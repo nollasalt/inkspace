@@ -17,13 +17,14 @@ app.whenReady().then(async()=>{
     if(url.host!=='app'||!file.startsWith(root+path.sep))return new Response('Forbidden',{status:403});
     return net.fetch(pathToFileURL(file).href);
   });
-  win=new BrowserWindow({width:1440,height:940,minWidth:860,minHeight:580,show:!smoke&&!verify,backgroundColor:'#f6f7f5',title:'墨境',webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:!smoke&&!verify}});
+  win=new BrowserWindow({width:1440,height:940,minWidth:860,minHeight:580,show:!smoke&&!verify,backgroundColor:'#f6f7f5',title:'墨境',titleBarStyle:'hidden',titleBarOverlay:{color:'#f3f3f3',symbolColor:'#333333',height:34},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:!smoke&&!verify}});
   win.setMenuBarVisibility(false);
   const nativeInk=require('./native-ink.cjs')(win,ipcMain);
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('inkspace://app/'))event.preventDefault()});
   win.webContents.session.setPermissionRequestHandler((wc,permission,callback)=>callback(false));
   const senderOK=event=>event.sender===win.webContents&&event.senderFrame.url.startsWith('inkspace://app/');
+  require('./terminal.cjs')({win,ipcMain,senderOK,app});
   const validData=(event,data)=>{if(!senderOK(event)||typeof data!=='string'||data.length>150*1024*1024)throw Error('Invalid document');JSON.parse(data)};
   ipcMain.handle('document-new',event=>{if(senderOK(event)){currentFile=null;pendingFile=null;win.setTitle('墨境 · 未命名筆记')}});
   ipcMain.handle('document-open-accepted',event=>{if(senderOK(event)&&pendingFile){currentFile=pendingFile;acceptedFiles.add(currentFile);pendingFile=null;win.setTitle('墨境 · '+path.basename(currentFile))}});
@@ -60,7 +61,7 @@ app.whenReady().then(async()=>{
   if(verify){
     const report=path.join(reportRoot,'artifacts','package-verification.json');
     try{
-      const result=await win.webContents.executeJavaScript(`(async()=>{doc.notes=[{id:'package-test',x:0,y:0,width:560,markdown:'$x^2$'}];render();await document.fonts.ready;const fixture=await PdfApi.PDFDocument.create();fixture.addPage().drawText('Packaged PDF text');const task=PdfApi.getDocument({data:await fixture.save(),isEvalSupported:false});const pdf=await task.promise;const text=(await (await pdf.getPage(1)).getTextContent()).items.map(i=>i.str).join(' ');await task.destroy();return{passed:!!document.querySelector('.katex')&&text.includes('Packaged PDF text')&&desktop.inkStatus().cairo==='1.18.4'&&desktop.inkStatus().hooks>0,nativeInk:desktop.inkStatus(),formula:!!document.querySelector('.katex'),pdfText:text,bridge:!!window.desktop}})()`);
+      const result=await win.webContents.executeJavaScript(`(async()=>{doc.notes=[{id:'package-test',x:0,y:0,width:560,markdown:'$x^2$'}];render();await document.fonts.ready;const fixture=await PdfApi.PDFDocument.create();fixture.addPage().drawText('Packaged PDF text');const task=PdfApi.getDocument({data:await fixture.save(),isEvalSupported:false});const pdf=await task.promise;const text=(await (await pdf.getPage(1)).getTextContent()).items.map(i=>i.str).join(' ');await task.destroy();await inkspaceTerminal.toggle(true);const terminalReady=inkspaceTerminal.isRunning();await desktop.terminalStop();await inkspaceTerminal.toggle(false);return{terminal:terminalReady,passed:terminalReady&&!!document.querySelector('.katex')&&text.includes('Packaged PDF text')&&desktop.inkStatus().cairo==='1.18.4'&&desktop.inkStatus().hooks>0,nativeInk:desktop.inkStatus(),formula:!!document.querySelector('.katex'),pdfText:text,bridge:!!window.desktop}})()`);
       await fs.writeFile(report,JSON.stringify(result,null,2));app.exit(result.passed?0:1);
     }catch(error){await fs.writeFile(report,JSON.stringify({passed:false,error:error.message}));app.exit(1)}return;
   }
@@ -82,6 +83,7 @@ app.whenReady().then(async()=>{
       result.noteInk.compositorPixel=pixel;await win.webContents.executeJavaScript('restoreNoteInkTest()');
       result.folder=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','folder-smoke.js'),'utf8'));
       result.textEditor=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-editor-smoke.js'),'utf8'));
+      result.terminal=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','terminal-smoke.js'),'utf8'));
       result.pdfLifecycle=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','pdf-lifecycle-smoke.js'),'utf8'));
       await fs.appendFile(path.join(root,'artifacts','folder-fixture','阅读.md'),'外部修改');
       result.folder.externalConflict=await win.webContents.executeJavaScript('(async()=>{const previous=activeDocumentTab;await activateTab(documentTabs.find(t=>t.md).id);const blocked=!await saveNotebook();await activateTab(previous);return blocked})()');
@@ -91,7 +93,8 @@ app.whenReady().then(async()=>{
       await fs.writeFile(path.join(root,'artifacts','desktop-preview.png'),screenshot.toPNG());delete result.document;
       const previousTab=await win.webContents.executeJavaScript('(async()=>{const previous=activeDocumentTab;await activateTab(documentTabs.find(t=>t.md).id);inkspaceWorkbench.setMarkdownMode("split");return previous})()');
       await new Promise(resolve=>setTimeout(resolve,200));await fs.writeFile(path.join(root,'artifacts','editor-preview.png'),(await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG());
-      await win.webContents.executeJavaScript('activateTab('+JSON.stringify(previousTab)+')');
+      await win.webContents.executeJavaScript('inkspaceTerminal.toggle(true)');await new Promise(resolve=>setTimeout(resolve,600));await fs.writeFile(path.join(root,'artifacts','terminal-preview.png'),(await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG());await win.webContents.executeJavaScript('(async()=>{await desktop.terminalStop();await inkspaceTerminal.toggle(false)})()');
+        await win.webContents.executeJavaScript('activateTab('+JSON.stringify(previousTab)+')');
       result.emptyWorkspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','empty-workspace-smoke.js'),'utf8'));
       await fs.writeFile(path.join(root,'artifacts','desktop-smoke.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));app.exit(result.passed&&result.bridge?0:1);
     }catch(error){console.error(error);app.exit(1)}
