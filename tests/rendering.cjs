@@ -217,14 +217,14 @@ for(const [dx,dy] of [[-75.5,28.5],[160,-100],[-220,-75],[65,40]]){
   assert.ok(alphaError<=3&&colorError<=2,`partial pan preserves ink coverage (alpha ${alphaError}, premultiplied color ${colorError})`);
 }
 
-// Text is laid out at native font sizes; no texture scale transform at fractional zoom.
+// Text keeps one world-coordinate layout at every fractional zoom.
 const mixed=b.w.document.querySelector('.note'),mixedBody=mixed.querySelector('.note-body');
 const sizeControl=b.w.document.querySelector('#text-size');sizeControl.value='20';sizeControl.dispatchEvent(new b.w.Event('change'));
 const ruledControl=b.w.document.querySelector('#background-kind');ruledControl.value='ruled';ruledControl.dispatchEvent(new b.w.Event('change'));
 assert.equal(b.run('backgroundSettings().spacing'),'auto');assert.equal(b.run('backgroundSpacing()'),35);
 for(const scale of [.75,1.1,1.25,1.6,2]){
   b.run(`zoom(${scale},400,300)`);
-  assert.equal(mixed.style.transform,'');assert.equal(Number.parseFloat(mixed.style.fontSize),20*scale);assert.equal(Number.parseFloat(mixed.style.width),320*scale);
+  assert.equal(mixed.style.transform,`scale(${scale})`);assert.equal(Number.parseFloat(mixed.style.fontSize),20);assert.equal(Number.parseFloat(mixed.style.width),320);
   assert.equal(mixed.querySelector('.note-body'),mixedBody);
   assert.equal(Number.parseFloat(b.w.document.querySelector('#paper').style.backgroundSize),35*scale);
 }
@@ -242,7 +242,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(detail.points.map(p=>[p.x,p.y]))),cor
 
 // Fractional zoom retains world layout below readable text sizes.
 b.run('doc.notes[0].width=880;zoom(.1,400,300)');
-assert.equal(mixed.style.width,'440px');assert.equal(mixed.style.fontSize,'10px');assert.equal(mixed.style.transform,'scale(0.2)');
+assert.equal(mixed.style.width,'880px');assert.equal(mixed.style.fontSize,'20px');assert.equal(mixed.style.transform,'scale(0.1)');
 assert.equal(b.run('itemBounds("notes",doc.notes[0]).w'),880);
 const beforeZoom=b.run('renderStats.fullScenePaints');
 for(let i=0;i<120;i++)b.run('interactiveZoom(.2+(.8*'+i+'/120),400,300)');
@@ -267,7 +267,7 @@ for(const el of w.document.querySelectorAll('script[src],link[href]'))assert.ok(
 for(const match of fs.readFileSync('vendor/katex.min.css','utf8').matchAll(/url\(([^)]+)\)/g))assert.ok(fs.existsSync(path.join('vendor',match[1])));
 console.log(`通过：真实 DOM 公式/高亮、安全转义、离线字体、压感轮廓抗锯齿、原始/合并采样、移动缓存与历史。已有 1000 条笔迹时，1500 次书写更新新增场景重绘 ${during.scenePaints-before.scenePaints} 次、文本构建 ${during.noteBuilds-before.noteBuilds} 次，实时尾部最多 ${during.maxTailSamples} 个采样。`);
 console.log('通过：稳定曲线前缀、慢速微抖动、平移及混合框选图层预览、背景切换/保存/撤销、平移中断和双指缩放衔接。');
-console.log('通过：显示画布无 clearRect、条带栅格对比、背景同层同步、字号/行距关联、分数倍率原生文字布局、原始转折保留、无固定上下限的缩放。');
+console.log('通过：显示画布无 clearRect、条带栅格对比、背景同层同步、字号/行距关联、缩放保持文字布局、原始转折保留、无固定上下限的缩放。');
 // Live coverage must agree with the saved vector union, across tile seams,
 // dense samples, pressure changes, crossings and fractional display density.
 for(const dpr of [1,1.25,2]){
@@ -293,3 +293,4 @@ for(const dpr of [1,1.25,2]){
 }
 console.log('通过：实时/保存墨迹覆盖一致（DPR 1/1.25/2）、raw 事件缺失回退、零压力落笔与抬笔坐标跳变。');
 a.dom.window.close();b.dom.window.close();
+

@@ -15,7 +15,7 @@ const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').r
 function inline(s){return InkContent.inline(s)}
 function markdown(s){return InkContent.markdown(s)}
 function normalized(a,b){return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
-function itemBounds(kind,item){if(!item)return null;if(kind==='notes')return{x:item.x,y:item.y,w:item.width||320,h:(notes.querySelector(`[data-id="${item.id}"]`)?.offsetHeight||200*view.scale)/Math.max(.5,view.scale)};if(kind==='shapes')return normalized({x:item.x,y:item.y},{x:item.x2,y:item.y2});let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;for(const p of item.points){x=Math.min(x,p.x);y=Math.min(y,p.y);x2=Math.max(x2,p.x);y2=Math.max(y2,p.y)}return{x:x-item.width/2,y:y-item.width/2,w:x2-x+item.width,h:y2-y+item.width}}
+function itemBounds(kind,item){if(!item)return null;if(kind==='notes')return{x:item.x,y:item.y,w:item.width||320,h:(notes.querySelector(`[data-id="${item.id}"]`)?.offsetHeight||200)};if(kind==='shapes')return normalized({x:item.x,y:item.y},{x:item.x2,y:item.y2});let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;for(const p of item.points){x=Math.min(x,p.x);y=Math.min(y,p.y);x2=Math.max(x2,p.x);y2=Math.max(y2,p.y)}return{x:x-item.width/2,y:y-item.width/2,w:x2-x+item.width,h:y2-y+item.width}}
 function union(items){if(!items.length)return null;let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;for(const r of items){x=Math.min(x,r.x);y=Math.min(y,r.y);x2=Math.max(x2,r.x+r.w);y2=Math.max(y2,r.y+r.h)}return{x,y,w:x2-x,h:y2-y}}
 function selectionBounds(){return union(Object.keys(selected).flatMap(k=>selected[k].map(i=>itemBounds(k,doc[k][i])).filter(Boolean)))}
 function clearSelection(){for(const c of noteCache.values())c.el.classList.remove('selected');selected={strokes:[],notes:[],shapes:[]};selectionRect=null}
@@ -58,4 +58,5 @@ function resize(){finishInteraction();persist();viewport.style.height=(window.in
 for(const id of ['#background-kind','#background-color','#background-spacing','#text-size'])$(id).onchange=()=>{finishInteraction();checkpoint();const type=$('#background-kind').value;let spacing=$('#background-spacing').value;if(id==='#background-kind'&&type==='ruled')spacing='auto';doc.background={type,color:$('#background-color').value,spacing:spacing==='auto'?'auto':Number(spacing),fontSize:Number($('#text-size').value)||16};renderBackground();renderNotes();persist()};
 
 $('#new').onclick=()=>{finishInteraction();checkpoint();doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[],pdfs:[],background:{...backgroundSettings()}};view={x:100,y:80,scale:1};clearSelection();render();persist();if(window.desktop)desktop.newDocument()};
+
 

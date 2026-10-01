@@ -1,6 +1,6 @@
-# 墨境 · 无限笔记 0.5.1
+# 墨境 · 无限笔记 0.5.2
 
-Windows x64 桌面书写应用。双击 `dist/Inkspace-0.5.1-Windows.exe` 启动便携版，无需 Node 或联网。开发：`npm ci`、`npm run build:native`、`npm run build`、`npm start`（原生构建需要 Windows x64、MinGW GCC/G++、Ninja、Python）。打包：`npm run dist`。
+Windows x64 桌面书写应用。双击 `dist/Inkspace-0.5.2-Windows.exe` 启动便携版，无需 Node 或联网。开发：`npm ci`、`npm run build:native`、`npm run build`、`npm start`（原生构建需要 Windows x64、MinGW GCC/G++、Ninja、Python）。打包：`npm run dist`。
 
 旧浏览器笔记请先保存 JSON，再在桌面版打开；自动保存位置不同。浏览器版 `index.html` 仍可书写，PDF 和大文件建议使用桌面版。
 
@@ -9,6 +9,7 @@ Windows x64 桌面书写应用。双击 `dist/Inkspace-0.5.1-Windows.exe` 启动
 - P 画笔；E 整条笔迹橡皮；H / 空格拖动；滚轮 / 双指缩放，无固定范围限制。支持压力、原始输入和合并采样。
 - V 框选笔迹、图形和文本框并拖动。Delete 删除；Ctrl+Z 撤销；Ctrl+Y / Ctrl+Shift+Z 重做。
 - S 创建矩形、椭圆、直线和箭头。
+- 文本框按固定的世界坐标宽度与字号排版；缩放保持换行、段落、公式和代码布局不变。调整文本框宽度或页面字号才会重新排版。
 - T 添加 Markdown。双击编辑，顶部拖动，右下角调整宽度；编辑框中可输入 160–4000px 宽度。新框默认 560px，旧框保留 320px。
 - 公式：`$…$`、`\(…\)`、`$$…$$`、`\[…\]`。代码围栏支持 python、javascript、typescript、cpp、csharp、java、json、bash、css、html、sql、rust 等语言。
 - 背景：纯色、点阵、横线、网格；颜色、字号、间距可调。自动行距为字号 × 1.75，例如 16px 字号对应 28px 横线。

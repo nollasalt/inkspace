@@ -58,6 +58,7 @@ app.whenReady().then(async()=>{
     try{
       await win.webContents.executeJavaScript('Promise.all([document.fonts.ready,new Promise(r=>setTimeout(r,100))])');
       const result=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','desktop-smoke.js'),'utf8'));
+      result.textLayout=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-layout-smoke.js'),'utf8'));
       await win.webContents.executeJavaScript('doc='+JSON.stringify(result.document)+';view={x:30,y:30,scale:.8};render();clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
       result.workspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','workspace-smoke.js'),'utf8'));
       await win.webContents.executeJavaScript('clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');

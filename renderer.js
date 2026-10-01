@@ -68,7 +68,9 @@ function paintStroke(context,s,points){
 function placeNote(n,el,dx=0,dy=0){
   const dpr=window.devicePixelRatio||1,s=view.scale;
   el.style.transform='';el.style.left=(Math.round((view.x+n.x*s+dx)*dpr)/dpr)+'px';el.style.top=(Math.round((view.y+n.y*s+dy)*dpr)/dpr)+'px';
-  const layoutScale=Math.max(.5,s);el.style.width=((n.width||320)*layoutScale)+'px';el.style.fontSize=(textSize()*layoutScale)+'px';el.style.setProperty('--note-scale',String(layoutScale));if(s<.5){el.style.transform=`scale(${s/layoutScale})`;el.style.transformOrigin='0 0'}
+  // Layout lives in world units. Zoom must never change line breaking, font
+  // metrics, fixed CSS padding, or browser minimum-font-size decisions.
+  el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
 }
 function renderNotes(){
   const ids=new Set(doc.notes.map(n=>n.id));
