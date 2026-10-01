@@ -1,6 +1,6 @@
 {
   "name": "inkspace",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "scripts": {
     "build:vscode": "npm run build && node scripts/build-vscode.cjs",
@@ -10,12 +10,13 @@
     "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs",
     "start": "electron .",
     "test:desktop": "electron . --smoke-test",
-    "dist": "npm run build:native && npm run build:terminal && npm run build && electron-builder --win portable --x64 && node scripts/package-source.cjs",
+    "dist": "npm run build:native && npm run build:terminal && npm run build && electron-builder --win nsis --x64 && node scripts/package-source.cjs",
     "test:package": "node scripts/verify-package.cjs",
     "test:raster": "electron tests/raster-electron.cjs",
     "build:native": "node scripts/build-native.cjs",
     "test:native": "node tests/native-ink.cjs",
-    "build:terminal": "node scripts/build-terminal.cjs"
+    "build:terminal": "node scripts/build-terminal.cjs",
+    "test:folder-launch": "node tests/folder-launch.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -53,15 +54,29 @@
       "LICENSE"
     ],
     "win": {
-      "target": "portable",
-      "artifactName": "Inkspace-${version}-Windows.exe",
+      "target": "nsis",
+      "artifactName": "Inkspace-${version}-Setup.exe",
       "signAndEditExecutable": true,
       "signExecutable": false,
       "icon": "desktop/icon.ico"
     },
     "asarUnpack": [
       "desktop/native/**"
-    ]
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "include": "desktop/installer.nsh",
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
+      "displayLanguageSelector": true
+    }
   },
   "description": "Windows infinite handwriting canvas with Markdown, equations and selectable PDF annotations",
   "author": "Inkspace",

@@ -14,5 +14,5 @@ module.exports=async function({ipcMain,dialog,win,app,senderOK,atomicWrite,onRea
     const markdownRevision=markdownRevisions.get(file);if(markdownRevision){const stat=await fs.stat(file);if(stat.mtimeMs+':'+stat.size!==markdownRevision.revision)throw Error('文件已被其他程序修改，请重新打开或另存为')}
     const format=markdownRevision?.file===file?markdownRevision:null,content=(format?.bom?'\uFEFF':'')+data.replace(/\r\n|\r/g,'\n').replace(/\n/g,format?.newline||'\n');await atomicWrite(file,content);const stat=await fs.stat(file);markdownRevisions.set(file,{file,bom:!!format?.bom,newline:format?.newline||'\n',revision:stat.mtimeMs+':'+stat.size});setCurrent(file);return file;
   });
-  return{trackRead:result=>{if(result.kind==='markdown')markdownRevisions.set(result.file,result)}};
+  return{openExternal:async directory=>{const state=await browser.open(directory);await atomicWrite(config,JSON.stringify(state));return state},trackRead:result=>{if(result.kind==='markdown')markdownRevisions.set(result.file,result)}};
 };

@@ -1,11 +1,14 @@
 const {app,BrowserWindow,protocol,net,ipcMain,dialog}=require('electron');
 const fs=require('node:fs/promises'),path=require('node:path'),{pathToFileURL}=require('node:url');
-const root=path.resolve(__dirname,'..'),smoke=process.argv.includes('--smoke-test'),verify=process.argv.includes('--verify-package');
+const root=path.resolve(__dirname,'..'),smoke=process.argv.includes('--smoke-test'),verify=process.argv.includes('--verify-package'),launchTest=process.argv.includes('--test-folder-launch');
 const reportArgument=process.argv.find(value=>value.startsWith('--report-root='));
 const reportRoot=reportArgument?path.resolve(reportArgument.slice('--report-root='.length)):process.cwd();
+if(smoke||verify||launchTest)app.setPath('userData',path.join(reportRoot,'artifacts',smoke?'test-profile':launchTest?'folder-launch-profile':'package-profile'));
+const {folderArgument}=require('./folder-launch.cjs');let queuedFolder=folderArgument(process.argv),externalFolderHandler=null;
+if(!smoke&&!verify){if(!app.requestSingleInstanceLock({folder:queuedFolder})){app.quit();return}app.on('second-instance',(_event,argv,_cwd,data)=>{const directory=folderArgument(['--open-folder',data?.folder])||folderArgument(argv);if(directory){if(externalFolderHandler)externalFolderHandler(directory);else queuedFolder=directory}if(win){if(win.isMinimized())win.restore();win.show();win.focus()}})}
 let win,currentFile=null,pendingFile=null;const acceptedFiles=new Set();
 protocol.registerSchemesAsPrivileged([{scheme:'inkspace',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
-if(smoke||verify)app.setPath('userData',path.join(reportRoot,'artifacts',smoke?'test-profile':'package-profile'));
+
 const writes=new Map();
 function atomicWrite(file,data){
   const operation=(writes.get(file)||Promise.resolve()).catch(()=>{}).then(async()=>{const temp=file+'.tmp';await fs.writeFile(temp,data,'utf8');await fs.rename(temp,file)});
@@ -17,7 +20,7 @@ app.whenReady().then(async()=>{
     if(url.host!=='app'||!file.startsWith(root+path.sep))return new Response('Forbidden',{status:403});
     return net.fetch(pathToFileURL(file).href);
   });
-  win=new BrowserWindow({width:1440,height:940,minWidth:860,minHeight:580,show:!smoke&&!verify,backgroundColor:'#f6f7f5',title:'墨境',titleBarStyle:'hidden',titleBarOverlay:{color:'#f3f3f3',symbolColor:'#333333',height:34},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:!smoke&&!verify}});
+  win=new BrowserWindow({width:1440,height:940,minWidth:860,minHeight:580,show:!smoke&&!verify&&!launchTest,backgroundColor:'#f6f7f5',title:'墨境',titleBarStyle:'hidden',titleBarOverlay:{color:'#f3f3f3',symbolColor:'#333333',height:34},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:!smoke&&!verify}});
   win.setMenuBarVisibility(false);
   const nativeInk=require('./native-ink.cjs')(win,ipcMain);
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -57,7 +60,10 @@ app.whenReady().then(async()=>{
     if(closing||smoke||verify)return;event.preventDefault();closing=true;
     win.webContents.executeJavaScript('finishInteraction();documentJSON()').then(data=>atomicWrite(recovery,data)).then(()=>win.destroy()).catch(error=>{closing=false;dialog.showErrorBox('自动恢复保存失败',error.message)});
   });
+  if(queuedFolder){try{await folderApi.openExternal(queuedFolder)}catch(error){dialog.showErrorBox('打开文件夹失败',error.message)}queuedFolder=null}
   await win.loadURL('inkspace://app/index.html');
+  externalFolderHandler=async directory=>{try{const state=await folderApi.openExternal(directory);win.webContents.send('folder-opened',state)}catch(error){dialog.showErrorBox('打开文件夹失败',error.message)}};if(queuedFolder){await externalFolderHandler(queuedFolder);queuedFolder=null}
+  if(launchTest){try{await require('../tests/folder-launch-electron.cjs')({win,app,root});app.exit(0)}catch(error){console.error(error);app.exit(1)}return}
   if(verify){
     const report=path.join(reportRoot,'artifacts','package-verification.json');
     try{

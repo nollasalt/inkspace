@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('desktop',{
   newDocument:()=>ipcRenderer.invoke('document-new'),
   save:(data,saveAs=false)=>ipcRenderer.invoke('document-save',data,saveAs),
   open:()=>ipcRenderer.invoke('document-open'),
+  onFolderOpened:callback=>ipcRenderer.on('folder-opened',(_event,state)=>callback(state)),
   folderState:()=>ipcRenderer.invoke('folder-state'),
   openFolder:()=>ipcRenderer.invoke('folder-open'),
   closeFolder:()=>ipcRenderer.invoke('folder-close'),
