@@ -1,0 +1,10 @@
+const fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
+const root=path.resolve(__dirname,'..'),folder=path.join(root,'artifacts','codium-test'),exe=process.env.INKSPACE_CODIUM||path.join(process.env.LOCALAPPDATA,'Programs','VSCodium','VSCodium.exe');
+if(!fs.existsSync(exe))throw Error('VSCodium not found. Set INKSPACE_CODIUM to its executable.');
+fs.mkdirSync(folder,{recursive:true});fs.mkdirSync(path.join(folder,'workspace'),{recursive:true});
+fs.mkdirSync(path.join(folder,'profile','User'),{recursive:true});fs.writeFileSync(path.join(folder,'profile','User','settings.json'),JSON.stringify({'window.titleBarStyle':'custom','workbench.startupEditor':'none','workbench.colorTheme':'Default Light Modern','security.workspace.trust.enabled':false,'extensions.autoCheckUpdates':false,'extensions.autoUpdate':false,'window.restoreWindows':'none'}));
+const report=path.join(folder,'result.json');if(fs.existsSync(report))fs.unlinkSync(report);
+const testEnv={...process.env,INKSPACE_TEST_ROOT:folder};delete testEnv.ELECTRON_RUN_AS_NODE;
+const child=spawn(exe,['--extensionDevelopmentPath='+(process.env.INKSPACE_TEST_EXTENSION||path.join(root,'vscode')),'--extensionTestsPath='+path.join(root,'vscode','tests','integration.cjs'),'--user-data-dir='+path.join(folder,'profile'),'--extensions-dir='+path.join(folder,'extensions'),'--skip-welcome','--skip-release-notes','--disable-workspace-trust',path.join(folder,'workspace')],{env:testEnv,windowsHide:true,stdio:['ignore','pipe','pipe']});
+let output='';child.stdout.on('data',data=>{output+=data});child.stderr.on('data',data=>{output+=data});const timer=setTimeout(()=>{child.kill();console.error('VSCodium test timeout\n'+output.slice(-5000));process.exitCode=1},90000);
+child.on('exit',code=>{clearTimeout(timer);if(!fs.existsSync(report)){console.error(output.slice(-8000));process.exitCode=1;return}const result=JSON.parse(fs.readFileSync(report));console.log(result);if(code||!result.passed)process.exitCode=1});

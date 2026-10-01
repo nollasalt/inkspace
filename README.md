@@ -51,3 +51,7 @@ UTF-8 JSON：笔记顶层 `format: "inkspace"`、`version: 2`、`title`、`activ
 ### 0.6.1 紧凑布局
 
 左侧活动栏分别打开文件资源管理器和页面侧栏，重复点击可收起；记住上次视图。工具与笔参数合并为顶部一行，文件行、标签和状态栏缩小。Markdown 文件的页面侧栏显示空状态，不会自动切换文件。
+
+## VSCodium 插件原型
+
+`dist/Inkspace-VSCodium-0.1.0.vsix`：利用 VSCodium 原生文件树、标签、Markdown、保存与撤销，墨境作为 `.inkspace.json` 自定义编辑器并提供页面侧栏。运行 `npm run build:vscode` 构建，`npm run test:vscode` 在独立配置的本机 VSCodium 中验证。安装与笔输入限制见 [插件说明](vscode/README.md)。当前使用浏览器笔输入和 Xournal++ 压力轮廓，未接入桌面版的 HIMETRIC / Cairo；真实触控笔效果需要实测。

@@ -3,6 +3,8 @@
   "version": "0.6.1",
   "private": true,
   "scripts": {
+    "build:vscode": "npm run build && node scripts/build-vscode.cjs",
+    "test:vscode": "node scripts/test-vscode.cjs",
     "build": "node scripts/build.cjs",
     "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs",
     "start": "electron .",

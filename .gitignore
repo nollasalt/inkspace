@@ -10,6 +10,8 @@ desktop/native/*.node
 artifacts/
 xournalpp/
 vendor/
+vscode/media/
+vscode/LICENSE
 *.inkspace.json
 .env
 .env.*
