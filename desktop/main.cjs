@@ -3,7 +3,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),{pathToFileURL}=r
 const root=path.resolve(__dirname,'..'),smoke=process.argv.includes('--smoke-test'),verify=process.argv.includes('--verify-package');
 const reportArgument=process.argv.find(value=>value.startsWith('--report-root='));
 const reportRoot=reportArgument?path.resolve(reportArgument.slice('--report-root='.length)):process.cwd();
-let win,currentFile=null,pendingFile=null;
+let win,currentFile=null,pendingFile=null;const acceptedFiles=new Set();
 protocol.registerSchemesAsPrivileged([{scheme:'inkspace',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 if(smoke||verify)app.setPath('userData',path.join(reportRoot,'artifacts',smoke?'test-profile':'package-profile'));
 const writes=new Map();
@@ -26,19 +26,29 @@ app.whenReady().then(async()=>{
   const senderOK=event=>event.sender===win.webContents&&event.senderFrame.url.startsWith('inkspace://app/');
   const validData=(event,data)=>{if(!senderOK(event)||typeof data!=='string'||data.length>150*1024*1024)throw Error('Invalid document');JSON.parse(data)};
   ipcMain.handle('document-new',event=>{if(senderOK(event)){currentFile=null;pendingFile=null;win.setTitle('墨境 · 未命名筆记')}});
-  ipcMain.handle('document-open-accepted',event=>{if(senderOK(event)&&pendingFile){currentFile=pendingFile;pendingFile=null;win.setTitle('墨境 · '+path.basename(currentFile))}});
+  ipcMain.handle('document-open-accepted',event=>{if(senderOK(event)&&pendingFile){currentFile=pendingFile;acceptedFiles.add(currentFile);pendingFile=null;win.setTitle('墨境 · '+path.basename(currentFile))}});
+  ipcMain.handle('document-activate',(event,file)=>{if(!senderOK(event)||file!==null&&!acceptedFiles.has(file))throw Error('文件尚未打开');currentFile=file;pendingFile=null;win.setTitle('墨境 · '+(file?path.basename(file):'未命名笔记'));return true});
+  ipcMain.handle('document-current',event=>{if(!senderOK(event))throw Error('Invalid sender');return currentFile});
   ipcMain.handle('document-save',async(event,data,saveAs)=>{
-    validData(event,data);let file=currentFile;
+    validData(event,data);let file=currentFile&&!/\.(md|markdown)$/i.test(currentFile)?currentFile:null;
     if(!file||saveAs){const choice=await dialog.showSaveDialog(win,{defaultPath:file||'笔记.inkspace.json',filters:[{name:'Inkspace JSON',extensions:['json']}]});if(choice.canceled)return null;file=choice.filePath}
-    await atomicWrite(file,data);currentFile=file;win.setTitle('墨境 · '+path.basename(file));return file;
+    await atomicWrite(file,data);currentFile=file;acceptedFiles.add(file);win.setTitle('墨境 · '+path.basename(file));return file;
   });
   ipcMain.handle('document-open',async event=>{
     if(!senderOK(event))throw Error('Invalid sender');
-    const choice=await dialog.showOpenDialog(win,{filters:[{name:'Inkspace JSON',extensions:['json']}],properties:['openFile']});if(choice.canceled)return null;
+    const choice=await dialog.showOpenDialog(win,{filters:[{name:'笔记和 Markdown',extensions:['json','md','markdown']}],properties:['openFile']});if(choice.canceled)return null;
     const file=choice.filePaths[0],stat=await fs.stat(file);if(stat.size>150*1024*1024)throw Error('File too large');
-    const data=await fs.readFile(file,'utf8');pendingFile=file;return{data,file};
+    const raw=await fs.readFile(file,'utf8'),result={data:raw.replace(/^\uFEFF/,''),file,kind:/\.(md|markdown)$/i.test(file)?'markdown':'notebook',bom:raw.startsWith('\uFEFF'),newline:raw.includes('\r\n')?'\r\n':'\n',revision:stat.mtimeMs+':'+stat.size};if(result.kind==='markdown'&&stat.size>10*1024*1024)throw Error('Markdown 超过 10 MB');pendingFile=file;folderApi.trackRead(result);return result;
   });
   const recovery=path.join(app.getPath('userData'),'recovery.json');await fs.mkdir(path.dirname(recovery),{recursive:true});
+  if(smoke){
+    const fixture=path.join(root,'artifacts','folder-fixture');await fs.mkdir(path.join(fixture,'子目录'),{recursive:true});
+    await fs.writeFile(path.join(fixture,'阅读.md'),'\uFEFF# 文件夹预览\r\n\r\n$x^2$\r\n');
+    await fs.writeFile(path.join(fixture,'子目录','子文件.md'),'# 子文件');
+    await fs.writeFile(path.join(fixture,'note.inkspace.json'),JSON.stringify({format:'inkspace',version:1,strokes:[],shapes:[],pdfs:[],notes:[{id:'fixture',x:0,y:0,width:560,markdown:'# 文件夹笔记'}]}));
+    await fs.writeFile(path.join(app.getPath('userData'),'folder.json'),JSON.stringify({root:fixture}));await fs.unlink(recovery).catch(()=>{});
+  }
+  const folderApi=await require('./folder-ipc.cjs')({ipcMain,dialog,win,app,senderOK,atomicWrite,onRead:file=>{pendingFile=file},getCurrent:()=>currentFile,setCurrent:file=>{currentFile=file;acceptedFiles.add(file);pendingFile=null;win.setTitle('墨境 · '+path.basename(file))}});
   ipcMain.handle('recovery-write',async(event,data)=>{validData(event,data);await atomicWrite(recovery,data);return true});
   ipcMain.handle('recovery-read',async event=>{if(!senderOK(event))return null;try{return await fs.readFile(recovery,'utf8')}catch{return null}});
   let closing=false;
@@ -70,6 +80,10 @@ app.whenReady().then(async()=>{
       const px=Math.round(probe.x*size.width/dimensions.width),py=Math.round(probe.y*size.height/dimensions.height),bitmap=noteShot.toBitmap(),pixel=[...bitmap.subarray((py*size.width+px)*4,(py*size.width+px)*4+4)];
       if(!(pixel[2]>150&&pixel[2]>pixel[1]*2&&pixel[2]>pixel[0]*1.5))throw Error('Ink hidden behind text: '+JSON.stringify(pixel));
       result.noteInk.compositorPixel=pixel;await win.webContents.executeJavaScript('restoreNoteInkTest()');
+      result.folder=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','folder-smoke.js'),'utf8'));
+      await fs.appendFile(path.join(root,'artifacts','folder-fixture','阅读.md'),'外部修改');
+      result.folder.externalConflict=await win.webContents.executeJavaScript('(async()=>{const previous=activeDocumentTab;await activateTab(documentTabs.find(t=>t.md).id);const blocked=!await saveNotebook();await activateTab(previous);return blocked})()');
+      if(!result.folder.externalConflict)throw Error('External Markdown modification overwritten');
       await win.webContents.executeJavaScript('clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
       await new Promise(r=>setTimeout(r,400));await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});await new Promise(r=>setTimeout(r,100));const screenshot=await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});
       await fs.writeFile(path.join(root,'artifacts','desktop-preview.png'),screenshot.toPNG());delete result.document;

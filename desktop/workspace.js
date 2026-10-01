@@ -70,4 +70,4 @@ viewport.addEventListener('dblclick',e=>{if(e.button!==0||lastCanvasPointer!=='m
 // app.js already recovered legacy browser files; now accept the notebook envelope.
 let initial=doc;try{const stored=JSON.parse(localStorage.getItem('inkspace.document'));if(valid(stored))initial=stored}catch{}
 adoptDocument(initial);savedDocument=contentSignature();
-if(window.desktop)desktop.recover().then(data=>{if(!data)return;try{const restored=JSON.parse(data);if(valid(restored)){adoptDocument(restored);savedDocument='';toast('已恢复上次笔记；保存可写入文件')}}catch{toast('恢复文件无法读取')}});
+let workspaceRecoveryReady=Promise.resolve();if(window.desktop)workspaceRecoveryReady=desktop.recover().then(data=>{if(!data)return;try{const restored=JSON.parse(data);if(valid(restored)){adoptDocument(restored);savedDocument='';toast('已恢复上次笔记；保存可写入文件')}}catch{toast('恢复文件无法读取')}});

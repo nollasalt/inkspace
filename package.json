@@ -1,10 +1,10 @@
 {
   "name": "inkspace",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "build": "node scripts/build.cjs",
-    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs",
+    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs",
     "start": "electron .",
     "test:desktop": "electron . --smoke-test",
     "dist": "npm run build:native && npm run build && electron-builder --win portable --x64 && node scripts/package-source.cjs",

@@ -55,7 +55,7 @@ $('#load').onclick=()=>$('#file').click();$('#file').onchange=async e=>{const f=
 try{const d=JSON.parse(localStorage.getItem('inkspace.document'));if(valid(d))doc=d}catch{}
 if(!doc.notes.length&&!doc.strokes.length&&!doc.shapes.length)doc.notes.push({id:'welcome',x:60,y:30,markdown:'# 思考，没有边界。\n\n在空白处写字、画图，或添加一个 Markdown 文本框。\n\n- **画笔**：支持触控笔压力\n- **文本**：点击画布添加笔记\n- **移动**：向任意方向展开\n\n> 把灵感留在同一张画布上。'});
 window.addEventListener('pagehide',()=>{finishInteraction();flushPersist()});
-function resize(){finishInteraction();persist();viewport.style.height=(window.innerHeight-viewport.getBoundingClientRect().top)+'px';const workspace=$('#workspace');if(workspace)workspace.style.height=viewport.style.height;render()}window.addEventListener('resize',resize);resize();
+function resize(){finishInteraction();persist();const workspace=$('#workspace');const height=window.innerHeight-(workspace||viewport).getBoundingClientRect().top;if(workspace)workspace.style.height=height+'px';viewport.style.height=($('#editor-area')?.clientHeight||height)+'px';render()}window.addEventListener('resize',resize);resize();
 
 for(const id of ['#background-kind','#background-color','#background-spacing','#text-size'])$(id).onchange=()=>{finishInteraction();checkpoint();const type=$('#background-kind').value;let spacing=$('#background-spacing').value;if(id==='#background-kind'&&type==='ruled')spacing='auto';doc.background={type,color:$('#background-color').value,spacing:spacing==='auto'?'auto':Number(spacing),fontSize:Number($('#text-size').value)||16};renderBackground();renderNotes();persist()};
 
