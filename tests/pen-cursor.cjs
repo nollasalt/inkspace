@@ -1,0 +1,22 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const {JSDOM}=require('jsdom');
+const dom=new JSDOM('<main id="viewport"><i id="pen-cursor" hidden></i></main><input id="width" value="4"><input id="color" value="#223344">');
+const viewport=dom.window.document.querySelector('#viewport');
+Object.defineProperties(viewport,{clientWidth:{value:800},clientHeight:{value:600}});
+let now=0;
+const context=vm.createContext({window:dom.window,performance:{now:()=>now},$:selector=>dom.window.document.querySelector(selector),viewport,nativeContact:false,view:{scale:2},local:e=>({x:e.clientX,y:e.clientY})});
+const source=fs.readFileSync(require.resolve('../desktop/workspace.js'),'utf8');
+vm.runInContext(source.slice(source.indexOf('const penCursor='),source.indexOf('const originalRender=')),context);
+function pointer(type,pointerType,x=120,y=130){const event=new dom.window.Event(type);Object.assign(event,{pointerType,clientX:x,clientY:y});viewport.dispatchEvent(event)}
+const cursor=dom.window.document.querySelector('#pen-cursor');
+pointer('pointermove','pen');assert.equal(cursor.hidden,false);assert.equal(cursor.style.width,'8px');
+pointer('pointerdown','pen');pointer('pointerup','pen');
+pointer('pointerover','mouse');pointer('pointerup','mouse');pointer('pointermove','mouse');pointer('pointerleave','mouse');
+assert.equal(cursor.hidden,false,'compatibility mouse events after pen release retain dot');assert(viewport.classList.contains('pen-input'));
+now=1000;pointer('pointermove','pen',125,135);pointer('pointerleave','pen',125,135);
+assert.equal(cursor.hidden,false,'capture transition within viewport retains dot');
+pointer('pointerdown','mouse');assert.equal(cursor.hidden,true,'mouse click switches immediately');
+pointer('pointermove','pen');now+=200;pointer('pointermove','mouse',300,300);assert.equal(cursor.hidden,true,'subsequent mouse motion restores ordinary cursor');
+pointer('pointermove','pen');pointer('pointerleave','pen',900,700);assert.equal(cursor.hidden,true,'pen leaving canvas hides dot');
+pointer('pointermove','pen');dom.window.dispatchEvent(new dom.window.Event('blur'));assert.equal(cursor.hidden,true,'window blur clears cursor');
+dom.window.close();console.log('Passed pen release/hover cursor stability, zoom size, mouse switching and exit handling.');

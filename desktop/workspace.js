@@ -52,11 +52,23 @@ async function pasteItems(items,text){
 }
 document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;const files=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean),text=e.clipboardData?.getData('text/plain');if(!files.length&&!text)return;e.preventDefault();pasteItems(files,text).catch(()=>toast('粘贴失败，请重试'))});
 // The cursor lives outside the transformed scene, so its size follows zoom once.
-const penCursor=$('#pen-cursor');let penPosition=null;
-function updatePenCursor(e){if(e.pointerType==='mouse'){if(nativeContact)return;penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true;return}if(e.pointerType!=='pen')return;penPosition=local(e);viewport.classList.add('pen-input');refreshPenCursor()}
+const penCursor=$('#pen-cursor');let penPosition=null,lastPenCursorTime=-Infinity;
+function clearPenCursor(){penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true}
+function updatePenCursor(e){
+  if(e.pointerType==='mouse'){
+    // Lifting a Windows pen can emit compatibility mouse/hover transitions.
+    // A mouse click is intentional; passive transitions immediately after pen
+    // input must not replace the pen cursor before the next hover sample.
+    if(nativeContact||e.sourceCapabilities?.firesTouchEvents)return;
+    if(penPosition&&e.type!=='pointerdown'&&(e.type==='pointerover'||e.type==='pointerup'||performance.now()-lastPenCursorTime<150))return;
+    clearPenCursor();return;
+  }
+  if(e.pointerType!=='pen')return;
+  lastPenCursorTime=performance.now();penPosition=local(e);viewport.classList.add('pen-input');refreshPenCursor();
+}
 function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#width').value)*view.scale;penCursor.style.width=penCursor.style.height=diameter+'px';penCursor.style.left=penPosition.x+'px';penCursor.style.top=penPosition.y+'px';penCursor.style.backgroundColor=$('#color').value;penCursor.hidden=false}
 for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown','pointerup'])viewport.addEventListener(type,updatePenCursor,{capture:true});
-viewport.addEventListener('pointerleave',()=>{penPosition=null;penCursor.hidden=true;viewport.classList.remove('pen-input')});window.addEventListener('blur',()=>{penPosition=null;penCursor.hidden=true;viewport.classList.remove('pen-input')});
+viewport.addEventListener('pointerleave',e=>{if(penPosition&&e.pointerType!=='pen')return;const p=local(e);if(p.x>=0&&p.y>=0&&p.x<viewport.clientWidth&&p.y<viewport.clientHeight)return;clearPenCursor()});window.addEventListener('blur',clearPenCursor);
 $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventListener('input',refreshPenCursor);
 const originalRender=render;render=function(){originalRender();refreshPenCursor();$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'};
 document.querySelectorAll('.menu').forEach(menu=>menu.addEventListener('toggle',()=>{if(menu.open)document.querySelectorAll('.menu').forEach(other=>{if(other!==menu)other.open=false})}));
