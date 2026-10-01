@@ -3,7 +3,7 @@ const root=path.resolve(__dirname,'..'),media=path.join(root,'vscode','media');
 fs.mkdirSync(media,{recursive:true});
 for(const file of ['index.html','style.css','app.js','renderer.js','pdf.js','desktop/bridge.js','desktop/ink-renderer.js','desktop/workspace.js','vendor/content.js','vendor/pdf-api.js','vendor/katex.min.css','vendor/highlight.min.css','vendor/pdf_viewer.css']){
   const destination=path.join(media,file);fs.mkdirSync(path.dirname(destination),{recursive:true});let data=fs.readFileSync(path.join(root,file));
-  if(file==='index.html')data=Buffer.from(data.toString().replace('<script src="desktop/files.js"></script>',''));
+  if(file==='index.html')data=Buffer.from(data.toString().replace('<script src="desktop/files.js"></script>','').replace('<script src="desktop/workbench.js"></script>','').replace('<script src="vendor/text-editor.js"></script>','').replace('<link rel="stylesheet" href="vendor/text-editor.css">',''));
   if(file==='pdf.js')data=Buffer.from(data.toString().replaceAll('location.href',"document.querySelector('#inkspace-assets').content").replace('async function openPdf(asset){','async function openPdf(asset){await window.inkspacePdfWorkerReady;'));
   if(file==='app.js')data=Buffer.from(data.toString().replace("brush:hasNativeInk()?'xournal':'raw-contour'","brush:'xournal'"));
   if(file==='app.js')data=Buffer.from(data.toString().replace("inputSource:e.nativeInk?","inputSource:e.nativeFixture?'native-fixture':e.nativeInk?"));

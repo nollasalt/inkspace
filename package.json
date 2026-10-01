@@ -1,6 +1,6 @@
 {
   "name": "inkspace",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "private": true,
   "scripts": {
     "build:vscode": "npm run build && node scripts/build-vscode.cjs",
@@ -20,6 +20,7 @@
     "highlight.js": "^11.12.0",
     "html-to-image": "^1.11.13",
     "katex": "^0.18.10",
+    "monaco-editor": "^0.57.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289"
   },
