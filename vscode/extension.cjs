@@ -42,7 +42,8 @@ function activate(context){
     // Save is handled outside the edit queue, so flushing cannot deadlock it.
     disposables.push(panel.webview.onDidReceiveMessage(async message=>{if(message.type!=='save')return;try{await request(state,'flush');await state.queue;if(message.saveAs)await vscode.commands.executeCommand('workbench.action.files.saveAs');else await document.save()}catch(error){vscode.window.showErrorMessage(error.message)}}));
     disposables.push(panel.onDidDispose(()=>{states.delete(document.uri.toString());if(active===state){active=null;refresh()}for(const [id,entry] of pending)if(entry.state===state){clearTimeout(entry.timer);entry.reject(Error('画布已关闭'));pending.delete(id)}for(const item of disposables)item.dispose()}));
-    panel.webview.html=editorHtml(panel.webview,media,vscode,{test:context.extensionMode===vscode.ExtensionMode.Test});
+    let nativeConfig=null;try{nativeConfig=JSON.parse(require('node:fs').readFileSync(process.env.INKSPACE_NATIVE_CONFIG,'utf8'));if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(nativeConfig.endpoint)||!/^[a-f0-9]{64}$/.test(nativeConfig.key))nativeConfig=null}catch{}
+    panel.webview.html=editorHtml(panel.webview,media,vscode,{test:context.extensionMode===vscode.ExtensionMode.Test,native:nativeConfig,client:require('node:crypto').randomUUID()});
   }};
   context.subscriptions.push(emitter,vscode.window.registerTreeDataProvider('inkspace.pages',pages),vscode.window.registerCustomEditorProvider(VIEW,provider,{webviewOptions:{retainContextWhenHidden:true},supportsMultipleEditorsPerDocument:false}),
     vscode.commands.registerCommand('inkspace.new',newNote),vscode.commands.registerCommand('inkspace.open',openNote),

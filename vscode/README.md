@@ -1,21 +1,23 @@
-# 墨境 · VSCodium 原型 0.1.0
+# 墨境 · VSCodium 原生输入版 0.2.0
 
-用 VSCodium 自带的文件资源管理器、标签、Markdown 编辑器、保存和恢复机制管理笔记。`.inkspace.json` 默认使用墨境画布打开；旧版普通 JSON 可右键“用墨境打开笔记”。命令面板中“墨境: 新建笔记”创建文件。
+使用 VSCodium 的文件树、标签、Markdown 编辑器及保存/撤销机制；`.inkspace.json` 使用墨境无限画布打开。命令面板“墨境: 新建笔记”创建笔记，左侧墨境图标管理页面。鼠标框选、双击创建文本框，触控笔书写；支持粘贴图片/文字、公式及 PDF。
 
-左侧墨境图标打开独立页面列表，画布底部“页面”按钮也可打开；侧栏顶部加号新增页面，页面条目可重命名，右键删除。每页是无限画布；鼠标框选、双击添加文本，触控笔书写；支持粘贴图片/文字、Markdown 文本框、公式和 PDF 导入/导出。Ctrl+S 保存到笔记原文件，标准标签显示未保存状态。原文编辑器的修改及宿主撤销同步到画布；未发送成功的草稿保留在 Webview 状态中，冲突时可用画布文件菜单“另存为”导出草稿。
+## 启动
 
-## 安装
+解压 `Inkspace-VSCodium-Native-0.2.0-Windows.zip`，运行其中的 `启动墨境 VSCodium.cmd`。扩展已随包安装，配置与扩展保存在该目录的 `data` 中。原有 VSCodium 安装不改动。打开文件夹后可直接访问笔记和 Markdown；页面视图也可拖到另一侧栏。
 
-VSCodium 扩展面板 → 更多操作 → “从 VSIX 安装”，选择 `Inkspace-VSCodium-0.1.0.vsix`。也可执行 `codium --install-extension Inkspace-VSCodium-0.1.0.vsix`。不需要微软 Marketplace 或 WSL 扩展。
+**必须使用专用原生宿主。只在普通 VSCodium 中安装 VSIX 不提供高精度书写，扩展会阻止浏览器笔输入。** 等待触控笔时，底部显示原生输入状态；收到真实高精度样本后才显示高精度已连接。设备只提供像素坐标时不继续书写。
 
-## 输入边界
+## 输入路线
 
-**这是可运行的迁移原型，尚不等同于桌面版笔迹引擎。** 保留原始压力采样和 Xournal++ 压力轮廓，在 Webview 中用浏览器绘制；没有接入原生 HIMETRIC 采样或 Cairo 栅格化。界面明确标注“浏览器笔输入”。真实笔迹、精度与延迟需要设备实测；实时轮廓每次更新整条活动笔迹，长笔迹可能比独立桌面版慢。不要据合成事件测试宣称原生精度。
+专用宿主在 Electron 主进程挂接自己的 Windows HWND，读取 Windows Pointer 历史采样、原始压力及经设备/显示器标定的 HIMETRIC 小数坐标。坐标经 Webview 嵌套位置与缩放转换，保留全部采样；压力轮廓及抗锯齿由已有 Xournal++ / Cairo 原生引擎生成。浏览器笔事件不会重复产生墨迹，鼠标不书写。
 
-VSCodium 的公开扩展接口不直接提供主进程 BrowserWindow/原生 HWND，现有 `native.attach(win.getNativeWindowHandle())` 不能原样搬进扩展宿主。后续可以比较 Webview 输入实测与原生宿主补丁；需要 Cairo 时也必须适配绘制通信及延迟。
+原生模块与画布通过本机回环连接通信，使用每次启动随机认证密钥。宿主自动更新已关闭，升级 VSCodium 时需要重新构建原生宿主。真实触控笔延迟、压感及防误触仍需设备实测，自动测试不能证明与 OneNote 体验相同。
 
-## 构建和测试
+## 构建与验证
 
-在仓库根目录执行 `npm run build:vscode`。在 `vscode` 目录执行 `npx @vscode/vsce package --no-dependencies --out ../dist/Inkspace-VSCodium-0.1.0.vsix`。`npm run test:vscode` 使用本机 VSCodium 的独立测试配置（可通过 `INKSPACE_CODIUM` 指定程序），不改动正常工作区。验证 Webview 笔/鼠标输入、公式字体、图片、PDF Worker、原生页面树、文件保存和宿主撤销。
+仓库根目录执行 `npm run build:vscodium-native`；需要本机已安装 VSCodium 及已构建的 Windows 原生模块。在 `vscode` 目录打包 VSIX，安装到专用宿主的 `data/extensions`。`npm run test:vscode` 默认使用专用宿主和独立测试配置。
 
-GPL-2.0-or-later，完整源码及共享画布代码见 https://github.com/nollasalt/inkspace ，Xournal++ 来源见仓库 `native/UPSTREAM.md`。原桌面版保留。
+测试覆盖小数坐标、侧栏及宿主缩放、全部 300 个密集样本保留、Cairo 像素一致性、精度丢失时结束笔迹、浏览器笔/鼠标不书写，以及文件保存、外部更新、撤销、图片、PDF 和公式。合成样本明确标记，不计为真实高精度输入。
+
+GPL-2.0-or-later；源码：https://github.com/nollasalt/inkspace 。来源见 `native/UPSTREAM.md`。原独立桌面版保留。

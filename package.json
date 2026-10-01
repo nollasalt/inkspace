@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "build:vscode": "npm run build && node scripts/build-vscode.cjs",
+    "build:vscodium-native": "npm run build:vscode && node scripts/build-vscodium-native.cjs",
     "test:vscode": "node scripts/test-vscode.cjs",
     "build": "node scripts/build.cjs",
-    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs",
+    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs",
     "start": "electron .",
     "test:desktop": "electron . --smoke-test",
     "dist": "npm run build:native && npm run build && electron-builder --win portable --x64 && node scripts/package-source.cjs",
