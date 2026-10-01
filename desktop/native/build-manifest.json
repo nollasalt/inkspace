@@ -1,0 +1,16 @@
+{
+  "cairo": "1.18.4",
+  "pixman": "0.43.4",
+  "xournalCommit": "9882ffaaf2c012a1de4c33161eb4284468d84b9d",
+  "sources": [
+    {
+      "file": "cairo-1.18.4.tar.xz",
+      "sha256": "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb"
+    },
+    {
+      "file": "pixman-0.43.4.tar.gz",
+      "sha256": "a0624db90180c7ddb79fc7a9151093dc37c646d8c38d3f232f767cf64b85a226"
+    }
+  ],
+  "binarySha256": "a9e318c5a1a24f9ba8cabe97aca98a1329afa57c130d0393a0e3fbcf2c5c9a0f"
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+research/
+artifacts/test-profile/
+artifacts/package-profile/
+artifacts/raster-profile/
+native/build*/
+native/deps/
+desktop/native/*.node
+artifacts/
+xournalpp/
+vendor/
+*.inkspace.json
+.env
+.env.*

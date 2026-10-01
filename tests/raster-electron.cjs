@@ -1,0 +1,10 @@
+const {app,BrowserWindow}=require('electron'),fs=require('fs'),vm=require('vm'),path=require('path');
+const context=vm.createContext({});vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/content.js'),'utf8'),context);
+const stroke={width:8,points:Array.from({length:101},(_,i)=>({x:50+i*2,y:40+i*3,p:.8}))},d=context.InkContent.strokePath(stroke);
+app.setPath('userData',path.join(__dirname,'../artifacts/raster-profile'));
+app.whenReady().then(async()=>{const w=new BrowserWindow({width:880,height:440,show:false,webPreferences:{offscreen:true,backgroundThrottling:false}});let last;
+  w.webContents.on('paint',(e,rect,image)=>{last=image});
+  await w.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(`<body style="margin:0;background:white"><canvas id="a" width="400" height="400" style="position:absolute;left:20px;top:20px;width:400px;height:400px"></canvas><canvas id="b" width="1200" height="1200" style="position:absolute;left:460px;top:20px;width:400px;height:400px"></canvas><script>for(const [id,density] of [['a',1],['b',3]]){const c=document.getElementById(id).getContext('2d');c.scale(density,density);c.fillStyle='#263f43';c.fill(new Path2D(${JSON.stringify(d)}))}</script>`));
+  await new Promise(r=>setTimeout(r,1000));if(!last)throw Error('No frame');fs.writeFileSync(path.join(__dirname,'../artifacts/raster-density.png'),last.toPNG());const bitmap=last.toBitmap(),size=last.getSize(),counts=[];
+  for(const left of [20,460]){let partial=0,solid=0;for(let y=20;y<420;y++)for(let x=left;x<left+400;x++){const k=(y*size.width+x)*4,v=bitmap[k+2];if(v>38&&v<250)partial++;if(v===38)solid++}counts.push({partial,solid})}const result={native:counts[0],cssDownsample3x:counts[1],passed:counts[0].partial>counts[1].partial*2};fs.writeFileSync(path.join(__dirname,'../artifacts/raster-density.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));app.exit(result.passed?0:1);
+});

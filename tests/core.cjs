@@ -1,0 +1,32 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const noop=()=>{},handlers=new Map(),elements=new Map(),storage=new Map();
+const ctx=new Proxy({},{get:()=>noop,set:()=>true});
+function element(id){if(elements.has(id))return elements.get(id);const e={id,value:id==='#color'?'#263f43':id==='#width'?'4':id==='#shape-kind'?'rect':'',style:{setProperty:noop},classList:{add:noop,toggle:noop,remove:noop},dataset:{},clientWidth:1000,clientHeight:700,offsetHeight:200,getContext:()=>ctx,getBoundingClientRect:()=>({left:0,top:0,width:1000,height:700}),addEventListener:(name,fn)=>handlers.set(id+':'+name,fn),setPointerCapture:noop,replaceChildren:noop,append:noop,remove:noop,querySelector:s=>s==='.note-body'?element(id+':body'):null,closest:()=>null,showModal(){this.open=true},close(){this.open=false},focus:noop,click(){this.onclick?.()},matches:()=>false};elements.set(id,e);return e}
+const context=vm.createContext({document:{compatMode:'CSS1Compat',querySelector:element,querySelectorAll:()=>[],createElement:()=>element('article')},window:{devicePixelRatio:1,innerHeight:800,addEventListener:(name,fn)=>handlers.set('window:'+name,fn)},localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)},crypto:{randomUUID:()=> 'test-note'},setTimeout:()=>0,clearTimeout:noop,URL:{},Blob,console,Path2D:class{constructor(d){this.d=d}addPath(){}}});
+for(const file of ['vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+const run=s=>vm.runInContext(s,context),read=s=>JSON.parse(JSON.stringify(run(s)));
+function pointer(name,x,y,pointerType='mouse'){handlers.get('#viewport:'+name)({pointerId:1,pointerType,pressure:.7,button:0,clientX:x,clientY:y,target:element('target')})}
+run("doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[]};view={x:0,y:0,scale:1};history=[];future=[]");
+pointer('pointerdown',10,10);pointer('pointermove',40,40);pointer('pointerup',40,40);assert.equal(run('doc.strokes.length'),0);run('clearSelection()');pointer('pointerdown',10,10,'pen');pointer('pointermove',40,40,'pen');pointer('pointerup',40,40,'pen');
+assert.equal(run('doc.strokes.length'),1);assert.equal(run('doc.strokes[0].points.length'),2);
+handlers.get('window:keydown')({key:'z',ctrlKey:true,preventDefault:noop,target:element('target')});assert.equal(run('doc.strokes.length'),0);
+handlers.get('window:keydown')({key:'y',ctrlKey:true,preventDefault:noop,target:element('target')});assert.equal(run('doc.strokes.length'),1);
+run("tool='shape'");pointer('pointerdown',100,100);pointer('pointermove',200,180);pointer('pointerup',200,180);
+assert.equal(run('doc.shapes.length'),1);assert.deepEqual(read('itemBounds("shapes",doc.shapes[0])'),{x:100,y:100,w:100,h:80});
+run("doc.notes.push({id:'n1',x:250,y:100,markdown:'# Hello'});tool='select'");
+pointer('pointerdown',0,0);pointer('pointermove',600,350);pointer('pointerup',600,350);
+assert.deepEqual(read('selected'),{strokes:[0],notes:[0],shapes:[0]});
+pointer('pointerdown',50,50);pointer('pointermove',70,80);pointer('pointerup',70,80);
+assert.equal(run('doc.strokes[0].points[0].x'),30);assert.equal(run('doc.notes[0].y'),130);assert.equal(run('doc.shapes[0].x'),120);
+run('undo()');assert.equal(run('doc.shapes[0].x'),100);run('redo()');assert.equal(run('doc.shapes[0].x'),120);
+run('selectBox({x:0,y:0,w:1000,h:1000})');handlers.get('window:keydown')({key:'Delete',preventDefault:noop,target:element('target')});assert.equal(run('doc.shapes.length+doc.strokes.length+doc.notes.length'),0);run('undo()');assert.equal(run('doc.shapes.length'),1);
+run('view={x:0,y:0,scale:1};zoom(2,100,100)');assert.deepEqual(read('world(100,100)'),{x:100,y:100});assert.equal(run('view.scale'),2);
+assert.equal(run('valid(JSON.parse(JSON.stringify(doc)))'),true);
+assert.equal(run('valid({format:"inkspace",version:1,strokes:[],notes:[],shapes:[{kind:"script"}]})'),false);
+assert.equal(run('valid({format:"inkspace",version:1,strokes:[],notes:[]})'),true);
+assert.match(run('markdown("# 标题\\n\\n**粗体**\\n\\n<script>alert(1)</script>")'),/<h1>标题<\/h1>/);
+assert.ok(!run('markdown("<script>alert(1)</script>")').includes('<script>'));
+assert.ok(!run('markdown("[坏链接](javascript:alert)")').includes('href='));
+assert.equal(run('markdown("`**raw**`")'),'<p><code>**raw**</code></p>');
+run('flushPersist()');assert.ok(storage.has('inkspace.document'));
+console.log('通过：笔迹、图形、混合框选移动、删除、Ctrl+Z / Ctrl+Y、缩放锚点、JSON 校验与 Markdown 安全渲染。');

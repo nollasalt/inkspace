@@ -1,0 +1,62 @@
+{
+  "name": "inkspace",
+  "version": "0.5.1",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs",
+    "start": "electron .",
+    "test:desktop": "electron . --smoke-test",
+    "dist": "npm run build:native && npm run build && electron-builder --win portable --x64 && node scripts/package-source.cjs",
+    "test:package": "node scripts/verify-package.cjs",
+    "test:raster": "electron tests/raster-electron.cjs",
+    "build:native": "node scripts/build-native.cjs",
+    "test:native": "node tests/native-ink.cjs"
+  },
+  "dependencies": {
+    "highlight.js": "^11.12.0",
+    "html-to-image": "^1.11.13",
+    "katex": "^0.18.10",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.3.289"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.1"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "org.inkspace.notes",
+    "productName": "墨境",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "style.css",
+      "app.js",
+      "renderer.js",
+      "pdf.js",
+      "desktop/**",
+      "vendor/**",
+      "package.json",
+      "LICENSE"
+    ],
+    "win": {
+      "target": "portable",
+      "artifactName": "Inkspace-${version}-Windows.exe",
+      "signAndEditExecutable": true,
+      "signExecutable": false,
+      "icon": "desktop/icon.ico"
+    },
+    "asarUnpack": [
+      "desktop/native/**"
+    ]
+  },
+  "description": "Windows infinite handwriting canvas with Markdown, equations and selectable PDF annotations",
+  "author": "Inkspace",
+  "license": "GPL-2.0-or-later"
+}
