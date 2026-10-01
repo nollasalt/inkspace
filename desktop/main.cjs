@@ -81,12 +81,14 @@ app.whenReady().then(async()=>{
       if(!(pixel[2]>150&&pixel[2]>pixel[1]*2&&pixel[2]>pixel[0]*1.5))throw Error('Ink hidden behind text: '+JSON.stringify(pixel));
       result.noteInk.compositorPixel=pixel;await win.webContents.executeJavaScript('restoreNoteInkTest()');
       result.folder=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','folder-smoke.js'),'utf8'));
+      result.pdfLifecycle=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','pdf-lifecycle-smoke.js'),'utf8'));
       await fs.appendFile(path.join(root,'artifacts','folder-fixture','阅读.md'),'外部修改');
       result.folder.externalConflict=await win.webContents.executeJavaScript('(async()=>{const previous=activeDocumentTab;await activateTab(documentTabs.find(t=>t.md).id);const blocked=!await saveNotebook();await activateTab(previous);return blocked})()');
       if(!result.folder.externalConflict)throw Error('External Markdown modification overwritten');
       await win.webContents.executeJavaScript('clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
       await new Promise(r=>setTimeout(r,400));await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});await new Promise(r=>setTimeout(r,100));const screenshot=await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});
       await fs.writeFile(path.join(root,'artifacts','desktop-preview.png'),screenshot.toPNG());delete result.document;
+      result.emptyWorkspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','empty-workspace-smoke.js'),'utf8'));
       await fs.writeFile(path.join(root,'artifacts','desktop-smoke.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));app.exit(result.passed&&result.bridge?0:1);
     }catch(error){console.error(error);app.exit(1)}
   }

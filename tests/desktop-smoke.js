@@ -1,6 +1,8 @@
 (async()=>{
   const assert=(condition,message)=>{if(!condition)throw Error(message)},pause=ms=>new Promise(r=>setTimeout(r,ms));
   const original=doc,originalView={...view};
+  assert(documentTabs.length===0&&document.body.classList.contains('empty-workspace'),'startup has no phantom notebook');
+  await $('#new').onclick();
   const nativeStatus=desktop.inkStatus();assert(nativeStatus.cairo==='1.18.4'&&nativeStatus.hooks>0,'native Cairo loaded and Windows HWND input hooked');
   const nativeCoverage=[];
   // Exercise the real preload/renderer boundary with native-format packets.

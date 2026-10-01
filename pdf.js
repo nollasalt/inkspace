@@ -3,11 +3,17 @@ PdfApi.GlobalWorkerOptions.workerSrc=new URL('vendor/pdf.worker.mjs',location.hr
 const pdfSessions=new Map(),pdfRoot=document.querySelector('#pdf-pages');let pdfGeneration=0;
 function pdfBytes(data){return Uint8Array.from(atob(data),c=>c.charCodeAt(0))}
 function pdfBase64(bytes){let result='';for(let i=0;i<bytes.length;i+=32768)result+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(result)}
+function disposePdfEntry(entry){
+  entry.disposed=true;
+  for(const cache of entry.pages.values()){cache.token++;cache.job?.cancel();cache.layer?.cancel();cache.el.remove()}
+  entry.loadingTask.destroy().catch(()=>{});
+}
 async function openPdf(asset){
   let entry=pdfSessions.get(asset.id);if(entry?.data===asset.data)return entry;
-  if(entry){for(const cache of entry.pages.values())cache.el.remove();entry.task.then(task=>task.destroy()).catch(()=>{})}
-  entry={data:asset.data,pages:new Map(),promise:PdfApi.getDocument({data:pdfBytes(asset.data),cMapUrl:new URL('vendor/pdf-cmaps/',location.href).href,cMapPacked:true,standardFontDataUrl:new URL('vendor/pdf-standard_fonts/',location.href).href,wasmUrl:new URL('vendor/pdf-wasm/',location.href).href,isEvalSupported:false}).promise};
-  entry.task=entry.promise.then(pdf=>pdf.loadingTask);pdfSessions.set(asset.id,entry);return entry;
+  if(entry)disposePdfEntry(entry);
+  const loadingTask=PdfApi.getDocument({data:pdfBytes(asset.data),cMapUrl:new URL('vendor/pdf-cmaps/',location.href).href,cMapPacked:true,standardFontDataUrl:new URL('vendor/pdf-standard_fonts/',location.href).href,wasmUrl:new URL('vendor/pdf-wasm/',location.href).href,isEvalSupported:false});
+  entry={data:asset.data,pages:new Map(),loadingTask,promise:loadingTask.promise,disposed:false};
+  entry.task=Promise.resolve(loadingTask);pdfSessions.set(asset.id,entry);return entry;
 }
 async function renderPdfPage(asset,index,entry){
   const spec=asset.pages[index];let cache=entry.pages.get(index);
@@ -22,17 +28,17 @@ async function renderPdfPage(asset,index,entry){
     const pdf=await entry.promise,page=await pdf.getPage(index+1);if(token!==cache.token)return;
     const viewport=page.getViewport({scale}),density=Math.max(1.5,devicePixelRatio),max=4096/Math.max(viewport.width,viewport.height),rasterDensity=Math.min(density,max);
     const buffer=document.createElement('canvas');buffer.width=Math.max(1,Math.round(viewport.width*rasterDensity));buffer.height=Math.max(1,Math.round(viewport.height*rasterDensity));
-    await page.render({canvasContext:buffer.getContext('2d'),viewport,transform:[rasterDensity,0,0,rasterDensity,0,0]}).promise;
+    cache.job=page.render({canvasContext:buffer.getContext('2d'),viewport,transform:[rasterDensity,0,0,rasterDensity,0,0]});await cache.job.promise;
     if(token!==cache.token)return;
     cache.canvas.width=buffer.width;cache.canvas.height=buffer.height;cache.canvas.getContext('2d').drawImage(buffer,0,0);
     cache.text.replaceChildren();cache.text.style.setProperty('--total-scale-factor',String(scale));cache.text.style.setProperty('--scale-factor',String(scale));cache.text.style.setProperty('--scale-round-x','1px');cache.text.style.setProperty('--scale-round-y','1px');
     cache.layer?.cancel();cache.layer=new PdfApi.TextLayer({textContentSource:await page.getTextContent(),container:cache.text,viewport});await cache.layer.render();cache.scale=scale;
-  }catch(e){if(token===cache.token)toast('PDF 页面加载失败：'+e.message)}finally{if(token===cache.token)cache.pending=null}
+  }catch(e){if(!entry.disposed&&pdfSessions.get(asset.id)===entry&&token===cache.token)toast('PDF 页面加载失败：'+e.message)}finally{if(token===cache.token){cache.pending=null;cache.job=null}}
 }
 function renderPdfs(){
-  const assets=doc.pdfs||[],ids=new Set(assets.map(a=>a.id));pdfRoot.classList.toggle('select-text',tool==='pdftext');
-  for(const [id,entry] of pdfSessions)if(!ids.has(id)){for(const c of entry.pages.values())c.el.remove();entry.task.then(task=>task.destroy()).catch(()=>{});pdfSessions.delete(id)}
-  for(const asset of assets){openPdf(asset).then(entry=>{if(!(doc.pdfs||[]).some(a=>a.id===asset.id&&a.data===asset.data))return;for(let i=0;i<asset.pages.length;i++)renderPdfPage(asset,i,entry)})}
+  const assets=document.body.classList.contains('empty-workspace')?[]:doc.pdfs||[],ids=new Set(assets.map(a=>a.id));pdfRoot.classList.toggle('select-text',tool==='pdftext');
+  for(const [id,entry] of pdfSessions)if(!ids.has(id)){disposePdfEntry(entry);pdfSessions.delete(id)}
+  for(const asset of assets){openPdf(asset).then(entry=>{if(entry.disposed||pdfSessions.get(asset.id)!==entry||!(doc.pdfs||[]).some(a=>a.id===asset.id&&a.data===asset.data))return;for(let i=0;i<asset.pages.length;i++)renderPdfPage(asset,i,entry)}).catch(error=>{if((doc.pdfs||[]).includes(asset)&&!document.body.classList.contains('empty-workspace'))toast('PDF 加载失败：'+error.message)})}
 }
 $('#pdf-import').onclick=()=>$('#pdf-file').click();
 $('#pdf-file').onchange=async e=>{

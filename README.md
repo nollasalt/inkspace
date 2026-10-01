@@ -55,3 +55,7 @@ UTF-8 JSON：笔记顶层 `format: "inkspace"`、`version: 2`、`title`、`activ
 ## VSCodium 原生输入版 0.2.2
 
 解压 `dist/Inkspace-VSCodium-Native-0.2.2-Windows.zip`，运行包内 `启动墨境 VSCodium.cmd`。专用宿主接入 Windows HIMETRIC 历史采样、Xournal++ 压力轮廓及原生 Cairo，保留 VSCodium 文件树、标签、Markdown 和页面侧栏。普通 VSCodium 单独安装 VSIX 无法提供原生书写。构建、使用及实测边界见 [插件说明](vscode/README.md)。原 VSCodium 安装不改动。
+
+## 0.6.2 独立版修复
+
+没有打开文件时显示空白工作区，关闭最后一个标签也回到空白；点击新建或打开文件后再显示编辑内容。PDF 切换和恢复时销毁旧任务，不再把已取消任务的 Transport destroyed 当成页面加载失败。
