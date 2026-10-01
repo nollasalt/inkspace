@@ -13,4 +13,4 @@ command = Chr(34) & electron & Chr(34) & " " & Chr(34) & files.BuildPath(folder,
 For Each argument In WScript.Arguments
   command = command & " " & Chr(34) & "--workspace=" & argument & Chr(34)
 Next
-shell.Run command, 0, False
+shell.Run command, 1, False
