@@ -61,6 +61,15 @@ app.whenReady().then(async()=>{
       result.textLayout=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-layout-smoke.js'),'utf8'));
       await win.webContents.executeJavaScript('doc='+JSON.stringify(result.document)+';view={x:30,y:30,scale:.8};render();clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
       result.workspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','workspace-smoke.js'),'utf8'));
+      result.noteInk=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','note-ink-smoke.js'),'utf8'));
+      await win.webContents.executeJavaScript('clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
+      await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});await new Promise(r=>setTimeout(r,100));
+      const noteShot=await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});
+      await fs.writeFile(path.join(root,'artifacts','note-ink-preview.png'),noteShot.toPNG());
+      const dimensions=await win.webContents.executeJavaScript('({width:innerWidth,height:innerHeight})'),size=noteShot.getSize(),probe=result.noteInk.probe;
+      const px=Math.round(probe.x*size.width/dimensions.width),py=Math.round(probe.y*size.height/dimensions.height),bitmap=noteShot.toBitmap(),pixel=[...bitmap.subarray((py*size.width+px)*4,(py*size.width+px)*4+4)];
+      if(!(pixel[2]>150&&pixel[2]>pixel[1]*2&&pixel[2]>pixel[0]*1.5))throw Error('Ink hidden behind text: '+JSON.stringify(pixel));
+      result.noteInk.compositorPixel=pixel;await win.webContents.executeJavaScript('restoreNoteInkTest()');
       await win.webContents.executeJavaScript('clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
       await new Promise(r=>setTimeout(r,400));await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});await new Promise(r=>setTimeout(r,100));const screenshot=await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});
       await fs.writeFile(path.join(root,'artifacts','desktop-preview.png'),screenshot.toPNG());delete result.document;

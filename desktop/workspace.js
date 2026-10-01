@@ -52,9 +52,9 @@ async function pasteItems(items,text){
 }
 document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;const files=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean),text=e.clipboardData?.getData('text/plain');if(!files.length&&!text)return;e.preventDefault();pasteItems(files,text).catch(()=>toast('粘贴失败，请重试'))});
 // The cursor lives outside the transformed scene, so its size follows zoom once.
-const penCursor=$('#pen-cursor');let penPosition=null,penPressure=1;
-function updatePenCursor(e){if(e.pointerType==='mouse'){if(nativeContact)return;penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true;return}if(e.pointerType!=='pen')return;penPosition=local(e);if((e.buttons&1)&&Number.isFinite(e.pressure))penPressure=Math.max(0,Math.min(1,e.pressure));viewport.classList.add('pen-input');refreshPenCursor()}
-function refreshPenCursor(){if(!penPosition)return;const pressure=hasNativeInk()?Math.max(.001,penPressure):.35+.65*penPressure,diameter=Number($('#width').value)*pressure*view.scale;penCursor.style.width=penCursor.style.height=diameter+'px';penCursor.style.left=penPosition.x+'px';penCursor.style.top=penPosition.y+'px';penCursor.style.backgroundColor=$('#color').value;penCursor.hidden=false}
+const penCursor=$('#pen-cursor');let penPosition=null;
+function updatePenCursor(e){if(e.pointerType==='mouse'){if(nativeContact)return;penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true;return}if(e.pointerType!=='pen')return;penPosition=local(e);viewport.classList.add('pen-input');refreshPenCursor()}
+function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#width').value)*view.scale;penCursor.style.width=penCursor.style.height=diameter+'px';penCursor.style.left=penPosition.x+'px';penCursor.style.top=penPosition.y+'px';penCursor.style.backgroundColor=$('#color').value;penCursor.hidden=false}
 for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown','pointerup'])viewport.addEventListener(type,updatePenCursor,{capture:true});
 viewport.addEventListener('pointerleave',()=>{penPosition=null;penCursor.hidden=true;viewport.classList.remove('pen-input')});window.addEventListener('blur',()=>{penPosition=null;penCursor.hidden=true;viewport.classList.remove('pen-input')});
 $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventListener('input',refreshPenCursor);
