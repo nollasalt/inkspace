@@ -8,6 +8,8 @@
     "test:theia": "node theia/host.cjs --smoke-test",
     "build:vscode": "npm run build && node scripts/build-vscode.cjs",
     "build:vscodium-native": "npm run build:vscode && node scripts/build-vscodium-native.cjs",
+    "dist:vscodium": "npm run build:vscode && node scripts/package-vscodium-installer.cjs",
+    "test:installer:vscodium": "node scripts/verify-vscodium-installer.cjs",
     "test:vscode": "node scripts/test-vscode.cjs",
     "build": "node scripts/build.cjs",
     "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs",
