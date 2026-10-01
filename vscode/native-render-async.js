@@ -1,6 +1,21 @@
 // Keep native Cairo coverage; transfer RGBA as binary without blocking Webview.
 let cairoRedrawFrame=null;
 let cairoHeldStroke=null;
+let cairoHeldKey=null;
+const renderBeforeReleaseOptimization=render;
+render=function(){
+  renderBeforeReleaseOptimization();
+  if(cairoHeldStroke&&active?.type!=='pen'&&(!doc.strokes.includes(cairoHeldStroke)||cairoHeldKey!==inkTileSignature())){clearLayer(inkLayers[1]);cairoHeldStroke=null}
+};
+const cairoFinishedStrokes=new WeakSet();
+function commitFinishedInk(s){
+  const b=clippedInkRect(screenBounds(s.points,s.width));
+  if(b.w&&b.h){
+    bufferContext.save();bufferContext.setTransform(1,0,0,1,0,0);bufferContext.clearRect(b.x,b.y,b.w,b.h);bufferContext.beginPath();bufferContext.rect(b.x,b.y,b.w,b.h);bufferContext.clip();worldTransform(bufferContext);paintScene(bufferContext,[cachedStroke(s).bounds]);bufferContext.restore();
+    ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.beginPath();ctx.rect(b.x,b.y,b.w,b.h);ctx.clip();ctx.globalCompositeOperation='copy';ctx.drawImage(sceneBuffer,0,0);ctx.restore();
+  }
+  if(cairoHeldStroke===s&&active?.type!=='pen'){clearLayer(inkLayers[1]);cairoHeldStroke=null}
+}
 const cairoPending=new Set();
 const originalCachedStroke=cachedStroke;
 cachedStroke=function(s){
@@ -27,7 +42,7 @@ paintCairoStroke=function(context,s){
       if(cache.cairoRequestKey!==key)return;
       const image=document.createElement('canvas');image.width=b.w;image.height=b.h;image.getContext('2d').putImageData(bitmap,0,0);
       cache.cairoCanvas=image;cache.cairoBounds=b;cache.cairoKey=key;cache.cairoRequestKey=null;
-      if(inkTileSignature()===key&&doc.strokes.includes(s))requestCairoRedraw();
+      if(inkTileSignature()===key&&doc.strokes.includes(s)){if(cairoFinishedStrokes.has(s)){cairoFinishedStrokes.delete(s);commitFinishedInk(s)}else requestCairoRedraw()}
     }).catch(error=>{cache.cairoRequestKey=null;toast('原生绘制失败：'+error.message)});
     else{cache.cairoKey=key;cache.cairoCanvas=null;cache.cairoRequestKey=null}
   }
@@ -52,7 +67,8 @@ const finishCairoInteraction=finishInk;
 finishInk=function(){
   const stroke=active.s;
   if(stroke.brush!=='xournal'){finishCairoInteraction();return}
-  const preview=document.createElement('canvas');preview.width=inkLayers[1].canvas.width;preview.height=inkLayers[1].canvas.height;preview.getContext('2d').drawImage(inkLayers[1].canvas,0,0);
-  finishCairoInteraction();
-  if(strokeCache.get(stroke)?.cairoKey!==inkTileSignature()){const context=inkLayers[1].ctx;context.save();context.setTransform(1,0,0,1,0,0);context.drawImage(preview,0,0);context.restore();cairoHeldStroke=stroke}
+  cancelCairoInk();active=null;cairoHeldStroke=stroke;cairoHeldKey=inkTileSignature();cairoFinishedStrokes.add(stroke);
+  $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
+  // Leave the live preview visible; no scene copy or DOM rebuild on pointerup.
+  requestAnimationFrame(()=>{if(!doc.strokes.includes(stroke))return;paintCairoStroke(bufferContext,stroke);if(strokeCache.get(stroke)?.cairoKey===inkTileSignature()){cairoFinishedStrokes.delete(stroke);commitFinishedInk(stroke)}});
 };

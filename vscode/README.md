@@ -1,10 +1,10 @@
-# 墨境 · VSCodium 原生输入版 0.2.1
+# 墨境 · VSCodium 原生输入版 0.2.2
 
 使用 VSCodium 的文件树、标签、Markdown 编辑器及保存/撤销机制；`.inkspace.json` 使用墨境无限画布打开。命令面板“墨境: 新建笔记”创建笔记，左侧墨境图标管理页面。鼠标框选、双击创建文本框，触控笔书写；支持粘贴图片/文字、公式及 PDF。
 
 ## 启动
 
-解压 `Inkspace-VSCodium-Native-0.2.1-Windows.zip`，运行其中的 `启动墨境 VSCodium.cmd`。扩展已随包安装，配置与扩展保存在该目录的 `data` 中。原有 VSCodium 安装不改动。打开文件夹后可直接访问笔记和 Markdown；页面视图也可拖到另一侧栏。
+解压 `Inkspace-VSCodium-Native-0.2.2-Windows.zip`，运行其中的 `启动墨境 VSCodium.cmd`。扩展已随包安装，配置与扩展保存在该目录的 `data` 中。原有 VSCodium 安装不改动。打开文件夹后可直接访问笔记和 Markdown；页面视图也可拖到另一侧栏。
 
 **必须使用专用原生宿主。只在普通 VSCodium 中安装 VSIX 不提供高精度书写，扩展会阻止浏览器笔输入。** 等待触控笔时，底部显示原生输入状态；收到真实高精度样本后才显示高精度已连接。设备只提供像素坐标时不继续书写。
 
@@ -23,3 +23,5 @@
 GPL-2.0-or-later；源码：https://github.com/nollasalt/inkspace 。来源见 `native/UPSTREAM.md`。原独立桌面版保留。
 
 0.2.1 将书写和静态画布改为异步二进制像素传输；Cairo 在独立进程中计算，主进程专注 Windows 输入。连续更新只允许一份活动绘制请求，积累的样本全部保留；不再每隔 1.5 秒重新遍历所有 Webview。
+
+0.2.2 抬笔只结束接触状态，最终墨迹异步合成到局部区域；不重建文本/PDF。自动同步在停笔 700ms 后合并执行，Ctrl+S 立即同步。

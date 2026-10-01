@@ -1,16 +1,16 @@
 // Writing is allowed only through the high-precision native host bridge.
 const codium=acquireVsCodeApi(),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
-let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,flushWaiters=[];
+let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,flushWaiters=[],draftTimer=null;
 // Load the bundled module through the webview resource service, then keep its
 // worker on a same-origin blob URL. Cross-origin module imports can stall here.
 window.inkspacePdfWorkerReady=fetch(PdfApi.GlobalWorkerOptions.workerSrc).then(async response=>{if(!response.ok)throw Error('PDF worker resource '+response.status);const url=URL.createObjectURL(new Blob([await response.text()],{type:'text/javascript'})),worker=new Worker(url,{type:'module'});PdfApi.GlobalWorkerOptions.workerPort=worker;window.addEventListener('beforeunload',()=>{worker.terminate();URL.revokeObjectURL(url)},{once:true});return worker});
 window.inkspacePdfWorkerReady.catch(error=>toast('PDF 初始化失败：'+error.message));
 function pageMessage(){codium.postMessage({type:'pages',pages:notebook.pages.map(p=>({id:p.id,title:p.title})),activePage:notebook.activePage})}
 function rememberDraft(){codium.setState({text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})}
-function sendEdit(){if(!hostLoaded||applyingHost||active)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion})}
-function flushed(){return new Promise((resolve,reject)=>{if(conflict){reject(Error('文件冲突，请另存草稿或重新打开'));return}finishInteraction();forceSaveView=true;sendEdit();if(!editFlight){forceSaveView=false;resolve();return}flushWaiters.push({resolve,reject})})}
-persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;pageMessage();sendEdit();codium.setState({text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})};
-flushPersist=persist;
+function sendEdit(){if(!hostLoaded||applyingHost||active||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion})}
+function flushed(){return new Promise((resolve,reject)=>{if(conflict){reject(Error('文件冲突，请另存草稿或重新打开'));return}finishInteraction();clearTimeout(draftTimer);draftTimer=null;forceSaveView=true;sendEdit();if(!editFlight){forceSaveView=false;resolve();return}flushWaiters.push({resolve,reject})})}
+persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active){persist();return}pageMessage();sendEdit()},700)};
+flushPersist=function(){clearTimeout(draftTimer);draftTimer=null;sendEdit()};
 saveNotebook=async function(saveAs=false){if(conflict&&saveAs){download(documentJSON(true),'application/json',notebook.title+'-草稿.inkspace.json');return true}codium.postMessage({type:'save',saveAs});return true};
 openNotebook=function(){codium.postMessage({type:'command',command:'open'})};
 $('#new').onclick=()=>codium.postMessage({type:'command',command:'new'});$('#load').onclick=openNotebook;$('#save').onclick=()=>saveNotebook();$('#save-as').onclick=()=>saveNotebook(true);
@@ -29,7 +29,7 @@ function receiveDocument(message){
 }
 window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='document'){receiveDocument(message);return}
-  if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight){forceSaveView=false;codium.setState({text:documentJSON(true),version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
+  if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight&&!active&&draftTimer===null){forceSaveView=false;codium.setState({text:documentJSON(true),version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
   if(message.type==='request'){try{let result=true;if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
@@ -56,10 +56,17 @@ async function runCodiumDiagnostic(action){
     try{
       await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:points.slice(0,1)}]});
       for(let i=1;i<points.length;i+=50){await window.inkspaceNative.test('fixture',{packets:[{type:'pointermove',samples:points.slice(i,i+50)}]});await new Promise(resolve=>setTimeout(resolve,5))}
-      await window.inkspaceNative.test('fixture',{packets:[{type:'pointerup',samples:[{...points.at(-1),p:0}]}]});
+      let releaseSerializations=0,releaseSceneCommits=0;
+      const originalJSON=documentJSON,originalSignature=contentSignature,originalCommit=commitScene;
+      documentJSON=function(...args){releaseSerializations++;return originalJSON(...args)};contentSignature=function(...args){releaseSerializations++;return originalSignature(...args)};commitScene=function(...args){releaseSceneCommits++;return originalCommit(...args)};
+      try{await window.inkspaceNative.test('fixture',{packets:[{type:'pointerup',samples:[{...points.at(-1),p:0}]}]})}
+      finally{documentJSON=originalJSON;contentSignature=originalSignature;commitScene=originalCommit}
       await window.inkspaceCairoIdle();const stroke=doc.strokes.at(-1),cache=cachedStroke(stroke);
       if(stroke.points.length!==1500||!cache.cairoCanvas||syncCalls||renderStats.livePaints===initialPaints)throw Error('Async rendering lost samples or blocked on sync raster');
-      const result={samples:stroke.points.length,synchronousRasterCalls:syncCalls,livePaints:renderStats.livePaints-initialPaints,eventLoopTicks:ticks,maxEventLoopGapMs:maxGap,totalMs:performance.now()-started};
+      const reference=document.createElement('canvas');reference.width=canvas.width;reference.height=canvas.height;const referenceContext=reference.getContext('2d');worldTransform(referenceContext);paintScene(referenceContext);const expected=referenceContext.getImageData(0,0,canvas.width,canvas.height).data,actualPixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      if(expected.some((value,index)=>value!==actualPixels[index]))throw Error('Partial release composition differs from full native scene');
+      if(releaseSerializations||releaseSceneCommits)throw Error('Pointerup synchronously serialized or rebuilt the scene');
+      const result={samples:stroke.points.length,synchronousRasterCalls:syncCalls,releaseSerializations,releaseSceneCommits,releasePixelsExact:true,livePaints:renderStats.livePaints-initialPaints,eventLoopTicks:ticks,maxEventLoopGapMs:maxGap,totalMs:performance.now()-started};
       undo();await window.inkspaceCairoIdle();await flushed();return result;
     }finally{clearInterval(timer);desktop.inkRaster=original}
   }
