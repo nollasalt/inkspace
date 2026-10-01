@@ -1,0 +1,3 @@
+const {contextBridge,ipcRenderer}=require('electron');
+const native=channel=>payload=>ipcRenderer.sendSync(channel,payload);
+contextBridge.exposeInMainWorld('inkspaceHost',{inkStatus:()=>ipcRenderer.sendSync('theia-ink-status'),inkRaster:native('theia-ink-raster'),inkPath:native('theia-ink-path'),onPen:callback=>ipcRenderer.on('theia-pen',(_event,packets)=>callback(packets)),save:(data,saveAs)=>ipcRenderer.invoke('theia-save',data,saveAs),open:()=>ipcRenderer.invoke('theia-open'),newDocument:()=>ipcRenderer.invoke('theia-new'),openAccepted:()=>ipcRenderer.invoke('theia-open-accepted'),useDocument:uri=>ipcRenderer.invoke('theia-use-document',uri)});

@@ -1,5 +1,7 @@
 # 墨境 · 无限笔记 0.5.3
 
+新增 [Theia 验证版](theia/README.md)：真实 Theia 文件工作区与独立版原生手写引擎集成。当前机器可双击 `theia/Start-Theia.vbs` 启动；源码构建使用 `npm run build:theia`。
+
 Windows x64 桌面书写应用。双击 `dist/Inkspace-0.5.3-Windows.exe` 启动便携版，无需 Node 或联网。开发：`npm ci`、`npm run build:native`、`npm run build`、`npm start`（原生构建需要 Windows x64、MinGW GCC/G++、Ninja、Python）。打包：`npm run dist`。
 
 旧浏览器笔记请先保存 JSON，再在桌面版打开；自动保存位置不同。浏览器版 `index.html` 仍可书写，PDF 和大文件建议使用桌面版。

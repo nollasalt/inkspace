@@ -1,0 +1,49 @@
+{
+  "name": "inkspace-theia-validation",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-2.0-or-later",
+  "dependencies": {
+    "@theia/core": "1.72.3",
+    "@theia/editor": "1.72.3",
+    "@theia/filesystem": "1.72.3",
+    "@theia/markers": "1.72.3",
+    "@theia/messages": "1.72.3",
+    "@theia/monaco": "1.72.3",
+    "@theia/navigator": "1.72.3",
+    "@theia/outline-view": "1.72.3",
+    "@theia/preferences": "1.72.3",
+    "@theia/preview": "1.72.3",
+    "@theia/process": "1.72.3",
+    "@theia/terminal": "1.72.3",
+    "@theia/workspace": "1.72.3",
+    "inkspace-theia-extension": "file:./extension",
+    "monaco-editor": "0.57.0"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.72.3"
+  },
+  "scripts": {
+    "build": "theia build --mode production",
+    "start": "node host.cjs",
+    "test": "node host.cjs --smoke-test"
+  },
+  "theia": {
+    "target": "browser",
+    "frontend": {
+      "config": {
+        "applicationName": "Inkspace · Theia 验证版",
+        "defaultTheme": "light",
+        "defaultIconTheme": "theia-file-icons",
+        "preferences": {
+          "editor.minimap.enabled": false,
+          "editor.fontSize": 14,
+          "editor.editContext": false,
+          "files.autoSave": "off",
+          "workspace.preserveWindow": true,
+          "window.menuBarVisibility": "classic"
+        }
+      }
+    }
+  }
+}

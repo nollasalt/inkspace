@@ -15,3 +15,8 @@ vscode/LICENSE
 *.inkspace.json
 .env
 .env.*
+theia/lib/
+theia/src-gen/
+theia/media/
+theia/gen-esbuild.*.mjs
+theia/demo-workspace/.theia/

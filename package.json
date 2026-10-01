@@ -3,6 +3,9 @@
   "version": "0.7.3",
   "private": true,
   "scripts": {
+    "build:theia": "npm run build && node theia/build-media.cjs && node theia/prepare-native.cjs && npm run build --prefix theia",
+    "start:theia": "node theia/host.cjs",
+    "test:theia": "node theia/host.cjs --smoke-test",
     "build:vscode": "npm run build && node scripts/build-vscode.cjs",
     "build:vscodium-native": "npm run build:vscode && node scripts/build-vscodium-native.cjs",
     "test:vscode": "node scripts/test-vscode.cjs",
