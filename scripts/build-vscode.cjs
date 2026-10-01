@@ -13,6 +13,6 @@ for(const file of ['index.html','style.css','app.js','renderer.js','pdf.js','des
 }
 // Copy the PDF worker, formula fonts and dependency licenses along with bundles.
 for(const name of fs.readdirSync(path.join(root,'vendor'))){if(name==='fonts'||/worker|license|licenses|^pdf-/i.test(name))fs.cpSync(path.join(root,'vendor',name),path.join(media,'vendor',name),{recursive:true})}
-for(const file of ['adapter.js','codium.css','native-client.js'])fs.copyFileSync(path.join(root,'vscode',file),path.join(media,file));
+for(const file of ['adapter.js','codium.css','native-client.js','native-render-async.js'])fs.copyFileSync(path.join(root,'vscode',file),path.join(media,file));
 fs.copyFileSync(path.join(root,'LICENSE'),path.join(root,'vscode','LICENSE'));
 console.log('Built VSCodium webview assets');

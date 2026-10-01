@@ -7,7 +7,7 @@ function editorHtml(webview,mediaUri,vscode,boot){
   html=html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/,`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}' ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; font-src ${webview.cspSource} data:; worker-src ${webview.cspSource} blob:; connect-src ${webview.cspSource} blob: data: ${nativeOrigin}; object-src 'none'; base-uri 'none'">`);
   html=html.replace(/(src|href)="([^":]+)"/g,(_all,attribute,file)=>`${attribute}="${resource(file)}"`);
   html=html.replace(/<script /g,`<script nonce="${nonce}" `);
-  html=html.replace('</body>',`<script nonce="${nonce}" src="${resource('adapter.js')}"></script></body>`);
+  html=html.replace('</body>',`<script nonce="${nonce}" src="${resource('native-render-async.js')}"></script><script nonce="${nonce}" src="${resource('adapter.js')}"></script></body>`);
   html=html.replace('<body>',`<body class="vscodium-mode"><meta id="inkspace-native-client" content="${boot.client}"><meta id="inkspace-assets" content="${resource('index.html')}"><meta id="inkspace-boot" content="${Buffer.from(JSON.stringify(boot)).toString('base64')}"><link rel="stylesheet" href="${resource('codium.css')}"><script nonce="${nonce}" src="${resource('native-client.js')}"></script>`);
   return html;
 }

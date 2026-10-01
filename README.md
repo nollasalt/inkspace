@@ -52,6 +52,6 @@ UTF-8 JSON：笔记顶层 `format: "inkspace"`、`version: 2`、`title`、`activ
 
 左侧活动栏分别打开文件资源管理器和页面侧栏，重复点击可收起；记住上次视图。工具与笔参数合并为顶部一行，文件行、标签和状态栏缩小。Markdown 文件的页面侧栏显示空状态，不会自动切换文件。
 
-## VSCodium 原生输入版 0.2.0
+## VSCodium 原生输入版 0.2.1
 
-解压 `dist/Inkspace-VSCodium-Native-0.2.0-Windows.zip`，运行包内 `启动墨境 VSCodium.cmd`。专用宿主接入 Windows HIMETRIC 历史采样、Xournal++ 压力轮廓及原生 Cairo，保留 VSCodium 文件树、标签、Markdown 和页面侧栏。普通 VSCodium 单独安装 VSIX 无法提供原生书写。构建、使用及实测边界见 [插件说明](vscode/README.md)。原 VSCodium 安装不改动。
+解压 `dist/Inkspace-VSCodium-Native-0.2.1-Windows.zip`，运行包内 `启动墨境 VSCodium.cmd`。专用宿主接入 Windows HIMETRIC 历史采样、Xournal++ 压力轮廓及原生 Cairo，保留 VSCodium 文件树、标签、Markdown 和页面侧栏。普通 VSCodium 单独安装 VSIX 无法提供原生书写。构建、使用及实测边界见 [插件说明](vscode/README.md)。原 VSCodium 安装不改动。

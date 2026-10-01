@@ -4,7 +4,7 @@ if(!fs.existsSync(path.join(source,'VSCodium.exe')))throw Error('Installed VSCod
 if(path.resolve(source)===path.resolve(output))throw Error('Source must be the original installation');
 fs.mkdirSync(output,{recursive:true});fs.cpSync(source,output,{recursive:true,filter:file=>!/^unins\d+\./i.test(path.basename(file))});
 const app=path.join(output,'resources','app'),bridge=path.join(app,'inkspace-native');fs.mkdirSync(bridge,{recursive:true});
-for(const file of ['bootstrap.cjs','frame-geometry.cjs','entry.mjs'])fs.copyFileSync(path.join(root,'vscode-native',file),path.join(bridge,file));
+for(const file of ['bootstrap.cjs','frame-geometry.cjs','entry.mjs','raster-service.cjs','raster-worker.cjs'])fs.copyFileSync(path.join(root,'vscode-native',file),path.join(bridge,file));
 fs.copyFileSync(path.join(root,'desktop','native','ink-native.node'),path.join(bridge,'ink-native.node'));fs.copyFileSync(path.join(root,'LICENSE'),path.join(bridge,'LICENSE'));fs.copyFileSync(path.join(root,'native','UPSTREAM.md'),path.join(bridge,'UPSTREAM.md'));fs.cpSync(path.join(root,'desktop','native','licenses'),path.join(bridge,'licenses'),{recursive:true});
 const packageFile=path.join(app,'package.json'),data=JSON.parse(fs.readFileSync(packageFile));if(data.main!=='./out/main.js')throw Error('Unexpected upstream VSCodium entry point');data.main='./inkspace-native/entry.mjs';fs.writeFileSync(packageFile,JSON.stringify(data,null,2));
 fs.mkdirSync(path.join(output,'data','user-data'),{recursive:true});fs.mkdirSync(path.join(output,'data','extensions'),{recursive:true});

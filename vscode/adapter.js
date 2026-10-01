@@ -15,7 +15,7 @@ saveNotebook=async function(saveAs=false){if(conflict&&saveAs){download(document
 openNotebook=function(){codium.postMessage({type:'command',command:'open'})};
 $('#new').onclick=()=>codium.postMessage({type:'command',command:'new'});$('#load').onclick=openNotebook;$('#save').onclick=()=>saveNotebook();$('#save-as').onclick=()=>saveNotebook(true);
 document.querySelector('header').insertBefore($('#tool-options'),$('.toolbar-actions'));
-const statusBar=document.createElement('div');statusBar.id='input-status-bar';const statusText=document.createElement('span');statusText.id='input-status';statusText.textContent='VSCodium 原型 · 浏览器笔输入 · 原生高精度接入待验证';const pagesButton=document.createElement('button');pagesButton.id='show-pages';pagesButton.textContent='页面';pagesButton.onclick=()=>codium.postMessage({type:'command',command:'pages'});statusBar.append(statusText,pagesButton);$('#editor-shell').append(statusBar);
+const statusBar=document.createElement('div');statusBar.id='input-status-bar';const statusText=document.createElement('span');statusText.id='input-status';statusText.textContent='Windows 原生输入 · 正在连接';const pagesButton=document.createElement('button');pagesButton.id='show-pages';pagesButton.textContent='页面';pagesButton.onclick=()=>codium.postMessage({type:'command',command:'pages'});statusBar.append(statusText,pagesButton);$('#editor-shell').append(statusBar);
 function updateNativeStatus(){const state=window.inkspaceNative.status(),engine=window.desktop?.inkStatus();statusText.textContent=!engine?'高精度笔输入必需 · 请使用墨境 VSCodium 原生版':!state.connected?'高精度笔输入未就绪 · '+state.error:state.lastPrecise===false?'设备未提供高精度笔数据 · 已停止书写':state.lastPrecise===true?'Windows 原生高精度笔迹 · Cairo '+engine.cairo:'Windows 原生采样已接入 · Cairo '+engine.cairo+' · 等待触控笔';}
 const nativeStatusTimer=setInterval(updateNativeStatus,1000);updateNativeStatus();window.addEventListener('beforeunload',()=>clearInterval(nativeStatusTimer),{once:true});
 download=async function(data,mime,name){try{const bytes=typeof data==='string'?null:Array.from(new Uint8Array(await new Blob([data]).arrayBuffer()));codium.postMessage({type:'export',mime,name,...(bytes?{bytes}:{text:data})})}catch(error){toast('导出失败：'+error.message)}};
@@ -45,7 +45,23 @@ async function runCodiumDiagnostic(action){
   }
   if(action==='addPage'){$('#page-add').click();await flushed();return{pages:notebook.pages.length,activePage:notebook.activePage}}
   if(action==='cairo'){
-    const payload={points:new Float64Array(Array.from({length:80},(_,i)=>[20.125+i*.625,40.375+15*Math.sin(i/10),.1+.85*i/80]).flat()),width:4,hasPressure:true,color:0x263f43,pixelWidth:160,pixelHeight:120,scale:1.5,tx:3.25,ty:2.375};const started=performance.now(),rgba=desktop.inkRaster(payload);return{payload:{...payload,points:Array.from(payload.points)},rgba:Array.from(rgba),elapsed:performance.now()-started};
+    const payload={points:new Float64Array(Array.from({length:80},(_,i)=>[20.125+i*.625,40.375+15*Math.sin(i/10),.1+.85*i/80]).flat()),width:4,hasPressure:true,color:0x263f43,pixelWidth:160,pixelHeight:120,scale:1.5,tx:3.25,ty:2.375};const started=performance.now(),rgba=await desktop.inkRasterAsync(payload);return{payload:{...payload,points:Array.from(payload.points)},rgba:Array.from(rgba),elapsed:performance.now()-started};
+  }
+  if(action==='performance'){
+    await window.inkspaceNative.register();await window.inkspaceCairoIdle();
+    const rect=viewport.getBoundingClientRect(),original=desktop.inkRaster,started=performance.now(),initialPaints=renderStats.livePaints;
+    let syncCalls=0,ticks=0,maxGap=0,last=performance.now();desktop.inkRaster=()=>{syncCalls++;throw Error('Synchronous raster on writing path')};
+    const timer=setInterval(()=>{const now=performance.now();maxGap=Math.max(maxGap,now-last);last=now;ticks++},5);
+    const points=Array.from({length:1500},(_,i)=>({x:rect.left+90.125+i*.35,y:rect.top+190.375+65*Math.sin(i/55),p:.35+.25*Math.sin(i/110),id:96,precise:true,eraser:false}));
+    try{
+      await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:points.slice(0,1)}]});
+      for(let i=1;i<points.length;i+=50){await window.inkspaceNative.test('fixture',{packets:[{type:'pointermove',samples:points.slice(i,i+50)}]});await new Promise(resolve=>setTimeout(resolve,5))}
+      await window.inkspaceNative.test('fixture',{packets:[{type:'pointerup',samples:[{...points.at(-1),p:0}]}]});
+      await window.inkspaceCairoIdle();const stroke=doc.strokes.at(-1),cache=cachedStroke(stroke);
+      if(stroke.points.length!==1500||!cache.cairoCanvas||syncCalls||renderStats.livePaints===initialPaints)throw Error('Async rendering lost samples or blocked on sync raster');
+      const result={samples:stroke.points.length,synchronousRasterCalls:syncCalls,livePaints:renderStats.livePaints-initialPaints,eventLoopTicks:ticks,maxEventLoopGapMs:maxGap,totalMs:performance.now()-started};
+      undo();await window.inkspaceCairoIdle();await flushed();return result;
+    }finally{clearInterval(timer);desktop.inkRaster=original}
   }
   if(action==='geometry')return window.inkspaceNative.test('layout');
   if(action==='dense'){
@@ -54,7 +70,7 @@ async function runCodiumDiagnostic(action){
   if(action==='cancel'){
     const rect=viewport.getBoundingClientRect(),count=doc.strokes.length,sample={x:rect.left+220.125,y:rect.top+100.375,p:.4,id:78,precise:true,eraser:false};await window.inkspaceNative.register();await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[sample]},{type:'pointermove',samples:[{...sample,x:10000,y:10000,precise:false}]},{type:'pointerup',samples:[{...sample,precise:false}]}]});if(active||nativeContact||doc.strokes.length!==count+1||doc.strokes.at(-1).points.length!==1)throw Error('Lost precision did not cancel native contact safely');const pixelSample={...sample,id:79,precise:false};await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[pixelSample]},{type:'pointerup',samples:[pixelSample]}]});if(doc.strokes.length!==count+1)throw Error('Pixel-only pen wrote ink');await flushed();return{cancelled:true,pixelInputBlocked:true};
   }
-  if(action==='capture'){await new Promise(resolve=>setTimeout(resolve,150));return window.inkspaceNative.capture()}
+  if(action==='capture'){await window.inkspaceCairoIdle();return window.inkspaceNative.capture()}
   if(action==='assets'){
     await document.fonts.ready;
     const imageCanvas=document.createElement('canvas');imageCanvas.width=32;imageCanvas.height=16;imageCanvas.getContext('2d').fillRect(0,0,32,16);const blob=await new Promise(resolve=>imageCanvas.toBlob(resolve));await pasteItems([new File([blob],'test.png',{type:'image/png'})],'');await flushed();

@@ -2,6 +2,7 @@
 // Windows/Xournal++/Cairo addon hooks this process's own HWNDs on the UI thread.
 const {app,BrowserWindow}=require('electron'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const native=require('./ink-native.node'),{measureFrame,toFrame,toRoot}=require('./frame-geometry.cjs');
+const rasterService=require('./raster-service.cjs');
 const key=crypto.randomBytes(32).toString('hex'),clients=new Map(),test=process.env.INKSPACE_NATIVE_TEST==='1';
 const dataIndex=process.argv.indexOf('--user-data-dir'),dataArg=process.argv.find(value=>value.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length)||(dataIndex>=0?process.argv[dataIndex+1]:null);
 const profile=dataArg||path.join(path.dirname(process.execPath),'data','user-data'),config=process.env.INKSPACE_NATIVE_CONFIG||path.join(profile,'native-bridge.json');process.env.INKSPACE_NATIVE_CONFIG=config;
@@ -20,7 +21,7 @@ async function findClient(id){
 }
 async function deliver(packet,win){
   for(const [id,client]of clients){if(client.win!==win)continue;if(client.frame.isDestroyed()){clients.delete(id);continue}
-    if(packet.type==='pointerdown'){try{client.layout=await measureFrame(client.frame)}catch{continue}}
+    if(packet.type==='pointerdown'&&client.layoutPending){try{await client.layoutPending}catch{continue}}
     const translated={...packet,samples:packet.samples.map(sample=>toFrame(sample,client.layout))};
     if(packet.type==='pointerdown'){const point=translated.samples.at(-1);if(!point||point.x<0||point.y<0||point.x/client.layout.dpr>client.layout.width||point.y/client.layout.dpr>client.layout.height)continue}
     await client.frame.executeJavaScript(`window.dispatchEvent(new CustomEvent('inkspace-native-packets',{detail:${JSON.stringify([translated])}}))`);
@@ -36,9 +37,9 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204);res.end();return}
   if(req.method!=='POST'||req.headers['x-inkspace-key']!==key){reply(res,403,{error:'Unauthorized'});return}
   try{let length=0;const chunks=[];for await(const chunk of req){length+=chunk.length;if(length>32*1024*1024)throw Error('Request too large');chunks.push(chunk)}const payload=chunks.length?JSON.parse(Buffer.concat(chunks).toString()):{};
-    if(req.url==='/status'){reply(res,200,{...native.status(),mainProcess:true,registered:clients.has(payload.client),injectedPackets});return}
-    if(req.url==='/register'){if(typeof payload.client!=='string'||!/^[\w-]{16,100}$/.test(payload.client))throw Error('Invalid client');const client=await findClient(payload.client);reply(res,200,{...native.status(),layout:client.layout});return}
-    if(req.url==='/raster'||req.url==='/path'){payload.points=new Float64Array(payload.points);const result=req.url==='/raster'?native.raster(payload):native.path(payload);reply(res,200,result,req.url==='/raster'?'application/octet-stream':'application/json');return}
+    if(req.url==='/status'){reply(res,200,{...native.status(),...rasterService.status(),mainProcess:true,registered:clients.has(payload.client),injectedPackets});return}
+    if(req.url==='/register'){if(typeof payload.client!=='string'||!/^[\w-]{16,100}$/.test(payload.client))throw Error('Invalid client');let client=clients.get(payload.client);if(client&&!client.frame.isDestroyed()){const pending=measureFrame(client.frame).then(layout=>{client.layout=layout});client.layoutPending=pending;try{await pending}finally{if(client.layoutPending===pending)client.layoutPending=null}}else client=await findClient(payload.client);reply(res,200,{...native.status(),layout:client.layout});return}
+    if(req.url==='/raster'||req.url==='/path'){const result=await rasterService.call(req.url.slice(1),payload);reply(res,200,req.url==='/raster'?Buffer.from(result):result,req.url==='/raster'?'application/octet-stream':'application/json');return}
     if(req.url==='/test/fixture'&&test){const client=clients.get(payload.client);if(!client)throw Error('Test frame not registered');client.layout=await measureFrame(client.frame);for(const packet of payload.packets){const rootPacket={...packet,synthetic:true,samples:packet.samples.map(sample=>({...sample,...toRoot(sample,client.layout)}))};injectedPackets++;await deliver(rootPacket,client.win)}reply(res,200,{passed:true,layout:client.layout});return}
     if(req.url==='/test/layout'&&test){const client=clients.get(payload.client);if(!client)throw Error('Test frame not registered');client.layout=await measureFrame(client.frame);reply(res,200,client.layout);return}
     if(req.url==='/test/capture'&&test){const client=clients.get(payload.client);if(!client)throw Error('Test frame not registered');const image=await client.win.webContents.capturePage();reply(res,200,image.toPNG(),'image/png');return}
