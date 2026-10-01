@@ -1,3 +1,7 @@
+import MarkdownIt from 'markdown-it';
+import taskLists from 'markdown-it-task-lists';
+import texmath from 'markdown-it-texmath';
+import DOMPurify from 'dompurify';
 import katex from 'katex';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -25,31 +29,11 @@ export function codeBlock(source,language=''){
   const value=known?hljs.highlight(source,{language,ignoreIllegals:true}).value:escape(source);
   return `<pre><code class="hljs${known?' language-'+language:''}">${value}</code></pre>`;
 }
-export function inline(source){
-  const tokens=[];const token=html=>{tokens.push(html);return `\u0000${tokens.length-1}\u0000`};
-  let s=source.replace(/\u0000/g,'').replace(/`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\\\((.+?)\\\)|(?<!\\)\$([^$\n]+?)(?<!\\)\$/g,(all,code,label,url,paren,dollar)=>{
-    if(code!==undefined)return token('<code>'+escape(code)+'</code>');
-    if(url!==undefined)return token(`<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${inline(label)}</a>`);
-    return token(formula(paren??dollar));
-  });
-  s=escape(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/\\\$/g,'$');
-  return s.replace(/\u0000(\d+)\u0000/g,(_,i)=>tokens[i]);
-}
-export function markdown(source){
-  let html='',code=null,language='',math=null,mathEnd='',list=null;
-  const close=()=>{if(list){html+=`</${list}>`;list=null}};
-  for(const line of source.split('\n')){
-    const fence=line.match(/^\s*```\s*([^\s`]*)\s*$/);
-    if(code!==null){if(fence){html+=codeBlock(code.join('\n'),language);code=null}else code.push(line);continue}
-    if(math!==null){const end=line.indexOf(mathEnd);if(end>=0){math.push(line.slice(0,end));html+=formula(math.join('\n'),true);if(line.slice(end+mathEnd.length).trim())html+='<p>'+inline(line.slice(end+mathEnd.length))+'</p>';math=null}else math.push(line);continue}
-    if(fence){close();code=[];language=fence[1];continue}
-    const trimmed=line.trim(),start=trimmed.startsWith('$$')?'$$':trimmed.startsWith('\\[')?'\\[':null;
-    if(start){close();mathEnd=start==='$$'?'$$':'\\]';const remainder=trimmed.slice(2),end=remainder.indexOf(mathEnd);if(end>=0){html+=formula(remainder.slice(0,end),true);if(remainder.slice(end+2).trim())html+='<p>'+inline(remainder.slice(end+2))+'</p>'}else math=[remainder];continue}
-    const heading=line.match(/^(#{1,3})\s+(.*)$/),li=line.match(/^\s*(?:([-*])|\d+\.)\s+(.*)$/);
-    if(li){const tag=li[1]?'ul':'ol';if(list!==tag){close();list=tag;html+=`<${tag}>`}html+='<li>'+inline(li[2])+'</li>';continue}
-    close();if(heading)html+=`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`;else if(line.startsWith('> '))html+='<blockquote>'+inline(line.slice(2))+'</blockquote>';else if(trimmed)html+='<p>'+inline(line)+'</p>';
-  }
-  close();if(code!==null)html+=codeBlock(code.join('\n'),language);if(math!==null)html+='<pre class="math-error">'+escape((mathEnd==='$$'?'$$':'\\[')+math.join('\n'))+'</pre>';
-  return html;
-}
+const parser=new MarkdownIt({html:false,linkify:true,breaks:true,highlight:(source,language)=>codeBlock(source,language)}).use(taskLists).use(texmath,{engine:katex,delimiters:['dollars','brackets'],katexOptions:{trust:false,maxExpand:500,maxSize:20,strict:'ignore',output:'htmlAndMathml'}});
+const imageRule=parser.renderer.rules.image;
+parser.renderer.rules.image=(tokens,index,options,env,self)=>{const token=tokens[index],src=token.attrGet('src');if(src&&!/^(https?:|data:image\/)/i.test(src)){token.attrSet('data-inkspace-src',src);token.attrSet('src','data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=')}token.attrSet('loading','lazy');return imageRule(tokens,index,options,env,self)};
+parser.renderer.rules.link_open=(tokens,index,options,env,self)=>{tokens[index].attrSet('target','_blank');tokens[index].attrSet('rel','noopener noreferrer');return self.renderToken(tokens,index,options)};
+const clean=html=>typeof DOMPurify.sanitize==='function'?DOMPurify.sanitize(html,{ADD_ATTR:['target','loading'],FORBID_TAGS:['style','iframe','object','embed']}):html;
+export function inline(source){return clean(parser.renderInline(source))}
+export function markdown(source){return clean(parser.render(source.replace(/\r\n|\r/g,'\n'))).trimEnd()}
 export {createStrokeState,appendStrokePoint,strokeTailPath,strokeTailPoints,strokePath,strokeOutline} from './ink-detail.js';

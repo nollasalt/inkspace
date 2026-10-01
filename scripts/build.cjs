@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),esbuild=require('esbuild');
 fs.mkdirSync('vendor',{recursive:true});
+esbuild.buildSync({entryPoints:['src/file-move.js'],bundle:true,platform:'node',format:'cjs',outfile:'vendor/file-move.cjs',minify:true,target:'node22',legalComments:'eof'});
 esbuild.buildSync({entryPoints:['src/content.js'],bundle:true,format:'iife',globalName:'InkContent',outfile:'vendor/content.js',minify:true,target:'es2022',legalComments:'eof'});
 esbuild.buildSync({entryPoints:['src/pdf-api.js'],bundle:true,format:'iife',globalName:'PdfApi',outfile:'vendor/pdf-api.js',minify:true,target:'es2022',legalComments:'eof'});
 esbuild.buildSync({entryPoints:['src/text-editor.js'],bundle:true,format:'iife',outfile:'vendor/text-editor.js',minify:true,target:'es2022',legalComments:'eof',loader:{'.ttf':'file'},assetNames:'editor-assets/[name]-[hash]'});
@@ -11,7 +12,7 @@ for(const folder of ['cmaps','standard_fonts','wasm'])fs.cpSync('node_modules/pd
 fs.copyFileSync('node_modules/katex/dist/katex.min.css','vendor/katex.min.css');
 fs.cpSync('node_modules/katex/dist/fonts','vendor/fonts',{recursive:true});
 fs.copyFileSync('node_modules/highlight.js/styles/github.min.css','vendor/highlight.min.css');
-for(const name of ['katex','highlight.js','pdfjs-dist','pdf-lib','html-to-image','monaco-editor','@xterm/xterm','@xterm/addon-fit']){
+for(const name of ['katex','highlight.js','pdfjs-dist','pdf-lib','html-to-image','monaco-editor','@xterm/xterm','@xterm/addon-fit','markdown-it','markdown-it-task-lists','markdown-it-texmath','dompurify','fs-extra','argparse','entities','linkify-it','mdurl','punycode.js','uc.micro','graceful-fs','jsonfile','universalify']){
   const base=path.join('node_modules',name),file=fs.readdirSync(base).find(f=>/^license/i.test(f));
   if(file)fs.copyFileSync(path.join(base,file),path.join('vendor',name.replaceAll('/','-')+'-LICENSE'));
 }

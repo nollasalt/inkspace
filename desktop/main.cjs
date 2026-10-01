@@ -21,7 +21,7 @@ app.whenReady().then(async()=>{
     return net.fetch(pathToFileURL(file).href);
   });
   win=new BrowserWindow({width:1440,height:940,minWidth:860,minHeight:580,show:!smoke&&!verify&&!launchTest,backgroundColor:'#f6f7f5',title:'墨境',titleBarStyle:'hidden',titleBarOverlay:{color:'#f3f3f3',symbolColor:'#333333',height:34},webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:!smoke&&!verify}});
-  win.setMenuBarVisibility(false);
+  win.setMenuBarVisibility(false);if(smoke)win.webContents.on('console-message',event=>console.log('renderer:',event.message));
   const nativeInk=require('./native-ink.cjs')(win,ipcMain);
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('inkspace://app/'))event.preventDefault()});
@@ -34,25 +34,26 @@ app.whenReady().then(async()=>{
   ipcMain.handle('document-activate',(event,file)=>{if(!senderOK(event)||file!==null&&!acceptedFiles.has(file))throw Error('文件尚未打开');currentFile=file;pendingFile=null;win.setTitle('墨境 · '+(file?path.basename(file):'未命名笔记'));return true});
   ipcMain.handle('document-current',event=>{if(!senderOK(event))throw Error('Invalid sender');return currentFile});
   ipcMain.handle('document-save',async(event,data,saveAs)=>{
-    validData(event,data);let file=currentFile&&!/\.(md|markdown)$/i.test(currentFile)?currentFile:null;
+    validData(event,data);let file=currentFile&&!/\.(md|markdown|txt)$/i.test(currentFile)?currentFile:null;
     if(!file||saveAs){const choice=await dialog.showSaveDialog(win,{defaultPath:file||'笔记.inkspace.json',filters:[{name:'Inkspace JSON',extensions:['json']}]});if(choice.canceled)return null;file=choice.filePath}
     await atomicWrite(file,data);currentFile=file;acceptedFiles.add(file);win.setTitle('墨境 · '+path.basename(file));return file;
   });
   ipcMain.handle('document-open',async event=>{
     if(!senderOK(event))throw Error('Invalid sender');
-    const choice=await dialog.showOpenDialog(win,{filters:[{name:'笔记和 Markdown',extensions:['json','md','markdown']}],properties:['openFile']});if(choice.canceled)return null;
+    const choice=await dialog.showOpenDialog(win,{filters:[{name:'笔记和 Markdown',extensions:['json','md','markdown','txt']}],properties:['openFile']});if(choice.canceled)return null;
     const file=choice.filePaths[0],stat=await fs.stat(file);if(stat.size>150*1024*1024)throw Error('File too large');
-    const raw=await fs.readFile(file,'utf8'),result={data:raw.replace(/^\uFEFF/,''),file,kind:/\.(md|markdown)$/i.test(file)?'markdown':'notebook',bom:raw.startsWith('\uFEFF'),newline:raw.includes('\r\n')?'\r\n':'\n',revision:stat.mtimeMs+':'+stat.size};if(result.kind==='markdown'&&stat.size>10*1024*1024)throw Error('Markdown 超过 10 MB');pendingFile=file;folderApi.trackRead(result);return result;
+    const raw=await fs.readFile(file,'utf8'),result={data:raw.replace(/^\uFEFF/,''),file,kind:/\.(md|markdown|txt)$/i.test(file)?'markdown':'notebook',bom:raw.startsWith('\uFEFF'),newline:raw.includes('\r\n')?'\r\n':'\n',revision:stat.mtimeMs+':'+stat.size};if(result.kind==='markdown'&&stat.size>10*1024*1024)throw Error('Markdown 超过 10 MB');pendingFile=file;folderApi.trackRead(result);return result;
   });
   const recovery=path.join(app.getPath('userData'),'recovery.json');await fs.mkdir(path.dirname(recovery),{recursive:true});
   if(smoke){
-    const fixture=path.join(root,'artifacts','folder-fixture');await fs.mkdir(path.join(fixture,'子目录'),{recursive:true});
+    const fixture=path.join(root,'artifacts','folder-fixture');await fs.mkdir(path.join(fixture,'子目录'),{recursive:true});for(const name of ['新文件.md','改名.md','最终.md','新画布.inkspace.json','改名画布.inkspace.json']){await fs.unlink(path.join(fixture,name)).catch(()=>{});await fs.unlink(path.join(fixture,'子目录',name)).catch(()=>{})}
+    await fs.writeFile(path.join(fixture,'图片 测试.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9XkAAAAASUVORK5CYII=','base64'));
     await fs.writeFile(path.join(fixture,'阅读.md'),'\uFEFF# 文件夹预览\r\n\r\n$x^2$\r\n');
     await fs.writeFile(path.join(fixture,'子目录','子文件.md'),'# 子文件');
     await fs.writeFile(path.join(fixture,'note.inkspace.json'),JSON.stringify({format:'inkspace',version:1,strokes:[],shapes:[],pdfs:[],notes:[{id:'fixture',x:0,y:0,width:560,markdown:'# 文件夹笔记'}]}));
     await fs.writeFile(path.join(app.getPath('userData'),'folder.json'),JSON.stringify({root:fixture}));await fs.unlink(recovery).catch(()=>{});
   }
-  const folderApi=await require('./folder-ipc.cjs')({ipcMain,dialog,win,app,senderOK,atomicWrite,onRead:file=>{pendingFile=file},getCurrent:()=>currentFile,setCurrent:file=>{currentFile=file;acceptedFiles.add(file);pendingFile=null;win.setTitle('墨境 · '+path.basename(file))}});
+  const folderApi=await require('./folder-ipc.cjs')({ipcMain,dialog,win,app,senderOK,atomicWrite,onRename:({old,file,directory})=>{for(const accepted of [...acceptedFiles])if(accepted===old||directory&&accepted.startsWith(old+path.sep)){acceptedFiles.delete(accepted);acceptedFiles.add(file+accepted.slice(old.length))}},onRead:file=>{pendingFile=file},getCurrent:()=>currentFile,setCurrent:file=>{currentFile=file;acceptedFiles.add(file);pendingFile=null;win.setTitle('墨境 · '+path.basename(file))}});
   ipcMain.handle('recovery-write',async(event,data)=>{validData(event,data);await atomicWrite(recovery,data);return true});
   ipcMain.handle('recovery-read',async event=>{if(!senderOK(event))return null;try{return await fs.readFile(recovery,'utf8')}catch{return null}});
   let closing=false;
@@ -74,11 +75,11 @@ app.whenReady().then(async()=>{
   if(smoke){
     try{
       await win.webContents.executeJavaScript('Promise.all([document.fonts.ready,new Promise(r=>setTimeout(r,100))])');
-      const result=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','desktop-smoke.js'),'utf8'));
-      result.textLayout=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-layout-smoke.js'),'utf8'));
+      const result=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','desktop-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
+      result.textLayout=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-layout-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
       await win.webContents.executeJavaScript('doc='+JSON.stringify(result.document)+';view={x:30,y:30,scale:.8};render();clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
-      result.workspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','workspace-smoke.js'),'utf8'));
-      result.noteInk=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','note-ink-smoke.js'),'utf8'));
+      result.workspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','workspace-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
+      result.noteInk=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','note-ink-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
       await win.webContents.executeJavaScript('clearTimeout(toast.timer);document.querySelector("#toast").style.display="none"');
       await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});await new Promise(r=>setTimeout(r,100));
       const noteShot=await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true});
@@ -87,10 +88,12 @@ app.whenReady().then(async()=>{
       const px=Math.round(probe.x*size.width/dimensions.width),py=Math.round(probe.y*size.height/dimensions.height),bitmap=noteShot.toBitmap(),pixel=[...bitmap.subarray((py*size.width+px)*4,(py*size.width+px)*4+4)];
       if(!(pixel[2]>150&&pixel[2]>pixel[1]*2&&pixel[2]>pixel[0]*1.5))throw Error('Ink hidden behind text: '+JSON.stringify(pixel));
       result.noteInk.compositorPixel=pixel;await win.webContents.executeJavaScript('restoreNoteInkTest()');
-      result.folder=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','folder-smoke.js'),'utf8'));
-      result.textEditor=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-editor-smoke.js'),'utf8'));
-      result.terminal=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','terminal-smoke.js'),'utf8'));
-      result.pdfLifecycle=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','pdf-lifecycle-smoke.js'),'utf8'));
+      result.folder=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','folder-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
+      result.textEditor=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','text-editor-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
+      result.editorInput=await require('../tests/editor-input-electron.cjs')(win);
+      result.explorer=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','explorer-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
+      result.terminal=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','terminal-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
+      result.pdfLifecycle=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','pdf-lifecycle-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
       await fs.appendFile(path.join(root,'artifacts','folder-fixture','阅读.md'),'外部修改');
       result.folder.externalConflict=await win.webContents.executeJavaScript('(async()=>{const previous=activeDocumentTab;await activateTab(documentTabs.find(t=>t.md).id);const blocked=!await saveNotebook();await activateTab(previous);return blocked})()');
       if(!result.folder.externalConflict)throw Error('External Markdown modification overwritten');
@@ -101,7 +104,7 @@ app.whenReady().then(async()=>{
       await new Promise(resolve=>setTimeout(resolve,200));await fs.writeFile(path.join(root,'artifacts','editor-preview.png'),(await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG());
       await win.webContents.executeJavaScript('inkspaceTerminal.toggle(true)');await new Promise(resolve=>setTimeout(resolve,600));await fs.writeFile(path.join(root,'artifacts','terminal-preview.png'),(await win.webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG());await win.webContents.executeJavaScript('(async()=>{await desktop.terminalStop();await inkspaceTerminal.toggle(false)})()');
         await win.webContents.executeJavaScript('activateTab('+JSON.stringify(previousTab)+')');
-      result.emptyWorkspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','empty-workspace-smoke.js'),'utf8'));
+      result.emptyWorkspace=await win.webContents.executeJavaScript(await fs.readFile(path.join(root,'tests','empty-workspace-smoke.js'),'utf8')+' .catch(error=>{console.error(error.stack);throw error})');
       await fs.writeFile(path.join(root,'artifacts','desktop-smoke.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));app.exit(result.passed&&result.bridge?0:1);
     }catch(error){console.error(error);app.exit(1)}
   }

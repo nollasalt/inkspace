@@ -1,5 +1,5 @@
 const fs=require('node:fs/promises'),path=require('node:path');
-const markdown=file=>/\.(md|markdown)$/i.test(file);
+const markdown=file=>/\.(md|markdown|txt)$/i.test(file);
 const within=(root,target)=>{const relative=path.relative(root,target);return !path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep)};
 function createFolderBrowser(){
   let root=null;
@@ -14,4 +14,4 @@ function createFolderBrowser(){
     resolve
   };
 }
-module.exports={createFolderBrowser,markdown};
+module.exports={createFolderBrowser,markdown,within};

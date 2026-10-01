@@ -1,5 +1,5 @@
 // Only the folder selected by the user is exposed to the renderer.
-module.exports=async function({ipcMain,dialog,win,app,senderOK,atomicWrite,onRead,getCurrent,setCurrent}){
+module.exports=async function({ipcMain,dialog,win,app,senderOK,atomicWrite,onRename,onRead,getCurrent,setCurrent}){
   const fs=require('node:fs/promises'),path=require('node:path'),{createFolderBrowser,markdown}=require('./folder-files.cjs'),browser=createFolderBrowser();
   const config=path.join(app.getPath('userData'),'folder.json');const markdownRevisions=new Map();
   try{const saved=JSON.parse(await fs.readFile(config,'utf8'));await browser.open(saved.root)}catch{}
@@ -8,6 +8,10 @@ module.exports=async function({ipcMain,dialog,win,app,senderOK,atomicWrite,onRea
   ipcMain.handle('folder-open',async event=>{guard(event);const choice=await dialog.showOpenDialog(win,{properties:['openDirectory'],title:'打开笔记文件夹'});if(choice.canceled)return null;const state=await browser.open(choice.filePaths[0]);await atomicWrite(config,JSON.stringify(state));return state});
   ipcMain.handle('folder-close',async event=>{guard(event);browser.close();await atomicWrite(config,'{}');return true});
   ipcMain.handle('folder-list',async(event,relative)=>{guard(event);return browser.list(relative)});
+  const operations=require('./file-operations.cjs');
+  ipcMain.handle('folder-create',async(event,options)=>{guard(event);return operations.create(browser,options)});
+  ipcMain.handle('folder-rename',async(event,options)=>{guard(event);const result=await operations.rename(browser,options);onRename?.(result);const revision=markdownRevisions.get(result.old);if(revision){markdownRevisions.delete(result.old);markdownRevisions.set(result.file,{...revision,file:result.file})}if(getCurrent()===result.old)setCurrent(result.file);return result});
+  ipcMain.handle('markdown-image',async(event,file,source)=>{guard(event);if(!markdownRevisions.has(file))throw Error('文件尚未打开');return operations.image(browser,file,source)});
   ipcMain.handle('folder-read',async(event,relative)=>{guard(event);const result=await browser.read(relative);onRead(result.file);if(result.kind==='markdown')markdownRevisions.set(result.file,result);return result});
   ipcMain.handle('markdown-save',async(event,data,saveAs=false)=>{
     guard(event);if(typeof data!=='string'||Buffer.byteLength(data,'utf8')>10*1024*1024)throw Error('Markdown 超过 10 MB');let file=getCurrent();if(!file||!markdown(file)||saveAs){const choice=await dialog.showSaveDialog(win,{defaultPath:file&&markdown(file)?file:'笔记.md',filters:[{name:'Markdown',extensions:['md','markdown']}]});if(choice.canceled)return null;file=choice.filePath;if(!markdown(file))file+='.md'}
