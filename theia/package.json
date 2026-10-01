@@ -24,7 +24,7 @@
     "@theia/cli": "1.72.3"
   },
   "scripts": {
-    "build": "theia build --mode production",
+    "build": "node build.cjs",
     "start": "node host.cjs",
     "test": "node host.cjs --smoke-test"
   },

@@ -24,9 +24,15 @@ module.exports=async({win,root,native,workspace})=>{
  await evaluate(`inkspaceTheiaValidation.files.createFile(inkspaceTheiaValidation.uri(${JSON.stringify(created)})).then(()=>true)`);await evaluate(`inkspaceTheiaValidation.files.move(inkspaceTheiaValidation.uri(${JSON.stringify(created)}),inkspaceTheiaValidation.uri(${JSON.stringify(renamed)})).then(()=>true)`);assert((await fs.stat(path.join(workspace,'renamed.txt'))).isFile(),'Theia create and rename');
  await evaluate(`(()=>{const widget=inkspaceTheiaValidation.editors.currentEditor;widget.editor.getControl().trigger('keyboard','type',{text:${JSON.stringify('<!-- Monaco edit verification -->\n')}});return widget.saveable.save().then(()=>true)})()`);
  assert((await fs.readFile(path.join(workspace,'README.md'),'utf8')).includes('Monaco edit verification'),'Monaco editing and save');
+ const {createCanvas}=require('@napi-rs/canvas');const image=createCanvas(12,12);image.getContext('2d').fillRect(0,0,12,12);
+ await fs.mkdir(path.join(workspace,'图片 空格'),{recursive:true});
+ await fs.writeFile(path.join(workspace,'图片 空格','测试.png'),image.toBuffer('image/png'));
+ await fs.writeFile(path.join(workspace,'图片 空格','测试.webp'),image.toBuffer('image/webp'));
+ await fs.appendFile(path.join(workspace,'README.md'),'\n![PNG](<图片 空格/测试.png>)\n![WebP](<图片 空格/测试.webp>)\n');
  await evaluate('inkspaceTheiaValidation.preview('+JSON.stringify(pathToFileURL(path.join(workspace,'README.md')).href)+').then(()=>true)');
- for(let i=0;i<60;i++){if(await evaluate(`!!document.querySelector('.theia-preview-widget h1')&&[...document.querySelectorAll('.theia-preview-widget img')].some(img=>img.complete&&img.naturalWidth>0)`))break;await pause(100)}
- assert(await evaluate(`!!document.querySelector('.theia-preview-widget h1')&&[...document.querySelectorAll('.theia-preview-widget img')].some(img=>img.complete&&img.naturalWidth>0)`),'Markdown first-open heading and local image');
+ const imagesLoaded=`(()=>{const images=[...document.querySelectorAll('.theia-preview-widget img')];return !!document.querySelector('.theia-preview-widget h1')&&images.length>=3&&images.every(img=>img.complete&&img.naturalWidth>0)})()`;
+ for(let i=0;i<60;i++){if(await evaluate(imagesLoaded))break;await pause(100)}
+ assert(await evaluate(imagesLoaded),'Markdown first-open SVG, PNG and WebP with Chinese and space paths');
  await evaluate(`inkspaceTheiaValidation.commands.executeCommand('terminal:new').then(()=>true)`);
  for(let i=0;i<100;i++){if(await evaluate(`inkspaceTheiaValidation.terminals.all.at(-1)?.terminalId>0`))break;await pause(100)}
  assert(await evaluate(`inkspaceTheiaValidation.terminals.all.at(-1)?.terminalId>0`),'real terminal process started');

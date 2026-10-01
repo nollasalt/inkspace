@@ -3,6 +3,8 @@ const root=path.resolve(__dirname,'..');
 if(!process.versions.electron){const electron=require(path.join(root,'node_modules','electron'));const child=spawn(electron,[__filename,...process.argv.slice(2)],{cwd:__dirname,stdio:'inherit',windowsHide:true});child.on('exit',code=>process.exitCode=code);return}
 const {app,BrowserWindow,ipcMain,dialog}=require('electron'),{fileURLToPath}=require('node:url'),net=require('node:net');
 const smoke=process.argv.includes('--smoke-test');let win,backend,currentFile=null,pendingFile=null,origin;
+// Diagnostic launches can outlive their terminal. A broken log pipe must not crash the UI.
+if(smoke)for(const stream of [process.stdout,process.stderr])stream.on('error',error=>{if(!['EPIPE','EBADF'].includes(error.code))throw error});
 // Keep Theia's isolated preview origins while resolving their localhost subdomains on Windows.
 app.commandLine.appendSwitch('host-resolver-rules','MAP *.mini-browser.localhost 127.0.0.1, MAP localhost 127.0.0.1');
 let backendStop;

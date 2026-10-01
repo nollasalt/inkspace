@@ -50,6 +50,10 @@ Theia 工作区在只监听本机回环地址的后台服务中运行。Electron
 
 浏览器目标的 Theia 在 Electron 中使用自己的菜单和工作区服务。Markdown 资源使用 Theia 隔离的预览域名；本机域名解析适配保留该隔离。没有修改第三方依赖源代码。
 
+预览链接通过 Theia 的服务替换点修正中文、空格路径被重复编码的问题，保留查询参数和片段，并补充 WebP/AVIF 的二进制图片响应。自动验证包含首次打开时的 SVG、中文及空格路径 PNG 和 WebP 图片。
+
+构建在 `artifacts/theia-build` 中完成，再仅复制内容发生变化的产物，避免覆盖运行中的原生模块。构建无需关闭当前窗口；保存工作后重新启动，才能加载更新。
+
 本版锁定 Theia **1.72.3**，以使用对应的 `@theia/preview`。该预览包在较新的 Theia 版本中已移除；正式路线应升级 Theia，并用其 VS Code 插件宿主加载成熟 Markdown 扩展。验证阶段没有把旧版独立编辑器界面搬进 Theia。常用语言高亮和缩进规则直接引用 Microsoft Monaco 0.57.0 的定义，构建时共享 Theia 的 Monaco 引擎。
 
 Inkspace 代码遵循项目根目录 GPL 许可；Theia 及其依赖保留各自许可。版本和来源记录在本目录 `package-lock.json`，Xournal++/Cairo 来源在 `native/UPSTREAM.md`。
