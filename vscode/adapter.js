@@ -87,6 +87,7 @@ async function runCodiumDiagnostic(action){
       lastCanvasPointer='mouse';viewport.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,button:0,clientX:rect.left+100,clientY:rect.top+120}));
       let input=$('.inline-note-editor');if(!input||document.activeElement!==input||$('#editor').open||doc.notes.length!==originalCount+1)throw Error('Double click did not create an inline editor');
       const noteId=doc.notes.at(-1).id,source='# 中文标题\n\n$x^2$';input.value=source;input.dispatchEvent(new Event('input',{bubbles:true}));await flushed();
+      const textStyle=getComputedStyle(noteCache.get(noteId).el);if(textStyle.backgroundColor!=='rgba(0, 0, 0, 0)'||textStyle.borderTopColor!=='rgba(0, 0, 0, 0)'||textStyle.boxShadow!=='none'||textStyle.outlineStyle!=='none')throw Error('Text still has a visible frame');
       if(!window.inkspaceInlineText.isEditing()||doc.notes.at(-1).markdown!==source)throw Error('Inline typing was not saved or save closed the editor');
       const caret=input.selectionStart;interactiveZoom(view.scale*1.2,150,150);settleZoom();await window.inkspaceCairoIdle();if($('.inline-note-editor')!==input||input.selectionStart!==caret)throw Error('Zoom replaced the focused input');
       input.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true,key:'Enter',ctrlKey:true}));if($('.inline-note-editor')||!noteCache.get(noteId).body.querySelector('.katex'))throw Error('Inline commit did not render Markdown/formula');
