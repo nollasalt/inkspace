@@ -69,6 +69,38 @@ window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='request'){try{let result=true;if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
+  if(action==='ink-overlay-navigation'){
+    await window.inkspaceCairoIdle();
+    const oldDoc=doc,oldView=view,oldTool=tool,oldHistory=history,oldFuture=future,raster=desktop.inkRasterAsync;
+    let release;let gate=new Promise(resolve=>release=resolve),block=false;
+    desktop.inkRasterAsync=async payload=>{const bytes=await raster(payload);if(block)await gate;return bytes};
+    try{
+      doc={...doc,strokes:[],notes:[],shapes:[],pdfs:[],diagram:undefined};view={x:60,y:40,scale:1};history=[];future=[];tool='pen';clearSelection();render();
+      const rect=viewport.getBoundingClientRect(),sample=(x,y)=>({x:rect.left+view.x+x,y:rect.top+view.y+y,p:.7,id:161,precise:true,eraser:false}),fixture=packets=>window.inkspaceNative.test('fixture',{packets});
+      const alpha=(layer,x,y)=>layer.ctx.getImageData(Math.round((x+surface.padding)*surface.dpr)-4,Math.round((y+surface.padding)*surface.dpr)-4,8,8).data.some((v,i)=>i%4===3&&v);
+      const blank=layer=>!layer.ctx.getImageData(0,0,layer.canvas.width,layer.canvas.height).data.some((v,i)=>i%4===3&&v);
+      await fixture([{type:'pointerdown',samples:[sample(100,100)]},{type:'pointermove',samples:[sample(130,100)]}]);await window.inkspaceCairoIdle();block=true;
+      await fixture([{type:'pointerup',samples:[sample(130,100)]}]);
+      if(!window.inkspaceRetainedInkCount()||!blank(inkLayers[1]))throw Error('Pen-up left a second screen-fixed preview');
+      const pointer=(type,x,y)=>viewport.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:171,button:1,buttons:type==='pointerup'?0:4,clientX:rect.left+x,clientY:rect.top+y}));
+      pointer('pointerdown',200,200);pointer('pointermove',220,210);await new Promise(r=>requestAnimationFrame(r));
+      if(!$('#scene').style.transform)throw Error('Small pan did not use compositor preview');
+      pointer('pointermove',380,270);await new Promise(r=>requestAnimationFrame(r));pointer('pointerup',380,270);
+      if(window.inkspaceRetainedInkCount()||!blank(inkLayers[1])||!blank(inkLayers[2]))throw Error('Pan rebase left stale overlay pixels');
+      release();await window.inkspaceCairoIdle();
+      if(alpha(inkLayers[0],175,140)||!alpha(inkLayers[0],view.x+115,view.y+100))throw Error('Last stroke failed to follow pan');
+      block=false;await fixture([{type:'pointerdown',samples:[sample(160,100)]},{type:'pointermove',samples:[sample(190,100)]}]);await window.inkspaceCairoIdle();
+      gate=new Promise(resolve=>release=resolve);block=true;await fixture([{type:'pointerup',samples:[sample(190,100)]}]);
+      pointer('pointerdown',200,200);pointer('pointermove',230,210);await new Promise(r=>requestAnimationFrame(r));release();await window.inkspaceCairoIdle();
+      if(!alpha(inkLayers[0],paintedView.x+175,paintedView.y+100))throw Error('Async ink committed at the translated view during compositor pan');
+      pointer('pointerup',230,210);if(!alpha(inkLayers[0],view.x+175,view.y+100)||!blank(inkLayers[1])||!blank(inkLayers[2]))throw Error('Ink completion during pan left stale pixels');
+      interactiveZoom(1.2,200,150);settleZoom();await window.inkspaceCairoIdle();
+      if(!blank(inkLayers[1])||!blank(inkLayers[2])||!alpha(inkLayers[0],view.x+115*view.scale,view.y+100*view.scale))throw Error('Zoom left stale or missing ink');
+      for(const pointerType of ['pen','mouse']){const event=new PointerEvent('contextmenu',{bubbles:true,cancelable:true,pointerType,button:2});viewport.dispatchEvent(event);if(!event.defaultPrevented)throw Error('Canvas context menu was not suppressed')}
+      const penDown=new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerType:'pen',pointerId:181,clientX:rect.left+100,clientY:rect.top+100});viewport.dispatchEvent(penDown);if(!penDown.defaultPrevented)throw Error('Browser pen press-and-hold default remained enabled');
+      return{liveLayerClearedOnPenUp:true,pendingInkFollowedPan:true,rebaseClearedOverlays:true,completionDuringPanCorrect:true,zoomPixelsCorrect:true,penAndMouseContextMenuSuppressed:true};
+    }finally{release();desktop.inkRasterAsync=raster;finishInteraction();doc=oldDoc;view=oldView;tool=oldTool;history=oldHistory;future=oldFuture;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
+  }
   if(action==='binary-writing'){
     if(!boot.binary)throw Error('Binary editor required');await window.inkspaceCairoIdle();
     const serialize=documentJSON,raster=desktop.inkRasterAsync,paints=renderStats.fullScenePaints,initial=doc.strokes.length;let serializations=0;

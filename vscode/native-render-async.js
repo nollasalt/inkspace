@@ -12,6 +12,17 @@ function retainFinishedInk(s){
 }
 function releaseRetainedInk(s){const held=cairoRetained.get(s);if(!held)return;cairoRetained.delete(s);const c=inkLayers[2].ctx,b=held.b;c.save();c.setTransform(1,0,0,1,0,0);c.clearRect(b.x,b.y,b.w,b.h);c.beginPath();c.rect(b.x,b.y,b.w,b.h);c.clip();for(const item of cairoRetained.values())if(item.key===inkTileSignature()&&item.b.x< b.x+b.w&&item.b.y<b.y+b.h&&item.b.x+item.b.w>b.x&&item.b.y+item.b.h>b.y)c.drawImage(item.image,item.b.x,item.b.y);c.restore()}
 window.inkspaceRetainedInkCount=()=>cairoRetained.size;
+// Navigation shifts the base scene; first merge held ink at its painted view.
+// Otherwise a pan rebase resets the scene transform underneath stale overlays.
+function settleRetainedInk(){
+  if(!cairoRetained.size)return;
+  const current=view;view={x:paintedView.x,y:paintedView.y,scale:renderedScale};
+  try{for(const stroke of [...cairoRetained.keys()])commitFinishedInk(stroke)}finally{view=current}
+}
+const previewZoomBeforeRetainedInk=previewZoom;
+previewZoom=function(){settleRetainedInk();previewZoomBeforeRetainedInk()};
+const rebasePanBeforeRetainedInk=rebasePan;
+rebasePan=function(){settleRetainedInk();rebasePanBeforeRetainedInk()};
 const renderBeforeReleaseOptimization=render;
 render=function(){
   cairoScenePreview=!cairoVisibleReady();
@@ -20,6 +31,10 @@ render=function(){
 };
 const cairoFinishedStrokes=new WeakSet();
 function commitFinishedInk(s){
+  // The scene can still be composited at a newer pan/zoom. Its backing pixels
+  // belong to paintedView until rebase/commitScene, not to the current view.
+  const current=view;view={x:paintedView.x,y:paintedView.y,scale:renderedScale};
+  try{
   const b=clippedInkRect(screenBounds(s.points,s.width));
   if(b.w&&b.h){
     // Repaint everything in the actual cleared rectangle, including neighbours
@@ -29,6 +44,7 @@ function commitFinishedInk(s){
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.beginPath();ctx.rect(b.x,b.y,b.w,b.h);ctx.clip();ctx.globalCompositeOperation='copy';ctx.drawImage(sceneBuffer,0,0);ctx.restore();
   }
   releaseRetainedInk(s);
+  }finally{view=current}
 }
 const cairoPending=new Set();
 const cairoRasterQueue=[];let cairoRasterRunning=0;
@@ -90,7 +106,7 @@ const finishCairoInteraction=finishInk;
 finishInk=function(){
   const stroke=active.s;
   if(stroke.brush!=='xournal'){finishCairoInteraction();return}
-  cancelCairoInk();retainFinishedInk(stroke);active=null;cairoFinishedStrokes.add(stroke);
+  cancelCairoInk();retainFinishedInk(stroke);clearLayer(inkLayers[1]);active=null;cairoFinishedStrokes.add(stroke);
   $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
   // Leave the live preview visible; no scene copy or DOM rebuild on pointerup.
   requestAnimationFrame(()=>{if(!doc.strokes.includes(stroke))return;paintCairoStroke(bufferContext,stroke);if(strokeCache.get(stroke)?.cairoKey===inkTileSignature()){cairoFinishedStrokes.delete(stroke);commitFinishedInk(stroke)}});
