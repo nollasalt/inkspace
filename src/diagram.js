@@ -1,6 +1,7 @@
 // mxGraph is draw.io's upstream diagram editing engine (Apache-2.0).
 // Native ink remains in its own Cairo layer; this layer handles mouse diagrams.
 import factory from 'mxgraph';
+import {installDiagramDrag} from './diagram-drag.js';
 const resource=new URL('mxgraph/',document.currentScript.src).href;
 const mx=factory({mxLoadResources:false,mxLoadStylesheets:false,mxBasePath:resource,mxImageBasePath:resource+'images'});
 const {mxGraph,mxGraphModel,mxCodec,mxUtils,mxEvent,mxPoint,mxConnectionConstraint,mxConstants,mxCell,mxGeometry}=mx;
@@ -42,15 +43,19 @@ function init(){
   // Start a connector only from an explicit boundary connection point.
   graph.connectionHandler.isStartEvent=()=>!!(graph.connectionHandler.constraintHandler.currentFocus&&graph.connectionHandler.constraintHandler.currentConstraint);
   graph.connectionHandler.createTarget=false;graph.connectionHandler.select=false;
-  graph.graphHandler.livePreview=true;graph.graphHandler.maxLivePreview=50;
+  installDiagramDrag(graph,{dimensions:()=>a4Dimensions(),view:()=>view,stats:()=>renderStats});
+  graph.connectionHandler.marker.getMarkerColor=()=>graph.connectionHandler.first?'#007acc':null;
+  graph.connectionHandler.constraintHandler.highlightColor='#007acc';
   graph.connectionHandler.isConnectableCell=cell=>!cell||cell.vertex;
   const connectionMove=graph.connectionHandler.mouseMove;graph.connectionHandler.mouseMove=function(sender,event){connectionMove.call(this,sender,event);if(!this.first&&this.currentState)this.currentState.setCursor(this.constraintHandler.currentConstraint?'crosshair':'move')};
   const fire=graph.fireMouseEvent;graph.fireMouseEvent=function(name,event,...args){
     const e=event.getEvent();if(e.pointerType&&e.pointerType!=='mouse'||e.nativeInk||e.sourceCapabilities?.firesTouchEvents)return;
     if(space||tool==='pan')return;
-    if(name===mxEvent.MOUSE_DOWN){if(tool!=='diagram')activateTool('diagram');diagramContact=true;}
+    if(name===mxEvent.MOUSE_DOWN){if(tool!=='diagram')activateTool('diagram',false,false);diagramContact=true;}
     const result=fire.call(this,name,event,...args);if(name===mxEvent.MOUSE_UP)diagramContact=false;return result;
   };
+  const cancelMouseDrag=()=>{diagramContact=false;graph.graphHandler.reset();graph.connectionHandler.reset();graph.isMouseDown=false};
+  window.addEventListener('blur',cancelMouseDrag);window.addEventListener('pointercancel',event=>{if(event.pointerType==='mouse')cancelMouseDrag()});
   const doubleClick=graph.dblClick;graph.dblClick=function(event,cell){if(event.sourceCapabilities?.firesTouchEvents||typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen')return;return doubleClick.call(this,event,cell)};
   graph.getModel().addListener(mxEvent.CHANGE,sync);
   graph.getSelectionModel().addListener(mxEvent.CHANGE,()=>{if(!loading&&graph.getSelectionCount())clearSelection();refreshProperties();overlaySelection()});
@@ -58,7 +63,7 @@ function init(){
 function render(){
   init();const source=doc.diagram||'';
   if(source!==loaded){loading=true;try{
-    graph.stopEditing(true);graph.clearSelection();graph.connectionHandler.reset();
+    graph.graphHandler.reset();diagramContact=false;graph.isMouseDown=false;graph.stopEditing(true);graph.clearSelection();graph.connectionHandler.reset();
     const entry=edits.findLast(e=>e.after===loaded&&e.before===source||e.before===loaded&&e.after===source);
     if(entry){if(entry.after===loaded)entry.edit.undo();else entry.edit.redo();replayCount++}
     else{edits.length=0;graph.getModel().setRoot((source?read(source):new mxGraphModel()).getRoot())}
@@ -109,7 +114,7 @@ function paste(source,dx,dy){
 }
 function remove(){if(!graph?.getSelectionCount()||graph.isEditing())return false;graph.removeCells();return true}
 function svg(){if(!graph||!doc.diagram)return '';const canvas=graph.view.getCanvas(),copy=canvas.cloneNode(true),original=canvas.querySelectorAll('foreignObject *'),cloned=copy.querySelectorAll('foreignObject *');original.forEach((element,index)=>{const style=getComputedStyle(element);cloned[index].setAttribute('style',Array.from(style,key=>key+':'+style.getPropertyValue(key)).join(';'))});return `<g transform="translate(${-view.x/view.scale} ${-view.y/view.scale}) scale(${1/view.scale})">${copy.outerHTML}</g>`}
-window.inkspaceDiagram={render,add,connect,ownsPointer,bounds,coverage,copy,paste,remove,svg,editing:()=>!!graph?.isEditing(),clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
+window.inkspaceDiagram={render,add,connect,ownsPointer,bounds,coverage,copy,paste,remove,svg,editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
 document.querySelectorAll('[data-diagram]').forEach(button=>{button.onclick=()=>add(button.dataset.diagram);button.draggable=true;button.addEventListener('dragstart',event=>event.dataTransfer.setData('application/x-inkspace-shape',button.dataset.diagram))});
 viewport.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('application/x-inkspace-shape'))event.preventDefault()});viewport.addEventListener('drop',event=>{const kind=event.dataTransfer.getData('application/x-inkspace-shape');if(!['rect','roundrect','ellipse','diamond','arrow','line'].includes(kind))return;event.preventDefault();const p=local(event);add(kind,world(p.x,p.y))});$('#diagram-connect').onclick=connect;$('#diagram-delete').onclick=remove;$('#diagram-front').onclick=()=>graph?.orderCells(false);$('#diagram-back').onclick=()=>graph?.orderCells(true);
 $('#diagram-stroke').onchange=()=>graph?.setCellStyles('strokeColor',$('#diagram-stroke').value);

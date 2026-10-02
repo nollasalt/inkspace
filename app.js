@@ -45,10 +45,10 @@ function end(e){if(duplicateBrowserPen(e))return;settleZoom();cancelInteractionF
 viewport.addEventListener('pointerup',end);viewport.addEventListener('pointercancel',end);
 viewport.addEventListener('wheel',e=>{e.preventDefault();if(active?.type==='pen')return;const p=local(e);interactiveZoom(view.scale*Math.exp(-e.deltaY*.001),p.x,p.y)},{passive:false});
 function undo(){finishInteraction();if(history.length){future.push(snapshot());const previous=doc;doc=history.pop();clearSelection();persist();renderHistoryChange(previous)}}function redo(){finishInteraction();if(future.length){history.push(snapshot());const previous=doc;doc=future.pop();clearSelection();persist();renderHistoryChange(previous)}}
-function activateTool(next,toggle=false){
+function activateTool(next,toggle=false,redraw=true){
   if(toggle&&next===tool)next=previousTool;
   if(next===tool)return;
-  finishInteraction();previousTool=tool;tool=next;clearSelection();render();
+  finishInteraction();previousTool=tool;tool=next;clearSelection();if(redraw)render();else{refreshToolOptions();overlaySelection()}
   document.querySelectorAll('[data-tool]').forEach(button=>button.classList.toggle('active',button.dataset.tool===tool));viewport.style.cursor='default';
 }
 $('#undo').onclick=undo;$('#redo').onclick=redo;document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>activateTool(b.dataset.tool));

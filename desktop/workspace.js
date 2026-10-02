@@ -100,7 +100,8 @@ function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#wid
 for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown','pointerup'])viewport.addEventListener(type,updatePenCursor,{capture:true});
 viewport.addEventListener('pointerleave',e=>{if(penPosition&&e.pointerType!=='pen')return;const p=local(e);if(p.x>=0&&p.y>=0&&p.x<viewport.clientWidth&&p.y<viewport.clientHeight)return;clearPenCursor()});window.addEventListener('blur',clearPenCursor);
 $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventListener('input',refreshPenCursor);
-const originalRender=render;render=function(){originalRender();refreshPenCursor();$('#diagram-sidebar').hidden=false;$('#diagram-options').hidden=false;$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'};
+function refreshToolOptions(){refreshPenCursor();$('#diagram-sidebar').hidden=false;$('#diagram-options').hidden=false;$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'}
+const originalRender=render;render=function(){originalRender();refreshToolOptions()};
 document.querySelectorAll('.menu').forEach(menu=>menu.addEventListener('toggle',()=>{if(menu.open)document.querySelectorAll('.menu').forEach(other=>{if(other!==menu)other.open=false})}));
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('.menu'))document.querySelectorAll('.menu').forEach(m=>m.open=false)});
 document.querySelectorAll('.menu button').forEach(button=>button.addEventListener('click',()=>button.closest('.menu').open=false));

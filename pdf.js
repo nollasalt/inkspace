@@ -36,7 +36,7 @@ async function renderPdfPage(asset,index,entry){
   }catch(e){if(!entry.disposed&&pdfSessions.get(asset.id)===entry&&token===cache.token)toast('PDF 页面加载失败：'+e.message)}finally{if(token===cache.token){cache.pending=null;cache.job=null}}
 }
 function renderPdfs(){
-  const assets=document.body.classList.contains('empty-workspace')?[]:doc.pdfs||[],ids=new Set(assets.map(a=>a.id));pdfRoot.classList.toggle('select-text',tool==='pdftext');
+  renderPdfList();const assets=document.body.classList.contains('empty-workspace')?[]:doc.pdfs||[],ids=new Set(assets.map(a=>a.id));pdfRoot.classList.toggle('select-text',tool==='pdftext');
   for(const [id,entry] of pdfSessions)if(!ids.has(id)){disposePdfEntry(entry);pdfSessions.delete(id)}
   for(const asset of assets){openPdf(asset).then(entry=>{if(entry.disposed||pdfSessions.get(asset.id)!==entry||!(doc.pdfs||[]).some(a=>a.id===asset.id&&a.data===asset.data))return;for(let i=0;i<asset.pages.length;i++)renderPdfPage(asset,i,entry)}).catch(error=>{if((doc.pdfs||[]).includes(asset)&&!document.body.classList.contains('empty-workspace'))toast('PDF 加载失败：'+error.message)})}
 }
@@ -76,3 +76,14 @@ function pdfPagePlacement(sizes,anchor){
   const [w,h]=a4Dimensions(),x=Math.floor(anchor.x/w)*w,y=Math.floor(anchor.y/h)*h;
   return sizes.map((page,index)=>{const scale=Math.min(w/page.width,h/page.height),width=page.width*scale,height=page.height*scale;return{x:x+(w-width)/2,y:y+index*h+(h-height)/2,width,height}});
 }
+
+function removePdf(id){
+  if(!(doc.pdfs||[]).some(asset=>asset.id===id))return false;
+  finishInteraction();checkpoint();doc.pdfs=doc.pdfs.filter(asset=>asset.id!==id);render();persist();return true;
+}
+function renderPdfList(){
+  const assets=doc.pdfs||[],root=$('#pdf-assets');$('#pdf-library').hidden=!assets.length;
+  const signature=assets.map(asset=>asset.id+':'+asset.name+':'+asset.pages.length).join('|');if(root.dataset.signature===signature)return;root.dataset.signature=signature;root.replaceChildren();
+  for(const asset of assets){const row=document.createElement('div');row.className='pdf-asset';const label=document.createElement('span');label.textContent=asset.name;label.title=asset.name+' · '+asset.pages.length+' 页';const remove=document.createElement('button');remove.textContent='×';remove.title='删除 PDF，保留笔迹批注（Ctrl+Z 恢复）';remove.setAttribute('aria-label','删除 PDF '+asset.name);remove.onclick=()=>removePdf(asset.id);row.append(label,remove);root.append(row)}
+}
+$('#pdf-manage').onclick=()=>{renderPdfList();if(!doc.pdfs?.length){toast('当前页没有 PDF');return}$('#pdf-library').scrollIntoView({block:'nearest'});$('#pdf-assets button')?.focus()};

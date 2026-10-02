@@ -20,9 +20,9 @@ window.inkspacePdfWorkerReady=fetch(PdfApi.GlobalWorkerOptions.workerSrc).then(a
 window.inkspacePdfWorkerReady.catch(error=>toast('PDF 初始化失败：'+error.message));
 function pageMessage(){codium.postMessage({type:'pages',pages:notebook.pages.map(p=>({id:p.id,title:p.title})),activePage:notebook.activePage})}
 function rememberDraft(){codium.setState({text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})}
-function sendEdit(){if(!hostLoaded||applyingHost||active||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,baseText:lastHostText,autoSave:true})}
+function sendEdit(){if(!hostLoaded||applyingHost||active||window.inkspaceDiagram?.interacting()||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,baseText:lastHostText,autoSave:true})}
 function flushed(){return new Promise((resolve,reject)=>{if(conflict){reject(Error('文件冲突，请另存草稿或重新打开'));return}finishInteraction();clearTimeout(draftTimer);draftTimer=null;forceSaveView=true;sendEdit();if(!editFlight){forceSaveView=false;resolve();return}flushWaiters.push({resolve,reject})})}
-persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active){persist();return}pageMessage();forceSaveView=true;sendEdit()},700)};
+persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active||window.inkspaceDiagram?.interacting()){persist();return}pageMessage();forceSaveView=true;sendEdit()},700)};
 viewport.addEventListener('wheel',()=>persist(),{passive:true});for(const id of ['#in','#out','#home'])$(id)?.addEventListener('click',()=>persist());
 flushPersist=function(){clearTimeout(draftTimer);draftTimer=null;sendEdit()};
 saveNotebook=async function(saveAs=false){if(conflict&&saveAs){download(documentJSON(true),'application/json',notebook.title+'-草稿.inkspace.json');return true}codium.postMessage({type:'save',saveAs});return true};
@@ -93,7 +93,32 @@ async function runCodiumDiagnostic(action){
     await $('#pdf-file').onchange({target:{files:[file],value:''}});const asset=doc.pdfs.at(-1);if(!asset||asset.pages.length!==3)throw Error('PDF import failed');
     for(let i=0;i<3;i++){const page=asset.pages[i];if(Math.abs(page.x+page.width/2-(Math.floor(anchor.x/w)+.5)*w)>1e-6||Math.abs(page.y+page.height/2-(Math.floor(anchor.y/h)+i+.5)*h)>1e-6||page.width>w+.001||page.height>h+.001)throw Error('PDF did not align with current A4 tile')}
     const exported=await exportAnnotatedPdf(),document=await PdfApi.PDFDocument.load(exported);if(document.getPageCount()!==3)throw Error('Scaled PDF export failed');
-    undo();await flushed();return{aligned:true,mixedOrientation:true,gaplessTiles:true,exported:true};
+    const strokeCount=doc.strokes.length,noteCount=doc.notes.length,button=$('#pdf-assets button');if(!button||!button.getAttribute('aria-label').includes('alignment.pdf'))throw Error('PDF delete entry missing');button.click();if(doc.pdfs.some(a=>a.id===asset.id)||pdfSessions.has(asset.id)||doc.strokes.length!==strokeCount||doc.notes.length!==noteCount)throw Error('PDF delete lost annotations or kept resource');undo();if(doc.pdfs.at(-1).data!==asset.data)throw Error('PDF undo did not restore original');redo();if(doc.pdfs.some(a=>a.id===asset.id))throw Error('PDF delete redo failed');undo();undo();await flushed();return{aligned:true,mixedOrientation:true,gaplessTiles:true,exported:true,deleteUndoRedo:true,annotationsPreserved:true};
+  }
+  if(action==='diagram-drag'){
+    await window.inkspaceCairoIdle();const saved={doc,history,future,tool,view:{...view}},api=window.inkspaceDiagram,g=api.graph;
+    try{
+      doc={...doc,diagram:undefined};history=[];future=[];view={x:150,y:100,scale:.8};render();await window.inkspaceCairoIdle();
+      const a=api.add('rect',{x:90,y:100}),b=api.add('ellipse',{x:400,y:150});g.setSelectionCells([a,b]);const edge=api.connect();g.setSelectionCell(a);const initial=a.geometry.clone(),fullPaints=renderStats.fullScenePaints,originalRedraw=g.cellRenderer.redraw;let redraws=0;
+      g.cellRenderer.redraw=function(...args){redraws++;return originalRedraw.apply(this,args)};
+      async function drag(x,y,altKey=false,samples=1){
+        const state=g.view.getState(a),target=state.shape.node,rect=viewport.getBoundingClientRect(),start={x:rect.left+state.x+state.width/2,y:rect.top+state.y+state.height/2},dx=(x-a.geometry.x)*view.scale,dy=(y-a.geometry.y)*view.scale;
+        const pointer=(type,factor)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:125,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,altKey,clientX:start.x+dx*factor,clientY:start.y+dy*factor}));
+        pointer('pointermove',0);pointer('pointerdown',0);const count=redraws;
+        for(let i=1;i<=samples;i++)pointer('pointermove',i/samples);await new Promise(resolve=>requestAnimationFrame(resolve));
+        if(redraws!==count||renderStats.fullScenePaints!==fullPaints)throw Error('Drag rebuilt cells or full ink scene');
+        if(!target.style.translate||!$('#diagram-layer [data-inkspace-drag]'))throw Error('Compositor drag preview missing');
+        if(g.connectionHandler.marker.markedState)throw Error('Connection highlight stayed behind');
+        pointer('pointerup',1);if(target.style.translate||$('#diagram-layer [data-inkspace-drag]'))throw Error('Drag preview not cleaned');
+      }
+      try{
+        await drag(3,4,false,400);if(Math.abs(a.geometry.x)>1e-8||Math.abs(a.geometry.y)>1e-8)throw Error('Top-left page snapping failed');
+        const [w,h]=a4Dimensions();await drag(w-a.geometry.width-3,h-a.geometry.height-2);if(Math.abs(a.geometry.x+a.geometry.width-w)>1e-8||Math.abs(a.geometry.y+a.geometry.height-h)>1e-8)throw Error('Fractional A4 bottom-right snapping failed');
+        const last=g.view.getState(edge).absolutePoints[0];if(!Number.isFinite(last.x))throw Error('Connector lost on drag commit');
+        await drag(3,4,true);if(Math.abs(a.geometry.x-3)>1e-8||Math.abs(a.geometry.y-4)>1e-8)throw Error('Alt did not bypass snapping');
+        undo();redo();return{samples:400,cellRedrawsDuringDrag:0,inkScenePaintsDuringDrag:0,highlightClean:true,pageCornersExact:true,altBypass:true,undoRedo:true};
+      }finally{g.cellRenderer.redraw=originalRedraw}
+    }finally{doc=saved.doc;history=saved.history;future=saved.future;tool=saved.tool;view=saved.view;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
   }
   if(action==='diagram'){
     const api=window.inkspaceDiagram;if(!api?.graph)throw Error('Diagram editor did not initialize');
