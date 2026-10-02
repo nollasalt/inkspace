@@ -80,6 +80,17 @@ window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='request'){try{let result=true;if(message.command==='tool'){if(!['pen','erase','pan','text','select','shape','diagram'].includes(message.tool))throw Error('未知工具');if(!window.inkspaceDiagram?.editing()&&!$('#editor').open){activateTool(message.tool,true,false);await flushed()}}else if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
+  if(action==='text-hit-testing'){
+    await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool,lastCanvasPointer};
+    try{
+      doc={...doc,notes:[{id:'hit-lower',x:40,y:80,width:320,markdown:'Lower'},{id:'hit-right',x:180,y:40,width:320,markdown:'Right'},{id:'hit-upper',x:40,y:40,width:320,markdown:'Upper'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};history=[];future=[];tool='pen';clearSelection();
+      const textHit=id=>{const cache=noteCache.get(id),range=document.createRange();range.selectNodeContents(cache.body.querySelector('p'));const rect=range.getClientRects()[0],hit=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);if(hit?.closest('.note')?.dataset.id!==id)throw Error('Adjacent text hit intercepted: '+id);return hit};
+      for(const scale of [.75,1,2]){view={x:40,y:30,scale};render();for(const note of doc.notes)textHit(note.id)}
+      view={x:40,y:30,scale:1};render();lastCanvasPointer='pen';textHit('hit-lower').dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,button:0}));const input=$('.inline-note-editor');if(!input||input.value!=='Lower'||document.activeElement!==input||$('#editor').open)throw Error('Mouse double click after pen did not edit correct text');
+      const r=input.getBoundingClientRect(),hit=document.elementFromPoint(r.left+8,r.top+10);if(hit!==input)throw Error('Inline text input is blocked');textHit('hit-right');window.inkspaceInlineText.finish();
+      return{adjacentVertical:true,adjacentHorizontal:true,scales:3,doubleClickAfterPen:true,correctTextEdited:true,inputReceivesMouse:true};
+    }finally{window.inkspaceInlineText.finish();finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;lastCanvasPointer=saved.lastCanvasPointer;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
+  }
   if(action==='text-guides'){
     await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool};
     try{
@@ -87,13 +98,13 @@ async function runCodiumDiagnostic(action){
       for(const scale of [.75,1,2]){
         view={x:80,y:60,scale};render();const cache=noteCache.get('guide-text'),n=doc.notes[0],paragraphs=cache.body.querySelectorAll('p'),first=document.createRange(),last=document.createRange();first.selectNodeContents(paragraphs[0].firstChild);last.selectNodeContents(paragraphs[1].firstChild);
         const start=first.getClientRects()[0],end=[...last.getClientRects()].at(-1),bar=cache.el.querySelector('.note-bar'),handle=cache.el.querySelector('.note-resize'),barRect=bar.getBoundingClientRect(),handleRect=handle.getBoundingClientRect();
-        if(Math.abs(barRect.right-start.left)>.6||Math.abs(barRect.bottom-start.top)>.6||Math.abs(handleRect.left+handleRect.width/2-end.right)>.6||Math.abs(handleRect.top+handleRect.height/2-end.bottom)>.6)throw Error('Text handles do not align at scale '+scale);
-        if(getComputedStyle(cache.el,'::after').borderTopStyle!=='dashed')throw Error('Missing dashed text guide');
+        if(Math.abs(barRect.left-(start.left-6*scale))>.6||barRect.bottom>start.top||Math.abs(handleRect.right-barRect.right)>.6||Math.abs(handleRect.top-barRect.top)>.6)throw Error('Text handles do not align at scale '+scale);
+        if(getComputedStyle(cache.el,'::after').borderTopStyle!=='solid')throw Error('Missing solid text guide');
         const pointer=(target,type,x,y)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:221,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,clientX:x,clientY:y}));
         let x=handleRect.left+handleRect.width/2,y=handleRect.top+handleRect.height/2,width=n.width;pointer(handle,'pointerdown',x,y);pointer(viewport,'pointermove',x+8*scale,y);pointer(viewport,'pointerup',x+8*scale,y);if(Math.abs(n.width-width-8)>1e-6)throw Error('Text resize jumped to container edge');
         const move=bar.getBoundingClientRect(),oldX=n.x,oldY=n.y;x=move.left+move.width/2;y=move.top+move.height/2;pointer(bar,'pointerdown',x,y);pointer(viewport,'pointermove',x+10*scale,y+5*scale);pointer(viewport,'pointerup',x+10*scale,y+5*scale);if(Math.abs(n.x-oldX-10)>1e-6||Math.abs(n.y-oldY-5)>1e-6)throw Error('Text move handle failed');
       }
-      return{dashedHoverGuide:true,startAndEndAligned:true,scales:3,resizeWithoutJump:true,moveHandle:true};
+      return{solidGrayGuide:true,controlsAboveText:true,scales:3,resizeWithoutJump:true,moveHandle:true};
     }finally{finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
   }
   if(action==='inline-text'){
@@ -202,9 +213,9 @@ async function runCodiumDiagnostic(action){
       const image=document.createElement('canvas');image.width=image.height=1;
       doc={...doc,strokes:[],shapes:[],pdfs:[],diagram:undefined,notes:[{id:'pan-text',x:40,y:30,width:160,markdown:'[Link](https://example.com)\n\nText body for panning.'},{id:'pan-image',kind:'image',x:230,y:30,width:80,markdown:'',src:image.toDataURL('image/png'),aspect:1}]};history=[];future=[];tool='pan';clearSelection();setDiagramSidebarCollapsed(false);
       const original=JSON.stringify(doc.notes);
-      for(const scale of [.75,1,2])for(const selector of ['.note:not(.image-note) .note-body','.note:not(.image-note) .note-bar','.note:not(.image-note) .note-resize','.image-note img','.note-body a']){
+      for(const scale of [.75,1,2])for(const selector of ['.note:not(.image-note) .note-hit','.note:not(.image-note) .note-bar','.note:not(.image-note) .note-resize','.image-note img','.note-body a']){
         view={x:80,y:60,scale};render();await window.inkspaceNative.register();
-        const target=$(selector),initialRect=target.getBoundingClientRect(),viewportRect=viewport.getBoundingClientRect();view.x-=Math.max(0,initialRect.right-viewportRect.right+40);render();const startView={...view},rect=target.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,hit=document.elementFromPoint(x,y);if(!hit||!target.contains(hit))throw Error('Pen pan target obscured: '+selector);
+        noteCache.get('pan-text').el.classList.add('selected');const target=$(selector),initialRect=target.getBoundingClientRect(),viewportRect=viewport.getBoundingClientRect();view.x-=Math.max(0,initialRect.right-viewportRect.right+40);render();noteCache.get('pan-text').el.classList.add('selected');const startView={...view},rect=target.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,hit=document.elementFromPoint(x,y);if(!hit||!target.contains(hit))throw Error('Pen pan target obscured: '+selector);
         const sample=(dx,dy)=>({x:x+dx,y:y+dy,p:.6,id:131,precise:true,eraser:false});
         await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[sample(0,0)]},{type:'pointermove',samples:[sample(24,16)]}]});
         if(active?.type!=='pan'||view.x!==startView.x+24||view.y!==startView.y+16)throw Error('Native pen did not pan over '+selector);
