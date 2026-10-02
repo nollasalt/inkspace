@@ -3,7 +3,7 @@ function validPdfs(pdfs){return pdfs===undefined||(Array.isArray(pdfs)&&pdfs.eve
 const $=s=>document.querySelector(s), viewport=$('#viewport'),canvas=$('#ink'),ctx=canvas.getContext('2d',{willReadFrequently:true}),notes=$('#notes');
 function usableZoom(s){return Number.isFinite(s)&&s>0&&Number.isFinite(1/s)?s:view.scale}
 function zoomLabel(s){const p=s*100;return (p>=.01&&p<1e7?p.toLocaleString('zh-CN',{maximumFractionDigits:p<1?3:1}):p.toExponential(2))+'%'}
-let doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[],background:{layout:'a4-portrait',type:'blank',color:'#ffffff',spacing:'auto',fontSize:16}},view={x:100,y:80,scale:1},tool='pen',previousTool='pen',space=false,active=null,editing=null;
+let doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[],background:{layout:'a4-portrait',type:'ruled',color:'#ffffff',spacing:'auto',fontSize:16}},view={x:100,y:80,scale:1},tool='pen',previousTool='pen',space=false,active=null,editing=null;
 let selected={strokes:[],notes:[],shapes:[]},selectionRect=null;
 let history=[],future=[],pointers=new Map(),gesture=null;
 const world=(x,y)=>({x:(x-view.x)/view.scale,y:(y-view.y)/view.scale});

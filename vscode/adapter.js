@@ -42,6 +42,17 @@ saveNotebook=async function(saveAs=false){if(conflict&&saveAs){download(document
 openNotebook=function(){codium.postMessage({type:'command',command:'open'})};
 $('#new').onclick=()=>codium.postMessage({type:'command',command:'new'});$('#load').onclick=openNotebook;$('#save').onclick=()=>saveNotebook();$('#save-as').onclick=()=>saveNotebook(true);
 document.querySelector('header').insertBefore($('#tool-options'),$('.toolbar-actions'));
+// VS Code owns file navigation and saving. Keep document resources beside the
+// palette, and leave a narrow edge rail available when the sidebar is closed.
+const sidebar=$('#diagram-sidebar'),rail=document.createElement('nav');rail.id='sidebar-rail';rail.setAttribute('aria-label','画布侧栏');
+const sidebarToggle=$('#diagram-sidebar-toggle');sidebarToggle.textContent='◧';rail.append(sidebarToggle);sidebar.before(rail);
+const diagramHeading=document.createElement('div');diagramHeading.className='sidebar-section-heading';diagramHeading.innerHTML='<strong>图形</strong>';
+for(const [id,text,title]of [['diagram-import','⇥','导入 draw.io 图形'],['diagram-export','⇧','导出 draw.io 图形']]){const button=$('#'+id);button.textContent=text;button.title=title;button.setAttribute('aria-label',title);diagramHeading.append(button)}sidebar.querySelector('h3').replaceWith(diagramHeading);
+const pdfHeading=document.createElement('div');pdfHeading.className='sidebar-section-heading';pdfHeading.innerHTML='<strong>PDF</strong>';const importPdf=$('#pdf-import');importPdf.textContent='＋';importPdf.title='导入 PDF 到当前页';importPdf.setAttribute('aria-label',importPdf.title);pdfHeading.append(importPdf);$('#pdf-library').before(pdfHeading);$('#pdf-library h3').remove();
+for(const id of ['pdf-manage','pdf-export'])$('#pdf-library').append($('#'+id));
+const utilities=document.createElement('div');utilities.id='sidebar-utilities';const svgExport=$('#svg');svgExport.textContent='导出 SVG';utilities.append(svgExport);sidebar.append(utilities);
+for(const id of ['new','load','save','save-as'])$('#'+id).hidden=true;
+$('.document-controls').hidden=true;
 const statusBar=document.createElement('div');statusBar.id='input-status-bar';const statusText=document.createElement('span');statusText.id='input-status';statusText.textContent='Windows 原生输入 · 正在连接';const pagesButton=document.createElement('button');pagesButton.id='show-pages';pagesButton.textContent='页面';pagesButton.onclick=()=>codium.postMessage({type:'command',command:'pages'});statusBar.append(statusText,pagesButton);$('#editor-shell').append(statusBar);
 function updateNativeStatus(){const state=window.inkspaceNative.status(),engine=window.desktop?.inkStatus();statusText.textContent=!engine?'高精度笔输入必需 · 请使用墨境 VSCodium 原生版':!state.connected?'高精度笔输入未就绪 · '+state.error:state.lastPrecise===false?'设备未提供高精度笔数据 · 已停止书写':state.lastPrecise===true?'Windows 原生高精度笔迹 · Cairo '+engine.cairo:'Windows 原生采样已接入 · Cairo '+engine.cairo+' · 等待触控笔';}
 const nativeStatusTimer=setInterval(updateNativeStatus,1000);updateNativeStatus();window.addEventListener('beforeunload',()=>clearInterval(nativeStatusTimer),{once:true});
@@ -70,6 +81,7 @@ window.addEventListener('message',async event=>{const message=event.data;
 });
 async function runCodiumDiagnostic(action){
   if(action==='tool-state')return{tool,keyboardFocused:document.hasFocus()};
+  if(action==='layout-state')return{fileMenuHidden:$('.document-controls').hidden,sidebarSwitchAtEdge:$('#diagram-sidebar-toggle').parentElement.id==='sidebar-rail',resourceImportInSidebar:sidebar.contains($('#pdf-import'))&&sidebar.contains($('#diagram-import')),calibrationInSidebar:!!$('#sidebar-utilities button'),background:backgroundSettings().type,visiblePaperCells:$('#a4-pages')?.querySelectorAll('rect[data-cell]').length||0};
   if(action==='erase-performance'){
     await window.inkspaceCairoIdle();const oldDoc=doc,oldView=view,oldTool=tool,oldHistory=history,oldFuture=future;
     try{
@@ -157,10 +169,10 @@ async function runCodiumDiagnostic(action){
       const original=JSON.stringify(doc.notes);
       for(const scale of [.75,1,2])for(const selector of ['.note:not(.image-note) .note-body','.note:not(.image-note) .note-bar','.note:not(.image-note) .note-resize','.image-note img','.note-body a']){
         view={x:80,y:60,scale};render();await window.inkspaceNative.register();
-        const target=$(selector),rect=target.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,hit=document.elementFromPoint(x,y);if(!hit||!target.contains(hit))throw Error('Pen pan target obscured: '+selector);
+        const target=$(selector),initialRect=target.getBoundingClientRect(),viewportRect=viewport.getBoundingClientRect();view.x-=Math.max(0,initialRect.right-viewportRect.right+40);render();const startView={...view},rect=target.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,hit=document.elementFromPoint(x,y);if(!hit||!target.contains(hit))throw Error('Pen pan target obscured: '+selector);
         const sample=(dx,dy)=>({x:x+dx,y:y+dy,p:.6,id:131,precise:true,eraser:false});
         await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[sample(0,0)]},{type:'pointermove',samples:[sample(24,16)]}]});
-        if(active?.type!=='pan'||view.x!==104||view.y!==76)throw Error('Native pen did not pan over '+selector);
+        if(active?.type!=='pan'||view.x!==startView.x+24||view.y!==startView.y+16)throw Error('Native pen did not pan over '+selector);
         await window.inkspaceNative.test('fixture',{packets:[{type:'pointerup',samples:[sample(24,16)]}]});
         if(active||JSON.stringify(doc.notes)!==original||doc.strokes.length||history.length)throw Error('Panning changed content or history');
       }

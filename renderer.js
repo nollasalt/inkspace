@@ -36,7 +36,7 @@ function cachedStroke(s){
   let c=strokeCache.get(s);if(!c){const d=InkContent.strokePath(s);c={d,path:new Path2D(d),bounds:itemBounds('strokes',s)};strokeCache.set(s,c);renderStats.outlineBuilds++}return c;
 }
 function visible(b){const pad=surface.padding,r={x:(-view.x-pad)/view.scale,y:(-view.y-pad)/view.scale,w:(surface.width+pad*2)/view.scale,h:(surface.height+pad*2)/view.scale};return b.x+b.w>=r.x&&b.y+b.h>=r.y&&b.x<=r.x+r.w&&b.y<=r.y+r.h}
-function backgroundSettings(){const bg=doc.background||{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16};return {...bg,layout:bg.layout==='a4-landscape'?'a4-landscape':'a4-portrait'}}
+function backgroundSettings(){const bg=doc.background||{type:'ruled',color:'#ffffff',spacing:'auto',fontSize:16};return {...bg,layout:bg.layout==='a4-landscape'?'a4-landscape':'a4-portrait'}}
 function a4Dimensions(){return backgroundSettings().layout==='a4-landscape'?[297*96/25.4,210*96/25.4]:[210*96/25.4,297*96/25.4]}
 function textSize(){return backgroundSettings().fontSize||16}
 function backgroundSpacing(){const bg=backgroundSettings();return bg.spacing==='auto'?textSize()*1.75:bg.spacing}
@@ -84,9 +84,11 @@ function renderA4Pages(){
     else if(s.kind==='ellipse'){const count=Math.max(32,Math.ceil(Math.PI*(b.w/w+b.h/h)*8));let prev={x:b.x+b.w,y:b.y+b.h/2};for(let i=1;i<=count;i++){const t=i/count*Math.PI*2,q={x:b.x+b.w/2+Math.cos(t)*b.w/2,y:b.y+b.h/2+Math.sin(t)*b.h/2};segment(prev,q,r);prev=q}}
     else{segment({x:s.x,y:s.y},{x:s.x2,y:s.y2},r);if(s.kind==='arrow'){const [a,z]=arrowPoints(s);segment(a,{x:s.x2,y:s.y2},r);segment(z,{x:s.x2,y:s.y2},r)}}
   }
-  const diagramCoverage=window.inkspaceDiagram?.coverage();for(const b of diagramCoverage?.boxes||[])box(b);for(const l of diagramCoverage?.lines||[])for(let i=1;i<l.points.length;i++)segment(l.points[i-1],l.points[i],l.width/2);
-  for(const n of doc.notes)box(itemBounds('notes',n));
+  const diagramCoverage=doc.diagram?window.inkspaceDiagram?.coverage():null;for(const b of diagramCoverage?.boxes||[])box(b);for(const l of diagramCoverage?.lines||[])for(let i=1;i<l.points.length;i++)segment(l.points[i-1],l.points[i],l.width/2);
+  for(const n of doc.notes)if(n.kind==='image'?n.src:n.markdown?.trim())box(itemBounds('notes',n));
   for(const asset of doc.pdfs||[])for(const p of asset.pages)box({x:p.x,y:p.y,w:p.width,h:p.height});
+  // An empty note starts with one sheet; additional sheets require content.
+  if(!cells.size)add(0,0);layer.hidden=false;
   const paths=[];
   for(const key of cells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
   const bg={...backgroundSettings(),color:'#ffffff'},dark=bg.color.match(/[a-f0-9]{2}/gi).reduce((sum,c)=>sum+parseInt(c,16),0)<384;
