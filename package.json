@@ -17,6 +17,7 @@
     "test:desktop": "electron . --smoke-test",
     "dist": "npm run build:native && npm run build:terminal && npm run build && electron-builder --win nsis --x64 && node scripts/package-source.cjs",
     "test:package": "node scripts/verify-package.cjs",
+    "test:text:mouse": "electron tests/text-mouse-electron.cjs",
     "test:raster": "electron tests/raster-electron.cjs",
     "build:native": "node scripts/build-native.cjs",
     "test:native": "node tests/native-ink.cjs",
