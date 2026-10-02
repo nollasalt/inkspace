@@ -169,6 +169,16 @@ assert.equal(w.document.querySelector('#ink-stream').style.transform,'');
 run('undo()');assert.equal(run('doc.strokes[1000].width'),scaleWidth);
 console.log('Passed 1000 pen selection and 1000 scaling samples with zero scene paints/geometry rebuilds during drag.');
 
+// Tool keys toggle the requested tool against the previous tool, once per press.
+run("tool='pen';previousTool='pen'");
+const toolKey=(key,options={})=>w.document.body.dispatchEvent(new w.KeyboardEvent('keydown',{bubbles:true,key,...options}));
+toolKey('e');assert.equal(run('tool'),'erase');toolKey('e',{repeat:true});assert.equal(run('tool'),'erase');
+toolKey('e');assert.equal(run('tool'),'pen');toolKey('e');assert.equal(run('tool'),'erase');
+toolKey('v');assert.equal(run('tool'),'select');toolKey('v');assert.equal(run('tool'),'erase');
+w.document.querySelector('[data-tool="pan"]').click();toolKey('v');toolKey('v');assert.equal(run('tool'),'pan');
+const source=w.document.querySelector('#source');source.dispatchEvent(new w.KeyboardEvent('keydown',{bubbles:true,key:'e'}));assert.equal(run('tool'),'pan');
+run("tool='select'");
+
 // Background styles follow world coordinates and survive save, validation and undo.
 const setBackground=(id,value)=>{const el=w.document.querySelector(id);el.value=value;el.dispatchEvent(new w.Event('change'))};
 setBackground('#background-kind','grid');assert.equal(run('doc.background.type'),'grid');assert.ok(w.document.querySelector('#paper').style.backgroundImage.includes('90deg'));
