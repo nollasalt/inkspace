@@ -86,8 +86,14 @@ function renderA4Pages(){
   for(const n of doc.notes)box(itemBounds('notes',n));
   for(const asset of doc.pdfs||[])for(const p of asset.pages)box({x:p.x,y:p.y,w:p.width,h:p.height});
   const paths=[];
-  if(Math.min(w,h)*view.scale>=8)for(const key of cells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
-  const markup=`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><g transform="translate(${view.x+surface.padding} ${view.y+surface.padding}) scale(${view.scale})" fill="none" stroke="rgba(100,110,120,.25)" stroke-width="1" stroke-dasharray="4 5">${paths.map(p=>p.replace('/>',' vector-effect="non-scaling-stroke"/>')).join('')}</g></svg>`;
+  for(const key of cells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
+  const bg=backgroundSettings(),dark=bg.color.match(/[a-f0-9]{2}/gi).reduce((sum,c)=>sum+parseInt(c,16),0)<384;
+  const line=dark?'rgba(255,255,255,.18)':'rgba(38,63,67,.16)';
+  let spacing=backgroundSpacing();while(spacing*view.scale<6)spacing*=10;
+  const pixel=1/view.scale;
+  const pattern=bg.type==='dots'?`<circle cx="${spacing/2}" cy="${spacing/2}" r="${pixel}" fill="${line}" stroke="none"/>`:bg.type==='ruled'||bg.type==='grid'?`<path d="M 0 0 H ${spacing}${bg.type==='grid'?` M 0 0 V ${spacing}`:''}" fill="none" stroke="${line}" stroke-width="${pixel}"/>`:'';
+  const defs=pattern?`<defs><pattern id="a4-pattern" width="${spacing}" height="${spacing}" patternUnits="userSpaceOnUse"><path d="M 0 0 H ${spacing} V ${spacing} H 0 Z" fill="${bg.color}" stroke="none"/>${pattern}</pattern></defs>`:'';
+  const markup=`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">${defs}<g transform="translate(${view.x+surface.padding} ${view.y+surface.padding}) scale(${view.scale})" fill="${pattern?'url(#a4-pattern)':bg.color}" stroke="${Math.min(w,h)*view.scale>=8?'rgba(100,110,120,.25)':'none'}" stroke-width="1" stroke-dasharray="4 5">${paths.map(p=>p.replace('/>',' vector-effect="non-scaling-stroke"/>')).join('')}</g></svg>`;
   if(layer.innerHTML!==markup)layer.innerHTML=markup;
 }
 function renderBackground(){
@@ -98,6 +104,7 @@ function renderBackground(){
   paper.style.backgroundImage=bg.type==='grid'?`linear-gradient(${line} 1px,transparent 1px),linear-gradient(90deg,${line} 1px,transparent 1px)`:bg.type==='ruled'?`linear-gradient(${line} 1px,transparent 1px)`:bg.type==='dots'?`radial-gradient(${line} 1px,transparent 1px)`:'none';
   paper.style.backgroundSize=`${size}px ${size}px`;paper.style.backgroundPosition=`${view.x+surface.padding}px ${view.y+surface.padding}px`;
   const layout=bg.layout||'infinite';$('#page-layout').value=layout;
+  if(layout.startsWith('a4-')){viewport.style.backgroundColor=paper.style.backgroundColor='#e8eaed';paper.style.backgroundImage='none'}
   renderA4Pages();
   $('#background-kind').value=bg.type;$('#background-color').value=bg.color;$('#background-spacing').value=String(bg.spacing);
   $('#text-size').value=String(textSize());$('#background-spacing').title=bg.spacing==='auto'?`按 ${textSize()}px 字号设置 ${backgroundSpacing()}px 行距`:'自定义世界坐标间距';
