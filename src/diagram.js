@@ -4,7 +4,7 @@ import factory from 'mxgraph';
 import {installDiagramDrag} from './diagram-drag.js';
 const resource=new URL('mxgraph/',document.currentScript.src).href;
 const mx=factory({mxLoadResources:false,mxLoadStylesheets:false,mxBasePath:resource,mxImageBasePath:resource+'images'});
-const {mxGraph,mxGraphModel,mxCodec,mxUtils,mxEvent,mxPoint,mxConnectionConstraint,mxConstants,mxCell,mxGeometry}=mx;
+const {mxGraph,mxGraphModel,mxCodec,mxUtils,mxEvent,mxPoint,mxConnectionConstraint,mxConstants,mxCell,mxGeometry,mxRectangle}=mx;
 // The upstream XML codec resolves these standard constructors by global name.
 Object.assign(window,{mxGraphModel,mxCell,mxGeometry,mxPoint});
 mx.mxObjectCodec.allowEval=false;
@@ -35,26 +35,53 @@ function init(){
     const html=`<div class="diagram-label" aria-label="${InkContent.escape(source)}">${content.innerHTML}</div>`;labelCache.set(cell,{source,html});return html;
   };
   graph.getEditingValue=label;graph.getCursorForCell=cell=>cell?.vertex?'move':'pointer';
+  graph.isToggleEvent=event=>!!(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey));
+  graph.graphHandler.guidesEnabled=true;
+  graph.graphHandler.useGuidesForEvent=event=>!event.getEvent().altKey&&!graph.isConstrainedEvent(event.getEvent());
   graph.getTooltipForCell=()=> '鼠标拖动移动 · 边角缩放 · 双击输入文字和 $公式$ · 拖动连接点添加箭头';
   const vertex=graph.getStylesheet().getDefaultVertexStyle();Object.assign(vertex,{fillColor:'#ffffff',strokeColor:'#263f43',strokeWidth:2,fontColor:'#263f43',fontSize:16,whiteSpace:'wrap',html:1,overflow:'hidden',spacing:8});
   Object.assign(graph.getStylesheet().getDefaultEdgeStyle(),{strokeColor:'#263f43',strokeWidth:2,endArrow:'block',edgeStyle:'orthogonalEdgeStyle',rounded:1,html:1,fontSize:16,labelBackgroundColor:'#ffffff'});
   const constraints=[[.5,0],[1,.5],[.5,1],[0,.5],[0,0],[1,0],[1,1],[0,1]].map(([x,y])=>new mxConnectionConstraint(new mxPoint(x,y),true));
   graph.getAllConnectionConstraints=terminal=>terminal?.cell?.vertex?constraints:null;
   // Start a connector only from an explicit boundary connection point.
-  graph.connectionHandler.isStartEvent=()=>!!(graph.connectionHandler.constraintHandler.currentFocus&&graph.connectionHandler.constraintHandler.currentConstraint);
+  const isResizeHandle=event=>graph.getSelectionCells().some(cell=>graph.selectionCellsHandler.getHandler(cell)?.sizers?.some(sizer=>sizer?.node===event.target||sizer?.node?.contains(event.target)));
+  graph.connectionHandler.isStartEvent=event=>!isResizeHandle(event.getEvent())&&!!(graph.connectionHandler.constraintHandler.currentFocus&&graph.connectionHandler.constraintHandler.currentConstraint);
   graph.connectionHandler.createTarget=false;graph.connectionHandler.select=false;
   installDiagramDrag(graph,{dimensions:()=>a4Dimensions(),view:()=>view,stats:()=>renderStats});
   graph.connectionHandler.marker.getMarkerColor=()=>graph.connectionHandler.first?'#007acc':null;
   graph.connectionHandler.constraintHandler.highlightColor='#007acc';
   graph.connectionHandler.isConnectableCell=cell=>!cell||cell.vertex;
-  const connectionMove=graph.connectionHandler.mouseMove;graph.connectionHandler.mouseMove=function(sender,event){connectionMove.call(this,sender,event);if(!this.first&&this.currentState)this.currentState.setCursor(this.constraintHandler.currentConstraint?'crosshair':'move')};
-  const fire=graph.fireMouseEvent;graph.fireMouseEvent=function(name,event,...args){
+  const connectionMove=graph.connectionHandler.mouseMove;graph.connectionHandler.mouseMove=function(sender,event){if(!this.first&&isResizeHandle(event.getEvent())){this.reset();return}connectionMove.call(this,sender,event);if(!this.first&&this.currentState)this.currentState.setCursor(this.constraintHandler.currentConstraint?'crosshair':'move')};
+  const createHandler=graph.createHandler;graph.createHandler=function(...args){
+    const handler=createHandler.apply(this,args);if(!handler?.state.cell.vertex)return handler;
+    handler.livePreview=true;handler.roundLength=value=>value;const baseUnion=handler.union;
+    handler.union=function(bounds,dx,dy,index,grid,scale,tr,constrained,centered){
+      if(index<0||index>7||constrained||centered||Number(this.state.style.rotation)||graph.getModel().getParent(this.state.cell)!==graph.getDefaultParent())return baseUnion.apply(this,arguments);
+      const [w,h]=a4Dimensions(),snap=(value,size)=>{if(!grid)return value;const edge=Math.round(value/size)*size;return Math.abs(value-edge)*graph.view.scale<=8?edge:graph.snap(value)};
+      let left=bounds.x,right=left+bounds.width,top=bounds.y,bottom=top+bounds.height;
+      if([0,3,5].includes(index))left=Math.min(right-1,snap(left+dx,w));if([2,4,7].includes(index))right=Math.max(left+1,snap(right+dx,w));
+      if(index<3)top=Math.min(bottom-1,snap(top+dy,h));if(index>4)bottom=Math.max(top+1,snap(bottom+dy,h));
+      return new mxRectangle(left,top,right-left,bottom-top);
+    };return handler;
+  };
+  let moveFrame=null,pendingMove=null;
+  const fire=graph.fireMouseEvent;
+  const flushMove=()=>{if(moveFrame!==null)cancelAnimationFrame(moveFrame);moveFrame=null;const pending=pendingMove;pendingMove=null;if(pending){const start=performance.now();fire.call(graph,mxEvent.MOUSE_MOVE,pending.event,...pending.args);renderStats.diagramMoveFrames=(renderStats.diagramMoveFrames||0)+1;renderStats.diagramMoveLastMs=performance.now()-start;renderStats.diagramMoveMaxMs=Math.max(renderStats.diagramMoveMaxMs||0,renderStats.diagramMoveLastMs)}};
+  const cancelMove=()=>{if(moveFrame!==null)cancelAnimationFrame(moveFrame);moveFrame=null;pendingMove=null};
+  graph.fireMouseEvent=function(name,event,...args){
     const e=event.getEvent();if(e.pointerType&&e.pointerType!=='mouse'||e.nativeInk||e.sourceCapabilities?.firesTouchEvents)return;
-    if(space||tool==='pan')return;
+    if(space||tool==='pan'){if(graph.isMouseDown)cancelMouseDrag();return}
+    if(e.button===1||e.button===2||e.buttons&6)return;
+    // Process the latest input once per display frame, including hit tests and
+    // connected-cell handlers. Commit must consume the final queued position.
+    if(name===mxEvent.MOUSE_MOVE&&graph.isMouseDown){pendingMove={event,args};if(moveFrame===null)moveFrame=requestAnimationFrame(flushMove);e.preventDefault();return}
+    if(name===mxEvent.MOUSE_UP)flushMove();
     if(name===mxEvent.MOUSE_DOWN){if(tool!=='diagram')activateTool('diagram',false,false);diagramContact=true;}
+    if(name===mxEvent.MOUSE_DOWN&&isResizeHandle(e))graph.connectionHandler.reset();
     const result=fire.call(this,name,event,...args);if(name===mxEvent.MOUSE_UP)diagramContact=false;return result;
   };
-  const cancelMouseDrag=()=>{diagramContact=false;graph.graphHandler.reset();graph.connectionHandler.reset();graph.isMouseDown=false};
+  graph.cancelPendingDiagramMove=cancelMove;
+  const cancelMouseDrag=()=>{cancelMove();diagramContact=false;graph.graphHandler.reset();graph.selectionCellsHandler.reset();graph.connectionHandler.reset();graph.isMouseDown=false};
   window.addEventListener('blur',cancelMouseDrag);window.addEventListener('pointercancel',event=>{if(event.pointerType==='mouse')cancelMouseDrag()});
   const doubleClick=graph.dblClick;graph.dblClick=function(event,cell){if(event.sourceCapabilities?.firesTouchEvents||typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen')return;return doubleClick.call(this,event,cell)};
   graph.getModel().addListener(mxEvent.CHANGE,sync);
@@ -63,7 +90,7 @@ function init(){
 function render(){
   init();const source=doc.diagram||'';
   if(source!==loaded){loading=true;try{
-    graph.graphHandler.reset();diagramContact=false;graph.isMouseDown=false;graph.stopEditing(true);graph.clearSelection();graph.connectionHandler.reset();
+    graph.cancelPendingDiagramMove();graph.graphHandler.reset();diagramContact=false;graph.isMouseDown=false;graph.stopEditing(true);graph.clearSelection();graph.connectionHandler.reset();
     const entry=edits.findLast(e=>e.after===loaded&&e.before===source||e.before===loaded&&e.after===source);
     if(entry){if(entry.after===loaded)entry.edit.undo();else entry.edit.redo();replayCount++}
     else{edits.length=0;graph.getModel().setRoot((source?read(source):new mxGraphModel()).getRoot())}
@@ -73,7 +100,7 @@ function render(){
 }
 function ownsPointer(event){
   if(!graph||event.pointerType&&event.pointerType!=='mouse')return false;
-  if(space||tool==='pan')return false;
+  if(space||tool==='pan'||event.button===1||event.button===2||event.buttons&6)return false;
   return diagramContact||!!event.target.closest?.('#diagram-layer');
 }
 function refreshProperties(){
@@ -114,7 +141,7 @@ function paste(source,dx,dy){
 }
 function remove(){if(!graph?.getSelectionCount()||graph.isEditing())return false;graph.removeCells();return true}
 function svg(){if(!graph||!doc.diagram)return '';const canvas=graph.view.getCanvas(),copy=canvas.cloneNode(true),original=canvas.querySelectorAll('foreignObject *'),cloned=copy.querySelectorAll('foreignObject *');original.forEach((element,index)=>{const style=getComputedStyle(element);cloned[index].setAttribute('style',Array.from(style,key=>key+':'+style.getPropertyValue(key)).join(';'))});return `<g transform="translate(${-view.x/view.scale} ${-view.y/view.scale}) scale(${1/view.scale})">${copy.outerHTML}</g>`}
-window.inkspaceDiagram={render,add,connect,ownsPointer,bounds,coverage,copy,paste,remove,svg,editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
+window.inkspaceDiagram={render,add,connect,ownsPointer,bounds,coverage,copy,paste,remove,svg,selectBox:r=>graph?.selectRegion(new mxRectangle(r.x*view.scale+view.x,r.y*view.scale+view.y,r.w*view.scale,r.h*view.scale)),editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
 document.querySelectorAll('[data-diagram]').forEach(button=>{button.onclick=()=>add(button.dataset.diagram);button.draggable=true;button.addEventListener('dragstart',event=>event.dataTransfer.setData('application/x-inkspace-shape',button.dataset.diagram))});
 viewport.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('application/x-inkspace-shape'))event.preventDefault()});viewport.addEventListener('drop',event=>{const kind=event.dataTransfer.getData('application/x-inkspace-shape');if(!['rect','roundrect','ellipse','diamond','arrow','line'].includes(kind))return;event.preventDefault();const p=local(event);add(kind,world(p.x,p.y))});$('#diagram-connect').onclick=connect;$('#diagram-delete').onclick=remove;$('#diagram-front').onclick=()=>graph?.orderCells(false);$('#diagram-back').onclick=()=>graph?.orderCells(true);
 $('#diagram-stroke').onchange=()=>graph?.setCellStyles('strokeColor',$('#diagram-stroke').value);

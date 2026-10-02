@@ -95,20 +95,59 @@ async function runCodiumDiagnostic(action){
     const exported=await exportAnnotatedPdf(),document=await PdfApi.PDFDocument.load(exported);if(document.getPageCount()!==3)throw Error('Scaled PDF export failed');
     const strokeCount=doc.strokes.length,noteCount=doc.notes.length,button=$('#pdf-assets button');if(!button||!button.getAttribute('aria-label').includes('alignment.pdf'))throw Error('PDF delete entry missing');button.click();if(doc.pdfs.some(a=>a.id===asset.id)||pdfSessions.has(asset.id)||doc.strokes.length!==strokeCount||doc.notes.length!==noteCount)throw Error('PDF delete lost annotations or kept resource');undo();if(doc.pdfs.at(-1).data!==asset.data)throw Error('PDF undo did not restore original');redo();if(doc.pdfs.some(a=>a.id===asset.id))throw Error('PDF delete redo failed');undo();undo();await flushed();return{aligned:true,mixedOrientation:true,gaplessTiles:true,exported:true,deleteUndoRedo:true,annotationsPreserved:true};
   }
+  if(action==='diagram-interactions'){
+    await window.inkspaceCairoIdle();const saved={doc,history,future,tool,view:{...view}},g=window.inkspaceDiagram.graph,api=window.inkspaceDiagram;
+    try{
+      doc={...doc,strokes:[],notes:[],shapes:[],pdfs:[],diagram:undefined};history=[];future=[];tool='diagram';view={x:20,y:20,scale:.75};render();
+      const a=api.add('rect',{x:180,y:160}),b=api.add('rect',{x:500,y:250});g.setSelectionCell(a);
+      const pointer=(target,type,x,y,options={})=>{const r=viewport.getBoundingClientRect();target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:130,button:0,buttons:type==='pointerup'?0:1,clientX:r.left+x,clientY:r.top+y,...options}))};
+      const bs=g.view.getState(b);for(const type of ['pointerdown','pointerup'])pointer(bs.shape.node,type,bs.x+bs.width/2,bs.y+bs.height/2,{shiftKey:true});if(g.getSelectionCount()!==2)throw Error('Shift click did not add to selection');
+      g.clearSelection();pointer(viewport,'pointerdown',70,90);pointer(viewport,'pointermove',480,280);pointer(viewport,'pointerup',480,280);if(g.getSelectionCount()!==2)throw Error('Mouse selection box omitted diagrams');
+      for(const button of [1,2]){const state=g.view.getState(a),x=state.x+state.width/2,y=state.y+state.height/2,old={...view};pointer(state.shape.node,'pointerdown',x,y,{button,buttons:button===1?4:2});pointer(state.shape.node,'pointermove',x+40,y+30,{button,buttons:button===1?4:2});pointer(state.shape.node,'pointerup',x+40,y+30,{button,buttons:0});if(view.x===old.x||view.y===old.y||g.getSelectionCount()!==2)throw Error('Mouse pan moved selection or lost selected cells')}
+      const scale=view.scale,x=view.x,y=view.y;viewport.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:20,deltaY:30}));if(view.scale!==scale||view.x!==x-20||view.y!==y-30)throw Error('Diagram wheel did not scroll');settleZoom();
+      viewport.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,deltaY:-100,clientX:viewport.getBoundingClientRect().left+300,clientY:viewport.getBoundingClientRect().top+200}));if(view.scale===scale)throw Error('Ctrl wheel did not zoom');settleZoom();
+      g.setSelectionCell(a);const state=g.view.getState(a),target=state.shape.node,sx=state.x+state.width/2,sy=state.y+state.height/2,dx=(b.geometry.x-a.geometry.x+3)*view.scale;
+      pointer(target,'pointerdown',sx,sy);pointer(target,'pointermove',sx+dx,sy+35);await new Promise(resolve=>requestAnimationFrame(resolve));if(!g.graphHandler.guide?.guideX||g.graphHandler.guide.guideX.node.style.visibility!=='visible')throw Error('Shape alignment guide missing');pointer(target,'pointerup',sx+dx,sy+35);if(Math.abs(a.geometry.x-b.geometry.x)>1e-7)throw Error('Shape alignment snap failed');
+      return{shiftMultiSelect:true,boxSelect:true,middleAndRightPan:true,selectionPreservedOnPan:true,wheelScroll:true,ctrlWheelZoom:true,alignmentGuides:true};
+    }finally{doc=saved.doc;history=saved.history;future=saved.future;tool=saved.tool;view=saved.view;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
+  }
+  if(action==='diagram-resize'){
+    await window.inkspaceCairoIdle();const saved={doc,history,future,tool,view:{...view}},g=window.inkspaceDiagram.graph,api=window.inkspaceDiagram;
+    try{
+      doc={...doc,strokes:[],notes:[],shapes:[],pdfs:[],diagram:undefined,background:{...doc.background,layout:'a4-portrait'}};history=[];future=[];view={x:20,y:20,scale:.75};render();
+      const a=api.add('rect',{x:250,y:220});
+      for(const scale of [.75,1,2])for(const index of [0,2,5,7]){
+        view.scale=scale;render();const geo=a.geometry.clone();geo.x=200;geo.y=180;geo.width=160;geo.height=90;g.resizeCell(a,geo);g.setSelectionCell(a);
+        const handler=g.selectionCellsHandler.getHandler(a),sizer=handler.sizers[index],target=sizer.node,rect=viewport.getBoundingClientRect(),x=rect.left+sizer.bounds.getCenterX(),y=rect.top+sizer.bounds.getCenterY(),left=index===0||index===5,top=index<3,dx=left?-40:40,dy=top?-30:30;
+        const pointer=(type,factor)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:127,button:0,buttons:type==='pointerup'?0:1,clientX:x+dx*scale*factor,clientY:y+dy*scale*factor}));
+        pointer('pointermove',0);pointer('pointerdown',0);if(g.connectionHandler.first||handler.index!==index)throw Error('Corner handle started a connector instead of resize');pointer('pointermove',1);
+        await new Promise(resolve=>requestAnimationFrame(resolve));if(Math.abs(g.view.getState(a).shape.bounds.width-200*scale)>1e-7)throw Error('Corner resize did not visibly grow toward pointer: '+JSON.stringify({scale,index,bounds:handler.bounds,shape:g.view.getState(a).shape.bounds}));pointer('pointerup',1);
+        if(Math.abs(a.geometry.x-(left?160:200))>1e-7||Math.abs(a.geometry.y-(top?150:180))>1e-7||a.geometry.width!==200||a.geometry.height!==120||g.getChildCells(g.getDefaultParent(),false,true).length)throw Error('Corner resize moved wrong anchor or created edge');
+      }
+      const [w,h]=a4Dimensions();view={x:0,y:0,scale:.75};render();const geo=a.geometry.clone();Object.assign(geo,{x:w-200,y:h-150,width:160,height:90});g.resizeCell(a,geo);g.setSelectionCell(a);
+      const handler=g.selectionCellsHandler.getHandler(a),sizer=handler.sizers[7],target=sizer.node,rect=viewport.getBoundingClientRect(),sx=rect.left+sizer.bounds.getCenterX(),sy=rect.top+sizer.bounds.getCenterY();
+      for(const type of ['pointermove','pointerdown','pointermove','pointerup']){const moved=type==='pointerup'||type==='pointermove'&&g.isMouseDown;target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:128,button:0,buttons:type==='pointerup'?0:1,clientX:sx+(moved?37*.75:0),clientY:sy+(moved?58*.75:0)}))}
+      if(Math.abs(a.geometry.x+a.geometry.width-w)>1e-7||Math.abs(a.geometry.y+a.geometry.height-h)>1e-7)throw Error('Resize did not align exact A4 edges');
+      if([...$('#a4-pages').querySelectorAll('rect[data-cell]')].some(element=>element.dataset.cell!=='0,0'))throw Error('Resize allocated blank paper past page boundary');
+      undo();redo();return{corners:4,zooms:3,oppositeAnchorFixed:true,livePreview:true,noConnectorCreated:true,exactPageEdges:true,noExtraPaper:true,undoRedo:true};
+    }finally{doc=saved.doc;history=saved.history;future=saved.future;tool=saved.tool;view=saved.view;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
+  }
   if(action==='diagram-drag'){
     await window.inkspaceCairoIdle();const saved={doc,history,future,tool,view:{...view}},api=window.inkspaceDiagram,g=api.graph;
     try{
       doc={...doc,diagram:undefined};history=[];future=[];view={x:150,y:100,scale:.8};render();await window.inkspaceCairoIdle();
       const a=api.add('rect',{x:90,y:100}),b=api.add('ellipse',{x:400,y:150});g.setSelectionCells([a,b]);const edge=api.connect();g.setSelectionCell(a);const initial=a.geometry.clone(),fullPaints=renderStats.fullScenePaints,originalRedraw=g.cellRenderer.redraw;let redraws=0;
       g.cellRenderer.redraw=function(...args){redraws++;return originalRedraw.apply(this,args)};
+      let coalescedFrames=0;
       async function drag(x,y,altKey=false,samples=1){
         const state=g.view.getState(a),target=state.shape.node,rect=viewport.getBoundingClientRect(),start={x:rect.left+state.x+state.width/2,y:rect.top+state.y+state.height/2},dx=(x-a.geometry.x)*view.scale,dy=(y-a.geometry.y)*view.scale;
         const pointer=(type,factor)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:125,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,altKey,clientX:start.x+dx*factor,clientY:start.y+dy*factor}));
-        pointer('pointermove',0);pointer('pointerdown',0);const count=redraws;
+        pointer('pointermove',0);pointer('pointerdown',0);const count=redraws,frames=renderStats.diagramMoveFrames||0,border=g.selectionCellsHandler.getHandler(a)?.selectionBorder?.node;
         for(let i=1;i<=samples;i++)pointer('pointermove',i/samples);await new Promise(resolve=>requestAnimationFrame(resolve));
+        if(samples===400){coalescedFrames=(renderStats.diagramMoveFrames||0)-frames;if(coalescedFrames!==1)throw Error('High-rate mouse events were not coalesced')}
         if(redraws!==count||renderStats.fullScenePaints!==fullPaints)throw Error('Drag rebuilt cells or full ink scene');
         if(!target.style.translate||!$('#diagram-layer [data-inkspace-drag]'))throw Error('Compositor drag preview missing');
-        if(g.connectionHandler.marker.markedState)throw Error('Connection highlight stayed behind');
+        if(g.connectionHandler.marker.markedState)throw Error('Connection highlight stayed behind');if(border&&border.style.visibility!=='hidden')throw Error('Original selection border stayed behind');
         pointer('pointerup',1);if(target.style.translate||$('#diagram-layer [data-inkspace-drag]'))throw Error('Drag preview not cleaned');
       }
       try{
@@ -116,7 +155,13 @@ async function runCodiumDiagnostic(action){
         const [w,h]=a4Dimensions();await drag(w-a.geometry.width-3,h-a.geometry.height-2);if(Math.abs(a.geometry.x+a.geometry.width-w)>1e-8||Math.abs(a.geometry.y+a.geometry.height-h)>1e-8)throw Error('Fractional A4 bottom-right snapping failed');
         const last=g.view.getState(edge).absolutePoints[0];if(!Number.isFinite(last.x))throw Error('Connector lost on drag commit');
         await drag(3,4,true);if(Math.abs(a.geometry.x-3)>1e-8||Math.abs(a.geometry.y-4)>1e-8)throw Error('Alt did not bypass snapping');
-        undo();redo();return{samples:400,cellRedrawsDuringDrag:0,inkScenePaintsDuringDrag:0,highlightClean:true,pageCornersExact:true,altBypass:true,undoRedo:true};
+        undo();redo();
+        const model=g.getModel();model.beginUpdate();try{for(let i=0;i<200;i++)g.insertVertex(g.getDefaultParent(),null,'Node '+i,500+(i%20)*100,200+Math.floor(i/20)*70,80,50);for(const cell of g.getChildCells(g.getDefaultParent(),true,false).slice(-20))g.insertEdge(g.getDefaultParent(),null,'',a,cell)}finally{model.endUpdate()}
+        g.setSelectionCell(a);const state=g.view.getState(a),target=state.shape.node,rect=viewport.getBoundingClientRect(),sx=rect.left+state.x+state.width/2,sy=rect.top+state.y+state.height/2,latencies=[],count=redraws;
+        const pointer=(type,x,y)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:129,button:0,buttons:type==='pointerup'?0:1,altKey:true,clientX:sx+x,clientY:sy+y}));
+        pointer('pointerdown',0,0);for(let frame=0;frame<60;frame++){for(let sample=0;sample<4;sample++)pointer('pointermove',40+frame+sample/4,30+Math.sin(frame/8)*20);await new Promise(resolve=>requestAnimationFrame(resolve));latencies.push(renderStats.diagramMoveLastMs)}
+        if(redraws!==count||renderStats.fullScenePaints!==fullPaints)throw Error('Continuous drag rebuilt scene');pointer('pointerup',100,30+Math.sin(59/8)*20);
+        latencies.sort((a,b)=>a-b);return{samples:400,coalescedFrames,stressVertices:202,stressConnectedEdges:21,continuousFrames:60,frameP95Ms:latencies[Math.floor(latencies.length*.95)],frameMaxMs:latencies.at(-1),cellRedrawsDuringDrag:0,inkScenePaintsDuringDrag:0,highlightClean:true,pageCornersExact:true,altBypass:true,undoRedo:true};
       }finally{g.cellRenderer.redraw=originalRedraw}
     }finally{doc=saved.doc;history=saved.history;future=saved.future;tool=saved.tool;view=saved.view;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
   }
