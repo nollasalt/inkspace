@@ -1,8 +1,8 @@
 {
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
-  "description": "Infinite pen notebooks, Markdown objects and PDF annotations for VSCodium",
-  "version": "0.2.3",
+  "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
+  "version": "0.3.1",
   "publisher": "nollasalt",
   "license": "GPL-2.0-or-later",
   "repository": {"type": "git", "url": "https://github.com/nollasalt/inkspace.git"},
@@ -27,7 +27,7 @@
     "views": {"inkspace": [{"id": "inkspace.pages", "name": "笔记页面", "when": "inkspace.hasNotebook"}]},
     "viewsWelcome": [{"view": "inkspace.pages", "contents": "打开 .inkspace.json 笔记即可切换页面。\n[新建笔记](command:inkspace.new)"}],
     "menus": {
-      "explorer/context": [{"command": "inkspace.open", "when": "resourceExtname == .json", "group": "navigation"}],
+      "explorer/context": [{"command": "inkspace.new", "when": "explorerViewletVisible && resourceScheme == file", "group": "navigation@1"}, {"command": "inkspace.open", "when": "resourceExtname == .json", "group": "navigation"}],
       "view/title": [{"command": "inkspace.addPage", "when": "view == inkspace.pages && inkspace.hasNotebook", "group": "navigation"}],
       "view/item/context": [
         {"command": "inkspace.renamePage", "when": "view == inkspace.pages && viewItem == inkspace.page", "group": "inline"},

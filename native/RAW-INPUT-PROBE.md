@@ -10,6 +10,6 @@
 
 切到其他程序，用真实触控笔悬空移动、轻重交替书写、连续快速打点。`status.json` 的 `backgroundXYPressureReports` 增长，才说明后台实际收到同时包含坐标和压力的报告。`contactDowns` / `contactUps` 应与操作相符；`samples.jsonl` 保存前 10000 个笔报告，计数不受记录上限限制。
 
-注册成功和设备描述中的字段不等于真实样本接收成功。没有收到报告时，需要区分未操作设备、测试超时、当前设备不暴露该路径等情况。该探针尚不做屏幕映射、数据传输和笔迹绘制，不能证明接入 IDE 后的书写延迟。
+注册成功和设备描述中的字段不等于真实样本接收成功。没有收到报告时，需要区分未操作设备、测试超时、当前设备不暴露该路径等情况。探针本身不做屏幕映射和笔迹绘制，不能证明接入 IDE 后的书写延迟。新增 `--stream` 可将每个原始报告作为一行 JSON 写入标准输出，供独立 Ink Engine 消费；该流不受样本日志 10000 条上限影响。接入验证见 [Ink Engine](../ink-engine/README.md)。
 
 参考：[Raw Input 概览](https://learn.microsoft.com/en-us/windows/win32/inputdev/about-raw-input)、[注册选项](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawinputdevice)、[HID 描述数据](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getrawinputdeviceinfow)。

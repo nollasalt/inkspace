@@ -1,0 +1,11 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
+const root=path.resolve(__dirname,'..'),version=require('../vscode/package.json').version;
+const vsix=path.join(root,'dist',`Inkspace-VSCode-${version}-win32-x64.vsix`),source=path.join(root,'dist',`Inkspace-VSCode-${version}-Source.zip`),output=path.join(root,'dist',`Inkspace-VSCode-${version}-Windows-x64-Bundle.zip`);
+if(!fs.existsSync(vsix))throw Error('Run npm run dist:vscode first');
+let result=spawnSync(process.execPath,[path.join(__dirname,'package-source.cjs'),source],{cwd:root,stdio:'inherit',windowsHide:true});if(result.status!==0)process.exit(result.status||1);
+const entries=[vsix,source,path.join(root,'docs','INSTALL.md')].map(file=>({file,name:path.basename(file)}));
+const checksums=entries.map(({file,name})=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')+'  '+name).join('\n')+'\n';
+const sums=path.join(root,'artifacts','release-SHA256SUMS.txt');fs.writeFileSync(sums,checksums);entries.push({file:sums,name:'SHA256SUMS.txt'});
+const manifest=path.join(root,'artifacts','release-bundle.json');fs.writeFileSync(manifest,JSON.stringify(entries));
+const script="import json,zipfile,sys; entries=json.load(open(sys.argv[1],encoding='utf-8')); z=zipfile.ZipFile(sys.argv[2],'w',compression=zipfile.ZIP_DEFLATED,compresslevel=1); [z.write(e['file'],e['name']) for e in entries]; z.close(); z=zipfile.ZipFile(sys.argv[2]); assert z.testzip() is None; print(sys.argv[2])";
+result=spawnSync('python',['-c',script,manifest,output],{stdio:'inherit',windowsHide:true});if(result.status!==0)process.exitCode=1;

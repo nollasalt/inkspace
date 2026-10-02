@@ -20,3 +20,5 @@ theia/src-gen/
 theia/media/
 theia/gen-esbuild.*.mjs
 theia/demo-workspace/.theia/
+
+vscode/engine-runtime/

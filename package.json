@@ -21,7 +21,13 @@
     "build:native": "node scripts/build-native.cjs",
     "test:native": "node tests/native-ink.cjs",
     "build:terminal": "node scripts/build-terminal.cjs",
-    "test:folder-launch": "node tests/folder-launch.cjs"
+    "test:folder-launch": "node tests/folder-launch.cjs",
+    "build:engine": "node scripts/build-raw-input-probe.cjs && node scripts/build-vscode.cjs",
+    "start:engine": "node ink-engine/service.cjs",
+    "start:engine:vscode": "node scripts/start-ink-engine-validation.cjs",
+    "test:engine": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node scripts/test-ink-engine.cjs",
+    "dist:vscode": "node scripts/build-vscode.cjs && node scripts/package-vscode-engine.cjs",
+    "dist:vscode:bundle": "node scripts/package-vscode-bundle.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -36,7 +42,8 @@
     "markdown-it-texmath": "^1.0.0",
     "monaco-editor": "^0.57.0",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.3.289"
+    "pdfjs-dist": "^6.3.289",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.9",

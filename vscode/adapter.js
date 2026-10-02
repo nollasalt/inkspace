@@ -1,13 +1,14 @@
 // Writing is allowed only through the high-precision native host bridge.
-const codium=acquireVsCodeApi(),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
-let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,flushWaiters=[],draftTimer=null;
+const codium=(window.inkspaceCalibrationApi||acquireVsCodeApi()),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
+let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,autoSaveSettings=false,flushWaiters=[],draftTimer=null;
 // Load the bundled module through the webview resource service, then keep its
 // worker on a same-origin blob URL. Cross-origin module imports can stall here.
 window.inkspacePdfWorkerReady=fetch(PdfApi.GlobalWorkerOptions.workerSrc).then(async response=>{if(!response.ok)throw Error('PDF worker resource '+response.status);const url=URL.createObjectURL(new Blob([await response.text()],{type:'text/javascript'})),worker=new Worker(url,{type:'module'});PdfApi.GlobalWorkerOptions.workerPort=worker;window.addEventListener('beforeunload',()=>{worker.terminate();URL.revokeObjectURL(url)},{once:true});return worker});
 window.inkspacePdfWorkerReady.catch(error=>toast('PDF 初始化失败：'+error.message));
+for(const id of ['#background-kind','#background-color','#background-spacing','#text-size'])$(id).addEventListener('change',()=>{autoSaveSettings=true});
 function pageMessage(){codium.postMessage({type:'pages',pages:notebook.pages.map(p=>({id:p.id,title:p.title})),activePage:notebook.activePage})}
 function rememberDraft(){codium.setState({text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})}
-function sendEdit(){if(!hostLoaded||applyingHost||active||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion})}
+function sendEdit(){if(!hostLoaded||applyingHost||active||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,autoSave:autoSaveSettings});autoSaveSettings=false}
 function flushed(){return new Promise((resolve,reject)=>{if(conflict){reject(Error('文件冲突，请另存草稿或重新打开'));return}finishInteraction();clearTimeout(draftTimer);draftTimer=null;forceSaveView=true;sendEdit();if(!editFlight){forceSaveView=false;resolve();return}flushWaiters.push({resolve,reject})})}
 persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active){persist();return}pageMessage();sendEdit()},700)};
 flushPersist=function(){clearTimeout(draftTimer);draftTimer=null;sendEdit()};
@@ -33,6 +34,14 @@ window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='request'){try{let result=true;if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
+  if(action==='view-loading'){
+    await window.inkspaceCairoIdle();const oldDoc=doc,oldView={...view},raster=desktop.inkRasterAsync;
+    const strokes=Array.from({length:20},(_,i)=>({brush:'xournal',color:'#18232a',width:3,hasPressure:true,points:[{x:25000+100+(i%5)*60,y:25000+100+Math.floor(i/5)*40,p:.8},{x:25000+130+(i%5)*60,y:25000+110+Math.floor(i/5)*40,p:.8}]}));
+    doc={...doc,strokes,notes:[],shapes:[]};view.x=0;view.y=0;view.scale=1;render();desktop.inkRasterAsync=async p=>{const data=await raster(p);await new Promise(r=>setTimeout(r,50));return data};
+    try{const before=renderStats.fullScenePaints;view.x=-25000;view.y=-25000;render();const preview=document.createElement('canvas');preview.width=canvas.width;preview.height=canvas.height;const c=preview.getContext('2d');worldTransform(c);for(const stroke of strokes){c.fillStyle=stroke.color;c.fill(new Path2D(cachedStroke(stroke).d))}const expected=c.getImageData(0,0,canvas.width,canvas.height).data,actual=ctx.getImageData(0,0,canvas.width,canvas.height).data;if(expected.some((v,i)=>v!==actual[i]))throw Error('Newly exposed strokes were missing before raster completed');await window.inkspaceCairoIdle();const paints=renderStats.fullScenePaints-before;if(paints>2)throw Error('Visible strokes were replaced incrementally');return{uncachedStrokes:20,immediateCompletePreview:true,scenePaints:paints};}
+    finally{desktop.inkRasterAsync=raster;doc=oldDoc;Object.assign(view,oldView);render();await window.inkspaceCairoIdle()}
+  }
+  if(action==='settings'){const input=$('#background-kind');input.value='grid';input.dispatchEvent(new Event('change'));await flushed();return{background:doc.background.type}}
   if(action==='inspect')return{model:documentData(),hasNativeInk:hasNativeInk(),native:window.desktop?.inkStatus()||null,nativeState:window.inkspaceNative.status(),formula:!!document.querySelector('.katex'),version:hostVersion,dirty:contentSignature()!==lastContent,conflict,width:viewport.clientWidth,height:viewport.clientHeight};
   if(action==='write'){
     const rect=viewport.getBoundingClientRect(),count=doc.strokes.length;const pointer=(type,pointerType,x,y,p,buttons)=>viewport.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:77,pointerType,clientX:rect.left+x,clientY:rect.top+y,pressure:p,button:0,buttons}));
@@ -71,6 +80,35 @@ async function runCodiumDiagnostic(action){
     }finally{clearInterval(timer);desktop.inkRaster=original}
   }
   if(action==='geometry')return window.inkspaceNative.test('layout');
+  if(action==='dots'){
+    await window.inkspaceNative.register();await window.inkspaceCairoIdle();
+    const rect=viewport.getBoundingClientRect(),before=doc.strokes.length,oldWidth=$('#width').value,originalRaster=desktop.inkRasterAsync;
+    $('#width').value='2';let requests=0;
+    desktop.inkRasterAsync=async payload=>{const index=requests++;const data=await originalRaster(payload);await new Promise(resolve=>setTimeout(resolve,index%3===0?60:5));return data};
+    try{
+      const packets=[];for(let i=0;i<60;i++){const sample={x:rect.left+280.125+(i%10)*5,y:rect.top+220.375+Math.floor(i/10)*5,p:.7,id:97,precise:true,eraser:false};packets.push({type:'pointerdown',samples:[sample]},{type:'pointerup',samples:[{...sample,p:0}]})}
+      await window.inkspaceNative.test('fixture',{packets});await window.inkspaceCairoIdle();
+      const added=doc.strokes.slice(before);if(added.length!==60||added.some(s=>s.points.length!==1))throw Error('Rapid dot input lost strokes');
+      const reference=document.createElement('canvas');reference.width=canvas.width;reference.height=canvas.height;const context=reference.getContext('2d');worldTransform(context);paintScene(context);
+      const expected=context.getImageData(0,0,canvas.width,canvas.height).data,actual=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      if(expected.some((value,index)=>value!==actual[index]))throw Error('Rapid dot composition erased neighbouring pixels');
+      const result={dots:added.length,reusedPointerId:true,outOfOrderRaster:true,pixelsExact:true};
+      doc.strokes.splice(before);history.splice(Math.max(0,history.length-60));render();await window.inkspaceCairoIdle();await flushed();return result;
+    }finally{$('#width').value=oldWidth;desktop.inkRasterAsync=originalRaster}
+  }
+  if(action==='zoom'){
+    await window.inkspaceNative.register();await window.inkspaceCairoIdle();
+    const rect=viewport.getBoundingClientRect(),before=doc.strokes.length,original={...view},raster=desktop.inkRasterAsync;
+    const sample={x:rect.left+210.25,y:rect.top+160.75,p:.7,id:99,precise:true,eraser:false};
+    await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[sample]},{type:'pointermove',samples:[{...sample,x:sample.x+40}]},{type:'pointerup',samples:[{...sample,x:sample.x+40,p:0}]}]});await window.inkspaceCairoIdle();
+    desktop.inkRasterAsync=async p=>{const data=await raster(p);await new Promise(r=>setTimeout(r,40));return data};
+    try{
+      let continuous=true;for(const scale of [1.3,.8,1.5,.9,1.2]){view.scale=original.scale*scale;render();const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;continuous&&=pixels.some((v,i)=>i%4===3&&v>0)}
+      await window.inkspaceCairoIdle();const reference=document.createElement('canvas');reference.width=canvas.width;reference.height=canvas.height;const c=reference.getContext('2d');worldTransform(c);paintScene(c);
+      const expected=c.getImageData(0,0,canvas.width,canvas.height).data,actual=ctx.getImageData(0,0,canvas.width,canvas.height).data;if(!continuous||expected.some((v,i)=>v!==actual[i]))throw Error('Zoom lost visible ink or retained stale pixels');
+      let panRequests=0;desktop.inkRasterAsync=async p=>{panRequests++;return raster(p)};view.x+=24;render();await window.inkspaceCairoIdle();view.x-=24;render();await window.inkspaceCairoIdle();if(panRequests)throw Error('Pan unnecessarily rerasterized cached strokes');return{continuous:true,finalPixelsExact:true,rapidZooms:5,panRasterRequests:panRequests};
+    }finally{desktop.inkRasterAsync=raster;Object.assign(view,original);doc.strokes.splice(before);history.pop();render();await window.inkspaceCairoIdle();await flushed()}
+  }
   if(action==='dense'){
     await window.inkspaceNative.register();const rect=viewport.getBoundingClientRect(),count=doc.strokes.length,points=Array.from({length:300},(_,i)=>({x:rect.left+160.123+i*.0192,y:rect.top+120.234+i*.0275,p:.5+i*.001,id:88,precise:true,eraser:false}));await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:points.slice(0,1)},{type:'pointermove',samples:points.slice(1)},{type:'pointerup',samples:[{...points.at(-1),p:0}]}]});const stored=doc.strokes.at(-1).points;for(let i=0;i<300;i++){const expected=world(points[i].x-rect.left,points[i].y-rect.top);if(Math.abs(stored[i].x-expected.x)>1e-8||Math.abs(stored[i].y-expected.y)>1e-8)throw Error('Dense native coordinates rounded or misaligned')}if(doc.strokes.length!==count+1||stored.length!==300)throw Error('Native samples lost');undo();await flushed();return{samples:stored.length,unrounded:true,dpr:surface.dpr};
   }

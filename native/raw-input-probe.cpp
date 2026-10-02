@@ -17,17 +17,18 @@
 #include <optional>
 #include <chrono>
 #include <algorithm>
+#include <iostream>
 
 namespace fs=std::filesystem;
 struct Device {
-  USHORT page=0,usage=0;std::vector<BYTE> preparsed;
+  unsigned long long identity=0;USHORT page=0,usage=0;std::vector<BYTE> preparsed;
   std::vector<HIDP_VALUE_CAPS> values;std::vector<HIDP_BUTTON_CAPS> buttons;
   bool pen=false;std::optional<bool> contact;
 };
 static std::map<HANDLE,Device> devices;
 static fs::path output;static std::ofstream events;
 static HWND receiver;static unsigned duration=300;
-static ULONGLONG started;static bool show=false,running=true;
+static ULONGLONG started;static bool show=false,running=true,stream=false;
 static unsigned long long messages=0,reports=0,penReports=0,backgroundPenReports=0,completeReports=0,backgroundCompleteReports=0,downs=0,ups=0,logged=0,decodeErrors=0;
 static std::optional<long long> pressureMin,pressureMax;
 static std::vector<std::pair<std::pair<USHORT,USHORT>,DWORD>> registrations;
@@ -39,6 +40,7 @@ static bool includes(const HIDP_BUTTON_CAPS& c,USHORT usage){return c.IsRange?us
 static Device inspect(HANDLE handle){
   Device d;RID_DEVICE_INFO info{};info.cbSize=sizeof(info);UINT bytes=sizeof(info);
   if(GetRawInputDeviceInfoW(handle,RIDI_DEVICEINFO,&info,&bytes)==UINT(-1)||info.dwType!=RIM_TYPEHID)return d;
+  UINT nameSize=0;GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,nullptr,&nameSize);std::vector<wchar_t> name(nameSize+1);if(nameSize&&GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,name.data(),&nameSize)!=UINT(-1)){d.identity=14695981039346656037ull;for(UINT i=0;i<nameSize&&name[i];i++){d.identity^=static_cast<unsigned short>(name[i]);d.identity*=1099511628211ull;}}
   d.page=info.hid.usUsagePage;d.usage=info.hid.usUsage;
   bytes=0;if(GetRawInputDeviceInfoW(handle,RIDI_PREPARSEDDATA,nullptr,&bytes)==UINT(-1)||!bytes)return d;
   d.preparsed.resize(bytes);if(GetRawInputDeviceInfoW(handle,RIDI_PREPARSEDDATA,d.preparsed.data(),&bytes)==UINT(-1)){d.preparsed.clear();return d;}
@@ -92,6 +94,10 @@ static void receive(HRAWINPUT handle,WPARAM code){
     char* data=reinterpret_cast<char*>(const_cast<BYTE*>(hid.bRawData))+size_t(i)*hid.dwSizeHid;
     auto x=value(d,1,0x30,data,hid.dwSizeHid),y=value(d,1,0x31,data,hid.dwSizeHid),pressure=value(d,0x0d,0x30,data,hid.dwSizeHid);
     auto contact=button(d,0x42,data,hid.dwSizeHid),range=button(d,0x32,data,hid.dwSizeHid);
+    if(stream&&x&&y&&pressure){
+      long maxPressure=0;for(const auto& v:d.values)if(v.UsagePage==0x0d&&includes(v,0x30))maxPressure=std::max(maxPressure,v.LogicalMax);
+      std::cout<<"{\"device\":"<<reinterpret_cast<uintptr_t>(raw->header.hDevice)<<",\"deviceKey\":\""<<d.identity<<"\",\"x\":"<<*x<<",\"y\":"<<*y<<",\"pressure\":"<<*pressure<<",\"pressureMax\":"<<maxPressure<<",\"contact\":"<<(contact?(*contact?"true":"false"):"null")<<",\"inRange\":"<<(range?(*range?"true":"false"):"null")<<",\"background\":"<<(background?"true":"false")<<"}\n";std::cout.flush();
+    }
     if(x&&y&&pressure){++completeReports;if(background)++backgroundCompleteReports;}
     if(pressure){pressureMin=pressureMin?std::min(*pressureMin,*pressure):*pressure;pressureMax=pressureMax?std::max(*pressureMax,*pressure):*pressure;}
     if(contact){if(!d.contact||*d.contact!=*contact){if(*contact)++downs;else if(d.contact)++ups;}d.contact=contact;}
@@ -126,7 +132,7 @@ static LRESULT CALLBACK windowProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int){
   wchar_t executable[MAX_PATH];GetModuleFileNameW(nullptr,executable,MAX_PATH);output=fs::path(executable).parent_path()/L"report";
-  int argc=0;LPWSTR* argv=CommandLineToArgvW(GetCommandLineW(),&argc);for(int i=1;i<argc;i++){std::wstring a=argv[i];if(a==L"--stop"){HWND existing=FindWindowW(L"InkspaceRawInputProbe",nullptr);if(existing)PostMessageW(existing,WM_CLOSE,0,0);LocalFree(argv);return 0;}if(a==L"--show")show=true;else if(a.starts_with(L"--out="))output=a.substr(6);else if(a.starts_with(L"--duration="))duration=std::stoul(a.substr(11));}LocalFree(argv);
+  int argc=0;LPWSTR* argv=CommandLineToArgvW(GetCommandLineW(),&argc);for(int i=1;i<argc;i++){std::wstring a=argv[i];if(a==L"--stop"){HWND existing=FindWindowW(L"InkspaceRawInputProbe",nullptr);if(existing)PostMessageW(existing,WM_CLOSE,0,0);LocalFree(argv);return 0;}if(a==L"--stream")stream=true;else if(a==L"--show")show=true;else if(a.starts_with(L"--out="))output=a.substr(6);else if(a.starts_with(L"--duration="))duration=std::stoul(a.substr(11));}LocalFree(argv);
   fs::create_directories(output);events.open(output/L"samples.jsonl");started=GetTickCount64();
   WNDCLASSW cls{};cls.lpfnWndProc=windowProc;cls.hInstance=instance;cls.lpszClassName=L"InkspaceRawInputProbe";cls.hCursor=LoadCursorW(nullptr,IDC_ARROW);cls.hbrBackground=HBRUSH(COLOR_WINDOW+1);RegisterClassW(&cls);
   receiver=CreateWindowExW(0,cls.lpszClassName,L"Inkspace · Raw Input 验证",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,700,330,nullptr,nullptr,instance,nullptr);if(!receiver)return 1;
