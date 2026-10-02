@@ -36,7 +36,8 @@ function cachedStroke(s){
   let c=strokeCache.get(s);if(!c){const d=InkContent.strokePath(s);c={d,path:new Path2D(d),bounds:itemBounds('strokes',s)};strokeCache.set(s,c);renderStats.outlineBuilds++}return c;
 }
 function visible(b){const pad=surface.padding,r={x:(-view.x-pad)/view.scale,y:(-view.y-pad)/view.scale,w:(surface.width+pad*2)/view.scale,h:(surface.height+pad*2)/view.scale};return b.x+b.w>=r.x&&b.y+b.h>=r.y&&b.x<=r.x+r.w&&b.y<=r.y+r.h}
-function backgroundSettings(){return doc.background||{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16}}
+function backgroundSettings(){const bg=doc.background||{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16};return {...bg,layout:bg.layout==='a4-landscape'?'a4-landscape':'a4-portrait'}}
+function a4Dimensions(){return backgroundSettings().layout==='a4-landscape'?[297*96/25.4,210*96/25.4]:[210*96/25.4,297*96/25.4]}
 function textSize(){return backgroundSettings().fontSize||16}
 function backgroundSpacing(){const bg=backgroundSettings();return bg.spacing==='auto'?textSize()*1.75:bg.spacing}
 // Paper occupancy is derived from content; completed stroke coverage is cached,
@@ -51,7 +52,7 @@ function renderA4Pages(){
   let layer=paper.querySelector('#a4-pages');
   if(!layout?.startsWith('a4-')){layer?.remove();return}
   if(!layer){layer=document.createElement('div');layer.id='a4-pages';layer.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden';paper.append(layer)}
-  const [w,h]=layout==='a4-landscape'?[297*96/25.4,210*96/25.4]:[210*96/25.4,297*96/25.4];
+  const [w,h]=a4Dimensions();
   layer.dataset.pageWidth=w;layer.dataset.pageHeight=h;
   const cells=new Set(),add=(x,y,target=cells)=>target.add(`${x},${y}`);
   // Include every grid crossing, even a brief crossing near a page corner.
@@ -67,7 +68,7 @@ function renderA4Pages(){
       for(let cx=Math.floor((x-r)/w);cx<=Math.floor((x+r)/w);cx++)for(let cy=Math.floor((y-r)/h);cy<=Math.floor((y+r)/h);cy++)add(cx,cy,target);
     }
   }
-  function box(b){for(let x=Math.floor(b.x/w);x<=Math.floor((b.x+b.w)/w);x++)for(let y=Math.floor(b.y/h);y<=Math.floor((b.y+b.h)/h);y++)add(x,y)}
+  function box(b){for(let x=Math.floor(b.x/w);x<=Math.floor((b.x+Math.max(0,b.w-1e-7))/w);x++)for(let y=Math.floor(b.y/h);y<=Math.floor((b.y+Math.max(0,b.h-1e-7))/h);y++)add(x,y)}
   for(const s of doc.strokes){
     const points=s.points;if(!points.length)continue;
     let c=a4StrokeCache.get(s);const first=points[0],prior=c&&points[c.length-1];
@@ -309,3 +310,27 @@ function snapshot(){return {...doc,strokes:doc.strokes.slice(),notes:doc.notes.m
 function detachSelection(){for(const i of selected.strokes){const s=doc.strokes[i];doc.strokes[i]={...s,points:s.points.map(p=>({...p}))}}}
 function persist(){clearTimeout(saveTimer);saveTimer=setTimeout(flushPersist,700)}
 function flushPersist(){if(active){persist();return}try{localStorage.setItem('inkspace.document',JSON.stringify(doc))}catch{toast('自动保存失败，请下载 JSON 保存。')}}
+
+// History updates preserve the existing scene and native stroke caches.
+function renderHistoryChange(previous){
+  if(!sceneBuffer||zoomBase||renderedScale!==view.scale||paintedView.x!==view.x||paintedView.y!==view.y||JSON.stringify(previous.background)!==JSON.stringify(doc.background)||previous.pdfs!==doc.pdfs){render();return}
+  const old=new Set(previous.strokes),current=new Set(doc.strokes),changed=previous.strokes.filter(s=>!current.has(s)).concat(doc.strokes.filter(s=>!old.has(s)));
+  const regions=changed.map(s=>cachedStroke(s).bounds);
+  const count=Math.max(previous.shapes.length,doc.shapes.length);
+  for(let i=0;i<count;i++)if(JSON.stringify(previous.shapes[i])!==JSON.stringify(doc.shapes[i]))for(const shape of [previous.shapes[i],doc.shapes[i]])if(shape){const b=itemBounds('shapes',shape);regions.push({x:b.x-shape.width,y:b.y-shape.width,w:b.w+2*shape.width,h:b.h+2*shape.width})}
+  const b=union(regions);
+  // Legacy direct paths change antialiasing when clipped; keep their full paint.
+  if(b&&previous.strokes.concat(doc.strokes).some(s=>s.brush!=='raw-contour'&&!(s.brush==='xournal'&&hasNativeInk())&&(()=>{const r=cachedStroke(s).bounds;return r.x+r.w>=b.x-132/view.scale&&r.y+r.h>=b.y-132/view.scale&&r.x<=b.x+b.w+132/view.scale&&r.y<=b.y+b.h+132/view.scale})())){render();return}
+  if(b){
+    const d=surface.dpr,margin=4,ox=Math.round((view.x+surface.padding)*d),oy=Math.round((view.y+surface.padding)*d);
+    // Match raw ink tile boundaries so clipping cannot change their coverage.
+    const x=Math.max(0,Math.floor(((view.x+surface.padding+b.x*view.scale)*d-margin-ox)/128)*128+ox),y=Math.max(0,Math.floor(((view.y+surface.padding+b.y*view.scale)*d-margin-oy)/128)*128+oy),right=Math.min(canvas.width,Math.ceil(((view.x+surface.padding+(b.x+b.w)*view.scale)*d+margin-ox)/128)*128+ox),bottom=Math.min(canvas.height,Math.ceil(((view.y+surface.padding+(b.y+b.h)*view.scale)*d+margin-oy)/128)*128+oy),w=right-x,h=bottom-y;
+    if(w>0&&h>0){
+      bufferContext.setTransform(1,0,0,1,0,0);bufferContext.clearRect(x,y,w,h);bufferContext.save();bufferContext.beginPath();bufferContext.rect(x,y,w,h);bufferContext.clip();worldTransform(bufferContext);paintScene(bufferContext,[{x:(x/d-view.x-surface.padding)/view.scale,y:(y/d-view.y-surface.padding)/view.scale,w:w/d/view.scale,h:h/d/view.scale}]);bufferContext.restore();
+      ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.globalCompositeOperation='copy';ctx.drawImage(sceneBuffer,0,0);ctx.restore();worldTransform(ctx);
+      renderStats.historyRegionPaints=(renderStats.historyRegionPaints||0)+1;
+    }
+  }
+  clearLayer(inkLayers[1]);clearLayer(inkLayers[2]);renderNotes();window.inkspaceDiagram?.render();renderBackground();overlaySelection();
+  $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
+}

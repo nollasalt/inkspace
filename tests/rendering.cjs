@@ -181,10 +181,10 @@ run("tool='select'");
 
 // Background styles follow world coordinates and survive save, validation and undo.
 const setBackground=(id,value)=>{const el=w.document.querySelector(id);el.value=value;el.dispatchEvent(new w.Event('change'))};
-setBackground('#background-kind','grid');assert.equal(run('doc.background.type'),'grid');assert.ok(w.document.querySelector('#paper').style.backgroundImage.includes('90deg'));
+setBackground('#background-kind','grid');assert.equal(run('doc.background.type'),'grid');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
 setBackground('#background-spacing','48');assert.equal(run('doc.background.spacing'),48);run('undo()');assert.equal(run('backgroundSettings().spacing'),'auto');
-setBackground('#background-kind','ruled');assert.equal((w.document.querySelector('#paper').style.backgroundImage.match(/linear-gradient/g)||[]).length,1);
-setBackground('#background-color','#202020');assert.equal(run('doc.background.color'),'#202020');assert.ok(w.document.querySelector('#paper').style.backgroundImage.includes('255'));
+setBackground('#background-kind','ruled');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
+setBackground('#background-color','#202020');assert.equal(run('doc.background.color'),'#202020');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
 setBackground('#background-kind','blank');assert.equal(w.document.querySelector('#paper').style.backgroundImage,'none');
 run('flushPersist()');assert.equal(JSON.parse(w.localStorage.getItem('inkspace.document')).background.type,'blank');
 assert.equal(run('valid(JSON.parse(JSON.stringify(doc)))'),true);
@@ -358,7 +358,8 @@ pr("doc.background.layout='a4-landscape';render()");
 assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),297*96/25.4);
 assert(pr('valid(JSON.parse(JSON.stringify(doc)))'));pr('flushPersist()');
 assert.equal(JSON.parse(pw.localStorage.getItem('inkspace.document')).background.layout,'a4-landscape');
-pr("doc.background.layout='infinite';render()");assert.equal(pw.document.querySelector('#a4-pages'),null);
+pr("doc.background.layout='infinite';render()");assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),210*96/25.4,'legacy infinite documents use A4 portrait');
+assert.equal(pw.document.querySelector('#page-layout option[value=infinite]'),null);
 pt.dom.window.close();
 console.log('Passed gapless dashed A4 borders, occupancy, live expansion, deletion, negative coordinates and persistence.');
 
@@ -383,3 +384,12 @@ assert(clip.run('pasteSelectionText('+JSON.stringify(fragment.replace('INKSPACE_
 assert.equal(cr('doc.strokes[0].points[1].p'),savedFragment.document.strokes[0].points[1].p);
 const textEvent=new cw.Event('copy',{bubbles:true,cancelable:true});textEvent.clipboardData=copyEvent.clipboardData;cw.document.querySelector('#source').dispatchEvent(textEvent);assert(!textEvent.defaultPrevented);
 clip.dom.window.close();console.log('Passed mixed selection copy/paste, original pressure, unique image/text IDs, cursor placement, cross-page paste and atomic undo/redo.');
+
+// Undo/redo reuse unchanged ink objects and repaint only the changed region.
+const historyApp=app(),historyRun=historyApp.run;
+historyRun("doc={format:'inkspace',version:1,strokes:Array.from({length:1000},(_,i)=>({brush:'raw-contour',color:'#263f43',width:2,points:[{x:(i%40)*20,y:Math.floor(i/40)*20,p:.5},{x:(i%40)*20+8,y:Math.floor(i/40)*20+8,p:.7}]})),notes:[],shapes:[],background:{layout:'a4-portrait',type:'blank',color:'#ffffff',spacing:'auto',fontSize:16}};view={x:0,y:0,scale:1};history=[];future=[];render()");
+const historyPixels=()=>Buffer.from(historyApp.canvases.get('ink').native.getContext('2d').getImageData(0,0,historyApp.canvases.get('ink').native.width,historyApp.canvases.get('ink').native.height).data);
+const beforeHistoryPixels=historyPixels();historyRun("checkpoint();doc.strokes.push({brush:'raw-contour',color:'#263f43',width:3,points:[{x:31,y:31,p:.5}]});render()");const afterHistoryPixels=historyPixels(),historyPaints=historyRun('renderStats.fullScenePaints'),historyBuilds=historyRun('renderStats.outlineBuilds');
+historyRun('undo()');assert.equal(historyRun('renderStats.fullScenePaints'),historyPaints);assert.equal(historyRun('renderStats.outlineBuilds'),historyBuilds);assert.deepEqual(historyPixels(),beforeHistoryPixels);
+historyRun('redo()');assert.equal(historyRun('renderStats.fullScenePaints'),historyPaints);assert.deepEqual(historyPixels(),afterHistoryPixels);historyApp.dom.window.close();
+console.log('Passed 1000-stroke region undo/redo: zero full-scene paints, zero contour rebuilds and exact pixels.');

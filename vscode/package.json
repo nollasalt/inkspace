@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {"type": "git", "url": "https://github.com/nollasalt/inkspace.git"},
@@ -41,9 +41,9 @@
     "keybindings": [
       {"command": "inkspace.copy", "key": "ctrl+c", "mac": "cmd+c", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
       {"command": "inkspace.paste", "key": "ctrl+v", "mac": "cmd+v", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
-      {"command": "inkspace.undo", "key": "ctrl+z", "mac": "cmd+z", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus"},
-      {"command": "inkspace.redo", "key": "ctrl+shift+z", "mac": "cmd+shift+z", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus"},
-      {"command": "inkspace.redo", "key": "ctrl+y", "mac": "cmd+y", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus"},
-      {"command": "inkspace.save", "key": "ctrl+s", "mac": "cmd+s", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus"}]
+      {"command": "inkspace.undo", "key": "ctrl+z", "mac": "cmd+z", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
+      {"command": "inkspace.redo", "key": "ctrl+shift+z", "mac": "cmd+shift+z", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
+      {"command": "inkspace.redo", "key": "ctrl+y", "mac": "cmd+y", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
+      {"command": "inkspace.save", "key": "ctrl+s", "mac": "cmd+s", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"}]
   }
 }

@@ -26,12 +26,12 @@ async function renderPdfPage(asset,index,entry){
   const scale=view.scale;if(cache.scale===scale||cache.pending===scale)return;cache.pending=scale;const token=++cache.token;
   try{
     const pdf=await entry.promise,page=await pdf.getPage(index+1);if(token!==cache.token)return;
-    const viewport=page.getViewport({scale}),density=Math.max(1.5,devicePixelRatio),max=4096/Math.max(viewport.width,viewport.height),rasterDensity=Math.min(density,max);
+    const pdfScale=scale*spec.width/page.getViewport({scale:1}).width,viewport=page.getViewport({scale:pdfScale}),density=Math.max(1.5,devicePixelRatio),max=4096/Math.max(viewport.width,viewport.height),rasterDensity=Math.min(density,max);
     const buffer=document.createElement('canvas');buffer.width=Math.max(1,Math.round(viewport.width*rasterDensity));buffer.height=Math.max(1,Math.round(viewport.height*rasterDensity));
     cache.job=page.render({canvasContext:buffer.getContext('2d'),viewport,transform:[rasterDensity,0,0,rasterDensity,0,0]});await cache.job.promise;
     if(token!==cache.token)return;
     cache.canvas.width=buffer.width;cache.canvas.height=buffer.height;cache.canvas.getContext('2d').drawImage(buffer,0,0);
-    cache.text.replaceChildren();cache.text.style.setProperty('--total-scale-factor',String(scale));cache.text.style.setProperty('--scale-factor',String(scale));cache.text.style.setProperty('--scale-round-x','1px');cache.text.style.setProperty('--scale-round-y','1px');
+    cache.text.replaceChildren();cache.text.style.setProperty('--total-scale-factor',String(pdfScale));cache.text.style.setProperty('--scale-factor',String(pdfScale));cache.text.style.setProperty('--scale-round-x','1px');cache.text.style.setProperty('--scale-round-y','1px');
     cache.layer?.cancel();cache.layer=new PdfApi.TextLayer({textContentSource:await page.getTextContent(),container:cache.text,viewport});await cache.layer.render();cache.scale=scale;
   }catch(e){if(!entry.disposed&&pdfSessions.get(asset.id)===entry&&token===cache.token)toast('PDF 页面加载失败：'+e.message)}finally{if(token===cache.token){cache.pending=null;cache.job=null}}
 }
@@ -43,9 +43,9 @@ function renderPdfs(){
 $('#pdf-import').onclick=()=>$('#pdf-file').click();
 $('#pdf-file').onchange=async e=>{
   const file=e.target.files[0];e.target.value='';if(!file)return;
-  try{if(file.size>60*1024*1024)throw Error('PDF 超过 60 MB');toast('正在导入 PDF…');const data=pdfBase64(new Uint8Array(await file.arrayBuffer())),id=crypto.randomUUID(),asset={id,name:file.name,data,pages:[]},entry=await openPdf(asset),pdf=await entry.promise;const origin=world(60,60);let y=origin.y;
-    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i),v=p.getViewport({scale:1});asset.pages.push({x:origin.x,y,width:v.width,height:v.height});y+=v.height+28}
-    finishInteraction();checkpoint();doc.pdfs=[...(doc.pdfs||[]),asset];render();persist();toast(`已导入 ${pdf.numPages} 页；“PDF 文字”可选取复制，画笔可直接批注`);
+  try{if(file.size>60*1024*1024)throw Error('PDF 超过 60 MB');toast('正在导入 PDF…');const data=pdfBase64(new Uint8Array(await file.arrayBuffer())),id=crypto.randomUUID(),asset={id,name:file.name,data,pages:[]},entry=await openPdf(asset),pdf=await entry.promise;const origin=world(viewport.clientWidth/2,viewport.clientHeight/2),sizes=[];
+    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i),v=p.getViewport({scale:1});sizes.push({width:v.width,height:v.height})}
+    asset.pages=pdfPagePlacement(sizes,origin);finishInteraction();checkpoint();doc.pdfs=[...(doc.pdfs||[]),asset];render();persist();toast(`已导入 ${pdf.numPages} 页；“PDF 文字”可选取复制，画笔可直接批注`);
   }catch(error){toast('PDF 导入失败：'+error.message)}
 };
 $('#pdf-highlight').onclick=()=>{
@@ -56,7 +56,7 @@ $('#pdf-highlight').onclick=()=>{
 };
 async function exportAnnotatedPdf(){
   try{finishInteraction();const assets=doc.pdfs||[];if(!assets.length){toast('先导入需要批注的 PDF');return}toast('正在导出 PDF…');
-    const result=await PdfApi.PDFDocument.create();for(const asset of assets){const source=await PdfApi.PDFDocument.load(pdfBytes(asset.data)),pages=source.getPages();for(let i=0;i<pages.length;i++){const original=pages[i];if(!original.node.Contents())original.drawRectangle({x:0,y:0,width:0,height:0,opacity:0});const spec=asset.pages[i],page=result.addPage([spec.width,spec.height]),crop=original.getCropBox(),embedded=await result.embedPage(original,{left:crop.x,bottom:crop.y,right:crop.x+crop.width,top:crop.y+crop.height}),angle=((original.getRotation().angle%360)+360)%360;page.drawPage(embedded,{x:angle===180||angle===270?spec.width:0,y:angle===90||angle===180?spec.height:0,rotate:PdfApi.degrees(-angle),width:crop.width,height:crop.height});const color=hex=>PdfApi.rgb(...hex.match(/[a-f0-9]{2}/gi).map(c=>parseInt(c,16)/255));
+    const result=await PdfApi.PDFDocument.create();for(const asset of assets){const source=await PdfApi.PDFDocument.load(pdfBytes(asset.data)),pages=source.getPages();for(let i=0;i<pages.length;i++){const original=pages[i];if(!original.node.Contents())original.drawRectangle({x:0,y:0,width:0,height:0,opacity:0});const spec=asset.pages[i],page=result.addPage([spec.width,spec.height]),crop=original.getCropBox(),embedded=await result.embedPage(original,{left:crop.x,bottom:crop.y,right:crop.x+crop.width,top:crop.y+crop.height}),angle=((original.getRotation().angle%360)+360)%360;page.drawPage(embedded,{x:angle===180||angle===270?spec.width:0,y:angle===90||angle===180?spec.height:0,rotate:PdfApi.degrees(-angle),width:crop.width*spec.width/(angle===90||angle===270?crop.height:crop.width),height:crop.height*spec.width/(angle===90||angle===270?crop.height:crop.width)});const color=hex=>PdfApi.rgb(...hex.match(/[a-f0-9]{2}/gi).map(c=>parseInt(c,16)/255));
       // Normalize rotated source pages so world/page coordinates agree.
       const touches=b=>b.x+b.w>=spec.x&&b.y+b.h>=spec.y&&b.x<=spec.x+spec.width&&b.y<=spec.y+spec.height;
       for(const note of doc.notes)if(touches(itemBounds('notes',note))){const raster=await rasterNote(note),image=await result.embedPng(raster.data);page.drawImage(image,{x:note.x-spec.x,y:page.getHeight()-(note.y-spec.y)-raster.height,width:raster.width,height:raster.height})}
@@ -70,3 +70,9 @@ $('#pdf-export').onclick=async()=>{try{const bytes=await exportAnnotatedPdf();if
 };
 async function rasterNote(n){const el=document.createElement('article');el.className='note';el.style.cssText=`position:fixed;left:-10000px;top:0;width:${n.width||320}px;font-size:${textSize()}px;--note-scale:1;transform:none`;el.innerHTML='<div class="note-body">'+(n.kind==='image'?`<img src="${n.src}" style="width:100%;aspect-ratio:${n.aspect}">`:markdown(n.markdown))+'</div>';if(n.kind==='image')el.classList.add('image-note');document.body.append(el);try{await document.fonts.ready;const width=n.width||320,height=el.offsetHeight,data=await PdfApi.toPng(el,{width,height,pixelRatio:2,cacheBust:false,preferredFontFormat:'woff2'});return{data,width:width*(n.scale||1),height:height*(n.scale||1)}}finally{el.remove()}}
 renderPdfs();
+
+// Fit each source page into a gapless A4 tile containing the viewport centre.
+function pdfPagePlacement(sizes,anchor){
+  const [w,h]=a4Dimensions(),x=Math.floor(anchor.x/w)*w,y=Math.floor(anchor.y/h)*h;
+  return sizes.map((page,index)=>{const scale=Math.min(w/page.width,h/page.height),width=page.width*scale,height=page.height*scale;return{x:x+(w-width)/2,y:y+index*h+(h-height)/2,width,height}});
+}

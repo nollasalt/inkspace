@@ -12,7 +12,7 @@ window.addEventListener('keydown',event=>{
   const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;
   if(!command||window.inkspaceDiagram?.editing()||$('#editor').open||event.target.matches?.('input,textarea,select')||event.target.closest?.('[contenteditable="true"],.monaco-editor,#terminal-panel'))return;
   event.preventDefault();event.stopImmediatePropagation();
-  if(!event.repeat)codium.postMessage({type:'history-shortcut',command});
+  if(!event.repeat){command==='undo'?undo():redo()}
 },{capture:true});
 // Load the bundled module through the webview resource service, then keep its
 // worker on a same-origin blob URL. Cross-origin module imports can stall here.
@@ -87,21 +87,43 @@ async function runCodiumDiagnostic(action){
     finally{desktop.inkRasterAsync=raster;doc=oldDoc;Object.assign(view,oldView);render();await window.inkspaceCairoIdle()}
   }
   if(action==='a4-layout'){const layout=$('#page-layout');layout.value='a4-portrait';layout.dispatchEvent(new Event('change'));await flushed();const portrait=$('#a4-pages').dataset.pageWidth;layout.value='a4-landscape';layout.dispatchEvent(new Event('change'));await flushed();const landscape=$('#a4-pages').dataset.pageWidth;if(portrait===landscape||!$('#a4-pages g').getAttribute('stroke-dasharray'))throw Error('A4 layout dimensions failed');return{layout:doc.background.layout,portrait,landscape}}
+  if(action==='pdf-layout'){
+    await window.inkspacePdfWorkerReady;const source=await PdfApi.PDFDocument.create();for(const size of [[595.28,841.89],[841.89,595.28],[600,600]]){const page=source.addPage(size);page.drawText('A4 alignment test',{x:20,y:20})}
+    const bytes=await source.save(),file=new File([bytes],'alignment.pdf',{type:'application/pdf'}),anchor=world(viewport.clientWidth/2,viewport.clientHeight/2),[w,h]=a4Dimensions();
+    await $('#pdf-file').onchange({target:{files:[file],value:''}});const asset=doc.pdfs.at(-1);if(!asset||asset.pages.length!==3)throw Error('PDF import failed');
+    for(let i=0;i<3;i++){const page=asset.pages[i];if(Math.abs(page.x+page.width/2-(Math.floor(anchor.x/w)+.5)*w)>1e-6||Math.abs(page.y+page.height/2-(Math.floor(anchor.y/h)+i+.5)*h)>1e-6||page.width>w+.001||page.height>h+.001)throw Error('PDF did not align with current A4 tile')}
+    const exported=await exportAnnotatedPdf(),document=await PdfApi.PDFDocument.load(exported);if(document.getPageCount()!==3)throw Error('Scaled PDF export failed');
+    undo();await flushed();return{aligned:true,mixedOrientation:true,gaplessTiles:true,exported:true};
+  }
   if(action==='diagram'){
     const api=window.inkspaceDiagram;if(!api?.graph)throw Error('Diagram editor did not initialize');
     const g=api.graph,model=g.getModel();
     const a=api.add('rect');g.cellLabelChanged(a,'Node $x^2$');g.moveCells([a],-400,0);
     const state=g.view.getState(a),rect=viewport.getBoundingClientRect(),target=state.shape.node,start={x:rect.left+state.x+state.width/2,y:rect.top+state.y+state.height/2},oldX=a.geometry.x,strokeCount=doc.strokes.length;
     const mouse=(type,dx,dy)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerType:'mouse',pointerId:97,button:0,buttons:type==='pointerup'?0:1,clientX:start.x+dx,clientY:start.y+dy}));
-    mouse('pointerdown',0,0);mouse('pointermove',40,20);mouse('pointerup',40,20);
+    mouse('pointermove',0,0);mouse('pointerdown',0,0);mouse('pointermove',40,20);mouse('pointerup',40,20);
     if(a.geometry.x===oldX||doc.strokes.length!==strokeCount||g.getSelectionCell()!==a)throw Error('Actual mouse drag failed or started ink');
     const b=api.add('ellipse');g.cellLabelChanged(b,'Target');g.setSelectionCells([a,b]);const edge=api.connect();
     if(!edge||edge.source!==a||edge.target!==b)throw Error('Attached connector failed');
+    g.clearSelection();const bs=g.view.getState(b),br=viewport.getBoundingClientRect(),bx=br.left+bs.x+bs.width/2,by=br.top+bs.y+bs.height/2,hit=document.elementFromPoint(bx,by);if(!hit?.closest('#diagram-layer'))throw Error('Vertex hit test failed');
+    for(const type of ['pointermove','pointerdown','pointerup'])hit.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerType:'mouse',pointerId:98,button:0,buttons:type==='pointerdown'?1:0,clientX:bx,clientY:by}));if(g.getSelectionCell()!==b||g.connectionHandler.isConnecting())throw Error('Node centre click was stolen by connector');
+    viewport.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'mouse',pointerId:99,button:0,buttons:1,clientX:br.right-15,clientY:br.bottom-60}));viewport.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerType:'mouse',pointerId:99,button:0,clientX:br.right-15,clientY:br.bottom-60}));if(g.getSelectionCount())throw Error('Blank click kept diagram selection');
+    // Hover first, then connect from the actual right boundary point.
+    g.moveCells([a],200,0);const ast=g.view.getState(a),ar=viewport.getBoundingClientRect(),hover=g.view.getState(a).shape.node;
+    const eventAt=(type,target,x,y)=>{if(!target)throw Error('Missing boundary event target: '+type);return target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerType:'mouse',pointerId:100,button:0,buttons:type==='pointerdown'||type==='pointermove'&&g.isMouseDown?1:0,clientX:ar.left+x,clientY:ar.top+y}))};
+    eventAt('pointermove',hover,ast.x+ast.width/2,ast.y+ast.height/2);
+    const point=g.connectionHandler.constraintHandler.focusIcons?.[1];if(!point)throw Error('Boundary connection points missing');
+    const px=point.bounds.getCenterX(),py=point.bounds.getCenterY(),sourceIcon=point.node;eventAt('pointermove',sourceIcon,px,py);const currentIcon=g.connectionHandler.constraintHandler.focusIcons?.[1]?.node||sourceIcon;eventAt('pointerdown',currentIcon,px,py);
+    if(!g.connectionHandler.first)throw Error('Boundary drag did not start connection');
+    const targetState=g.view.getState(b),beforeConnect=g.getChildCells(g.getDefaultParent(),false,true).length;
+    eventAt('pointermove',targetState.shape.node,targetState.x+targetState.width/2,targetState.y+targetState.height/2);eventAt('pointerup',targetState.shape.node,targetState.x+targetState.width/2,targetState.y+targetState.height/2);
+    if(g.getChildCells(g.getDefaultParent(),false,true).length!==beforeConnect+1)throw Error('Boundary drag did not attach connection');undo();
     const before=edge.geometry?.clone(),oldState=g.view.getState(edge).absolutePoints.map(p=>p&&{x:p.x,y:p.y});
     g.moveCells([a],60,30);const after=g.view.getState(edge).absolutePoints;
     if(after[0].x===oldState[0].x&&after[0].y===oldState[0].y)throw Error('Connector did not follow its node');
-    const geo=a.geometry.clone();geo.width*=1.5;geo.height*=1.5;g.resizeCell(a,geo);
+    const replayBefore=api.replayCount,paintsBefore=renderStats.fullScenePaints,geo=a.geometry.clone();geo.width*=1.5;geo.height*=1.5;g.resizeCell(a,geo);
     if(Math.abs(a.geometry.width-240)>1e-6)throw Error('Node resize failed');
+    undo();if(a.geometry.width!==160||api.replayCount!==replayBefore+1||renderStats.fullScenePaints!==paintsBefore)throw Error('Incremental diagram undo failed');redo();if(a.geometry.width!==240)throw Error('Incremental diagram redo failed');
     if(!$('#diagram-layer .katex'))throw Error('Offline formula label did not render');
     g.view.getState(a).shape.node.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,button:0}));if(!g.isEditing()||!nodeEditor())throw Error('Node text editor failed');g.cellEditor.textarea.textContent='Edited $\\frac{a}{b}$';g.stopEditing(false);
     if(!String(a.value).includes('Edited'))throw Error('Node text edit not committed');
@@ -117,7 +139,7 @@ async function runCodiumDiagnostic(action){
     if(g.getChildCells(g.getDefaultParent(),true,true).length!==count*2)throw Error('Compressed draw.io import failed');undo();
     const formulaNode=$('#diagram-layer .katex .vlist');if(!formulaNode||getComputedStyle(formulaNode).position!=='relative')throw Error('Formula layout styles missing');
     const previewContainer=document.createElement('div');previewContainer.style.cssText='position:absolute;left:0;top:0;width:'+viewport.clientWidth+'px;height:'+viewport.clientHeight+'px';previewContainer.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="'+viewport.clientWidth+'" height="'+viewport.clientHeight+'">'+api.svg()+'</svg>';document.body.appendChild(previewContainer);const preview=await PdfApi.toPng(previewContainer,{backgroundColor:'#ffffff'});previewContainer.remove();
-    await flushed();return{mouseEditor:true,mouseDragEvents:true,nodeResize:true,attachedArrows:true,formula:true,textEditing:true,copyPaste:true,undoRedo:true,drawioImport:true,xml:doc.diagram,preview};
+    await flushed();return{mouseEditor:true,mouseDragEvents:true,nodeResize:true,attachedArrows:true,formula:true,textEditing:true,copyPaste:true,undoRedo:true,drawioImport:true,boundaryDrag:true,centreDrag:true,blankDeselect:true,incrementalUndo:true,xml:doc.diagram,preview};
     function nodeEditor(){return $('#diagram-layer [contenteditable="true"]')}
   }
   if(action==='clipboard-roundtrip'){
