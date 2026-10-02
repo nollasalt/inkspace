@@ -46,3 +46,5 @@ header{height:35px;min-height:35px!important;flex-wrap:nowrap!important;padding:
 #pdf-library{margin-top:18px;padding-top:12px;border-top:1px solid #8884}#pdf-library[hidden]{display:none}.pdf-asset{display:flex;align-items:center;gap:4px;font-size:11px;margin:6px 0}.pdf-asset span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pdf-asset button{font-size:18px;padding:2px 5px;flex:none}
 
 body.diagram-sidebar-hidden #diagram-sidebar{display:none!important}#diagram-sidebar-toggle{white-space:nowrap}
+
+.note-scale{display:none}

@@ -91,6 +91,22 @@ async function runCodiumDiagnostic(action){
       return{adjacentVertical:true,adjacentHorizontal:true,scales:3,doubleClickAfterPen:true,correctTextEdited:true,inputReceivesMouse:true};
     }finally{window.inkspaceInlineText.finish();finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;lastCanvasPointer=saved.lastCanvasPointer;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
   }
+  if(action==='text-scale-hover'){
+    await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool};
+    try{
+      doc={...doc,notes:[{id:'scale-hover-text',x:40,y:40,width:320,markdown:'A long line of text to scale.'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};history=[];future=[];tool='pan';view={x:80,y:60,scale:1};clearSelection();render();
+      const cache=noteCache.get('scale-hover-text'),hit=cache.el.querySelector('.note-hit'),handle=cache.el.querySelector('.note-scale'),bar=cache.el.querySelector('.note-bar');clearPenCursor();
+      hit.dispatchEvent(new PointerEvent('pointerover',{bubbles:true,pointerType:'mouse'}));if(!cache.el.classList.contains('mouse-hover')||getComputedStyle(handle).opacity!=='1')throw Error('Mouse hover does not expose text scale');
+      updatePenCursor({pointerType:'pen',clientX:100,clientY:100});if(cache.el.classList.contains('mouse-hover')||getComputedStyle(handle).opacity!=='0'||getComputedStyle(cache.el,'::after').opacity!=='0')throw Error('Raw pen hover exposes text controls');
+      hit.dispatchEvent(new PointerEvent('pointerover',{bubbles:true,pointerType:'pen'}));if(cache.el.classList.contains('mouse-hover'))throw Error('Browser pen hover exposes text controls');clearPenCursor();hit.dispatchEvent(new PointerEvent('pointerover',{bubbles:true,pointerType:'mouse'}));
+      if(bar.getBoundingClientRect().width>48.1)throw Error('Text toolbar too wide');
+      const n=doc.notes[0],width=n.width,markdown=n.markdown,b=window.inkspaceInlineText.bounds(n),r=handle.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+      const pointer=(target,type,dx,dy)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:223,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,clientX:x+dx,clientY:y+dy}));
+      pointer(handle,'pointerdown',0,0);if(active?.type!=='resize-selection')throw Error('Text scale does not use group scale engine');const paints=renderStats.scenePaints;pointer(viewport,'pointermove',b.w*.5,b.h*.5);await new Promise(requestAnimationFrame);if(renderStats.scenePaints!==paints)throw Error('Text scaling repaints scene');pointer(viewport,'pointerup',b.w*.5,b.h*.5);await window.inkspaceCairoIdle();
+      if(Math.abs(n.scale-1.5)>1e-6||n.width!==width||n.markdown!==markdown)throw Error('Text scale changes wrapping or size incorrectly');const after=window.inkspaceInlineText.bounds(n);if(Math.abs(after.x-b.x)>1e-6||Math.abs(after.y-b.y)>1e-6)throw Error('Text scale does not preserve opposite corner');if(view.x!==80||view.y!==60)throw Error('Canvas pan intercepts text scale');undo();await window.inkspaceCairoIdle();if(doc.notes[0].scale!==undefined)throw Error('Text scale undo failed');redo();await window.inkspaceCairoIdle();if(Math.abs(doc.notes[0].scale-1.5)>1e-6)throw Error('Text scale redo failed');
+      return{mouseHoverOnly:true,rawAndBrowserPenIgnored:true,toolbarMaxWidth:48,sharedSelectionScale:true,noScenePaintDuringDrag:true,wrappingPreserved:true,oppositeCornerFixed:true,mousePanNotIntercepted:true,undoRedo:true};
+    }finally{clearPenCursor();finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
+  }
   if(action==='text-guides'){
     await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool};
     try{
