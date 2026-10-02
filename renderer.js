@@ -307,7 +307,7 @@ function beginGroupMove(){
   for(const s of active.movingShapes)drawShape(s,inkLayers[1].ctx);
 }
 function finishGroupScale(){
-  const {factor,bounds,items}=active;scaleSelection(factor,bounds,items);active=null;
+  const {factor,bounds,items,hideSelection}=active;scaleSelection(factor,bounds,items);if(hideSelection)clearSelection();active=null;
   inkLayers[1].canvas.style.transform='';inkLayers[1].canvas.style.transformOrigin='';
   $('#selection').style.transform='';$('#selection').style.transformOrigin='';clearLayer(inkLayers[1]);render();
 }
