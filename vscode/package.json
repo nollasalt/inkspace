@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "nollasalt",
   "license": "GPL-2.0-or-later",
   "repository": {"type": "git", "url": "https://github.com/nollasalt/inkspace.git"},

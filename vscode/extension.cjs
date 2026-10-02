@@ -1,7 +1,7 @@
 const vscode=require('vscode'),path=require('node:path');
 const {editorHtml}=require('./html.cjs');
 const VIEW='inkspace.notebook';
-function emptyNotebook(title='未命名笔记'){return{format:'inkspace',version:2,title,activePage:'page-1',pages:[{id:'page-1',title:'第 1 页',view:{x:100,y:80,scale:1},document:{format:'inkspace',version:1,strokes:[],notes:[],shapes:[],pdfs:[],background:{type:'dots',color:'#f6f7f5',spacing:'auto',fontSize:16}}}]}}
+function emptyNotebook(title='未命名笔记'){return{format:'inkspace',version:2,title,activePage:'page-1',pages:[{id:'page-1',title:'第 1 页',view:{x:100,y:80,scale:1},document:{format:'inkspace',version:1,strokes:[],notes:[],shapes:[],pdfs:[],background:{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16}}}]}}
 function assertNotebook(text){if(typeof text!=='string'||Buffer.byteLength(text)>150*1024*1024)throw Error('笔记超过 150 MB');const model=JSON.parse(text);if(model?.format!=='inkspace'||![1,2].includes(model.version)||model.version===2&&!Array.isArray(model.pages)||model.version===1&&!Array.isArray(model.strokes))throw Error('不是有效的墨境笔记');return model}
 function activate(context){
   const states=new Map(),pending=new Map();let active=null,sequence=0;

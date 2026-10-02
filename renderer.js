@@ -36,7 +36,7 @@ function cachedStroke(s){
   let c=strokeCache.get(s);if(!c){const d=InkContent.strokePath(s);c={d,path:new Path2D(d),bounds:itemBounds('strokes',s)};strokeCache.set(s,c);renderStats.outlineBuilds++}return c;
 }
 function visible(b){const pad=surface.padding,r={x:(-view.x-pad)/view.scale,y:(-view.y-pad)/view.scale,w:(surface.width+pad*2)/view.scale,h:(surface.height+pad*2)/view.scale};return b.x+b.w>=r.x&&b.y+b.h>=r.y&&b.x<=r.x+r.w&&b.y<=r.y+r.h}
-function backgroundSettings(){return doc.background||{type:'dots',color:'#f6f7f5',spacing:'auto',fontSize:16}}
+function backgroundSettings(){return doc.background||{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16}}
 function textSize(){return backgroundSettings().fontSize||16}
 function backgroundSpacing(){const bg=backgroundSettings();return bg.spacing==='auto'?textSize()*1.75:bg.spacing}
 function renderBackground(){
@@ -66,8 +66,8 @@ function paintStroke(context,s,points){
   for(const tile of cache.tiles.values())paintInkTile(context,tile,false);
 }
 function placeNote(n,el,dx=0,dy=0){
-  const dpr=window.devicePixelRatio||1,s=view.scale;
-  el.style.transform='';el.style.left=(Math.round((view.x+n.x*s+dx)*dpr)/dpr)+'px';el.style.top=(Math.round((view.y+n.y*s+dy)*dpr)/dpr)+'px';
+  const dpr=window.devicePixelRatio||1,s=view.scale*(n.scale||1);
+  el.style.transform='';el.style.left=(Math.round((view.x+n.x*view.scale+dx)*dpr)/dpr)+'px';el.style.top=(Math.round((view.y+n.y*view.scale+dy)*dpr)/dpr)+'px';
   // Layout lives in world units. Zoom must never change line breaking, font
   // metrics, fixed CSS padding, or browser minimum-font-size decisions.
   el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
