@@ -295,4 +295,29 @@ console.log('通过：实时/保存墨迹覆盖一致（DPR 1/1.25/2）、raw �
 a.dom.window.close();b.dom.window.close();
 
 
-setBackground('#background-kind','blank');setBackground('#page-layout','a4-portrait');assert.equal(run('doc.background.layout'),'a4-portrait');let dimensions=w.document.querySelector('#paper').style.backgroundSize.split(',')[0].split(' ').map(parseFloat);assert(Math.abs(dimensions[0]-(210*96/25.4+24)*run('view.scale'))<.01);setBackground('#page-layout','a4-landscape');dimensions=w.document.querySelector('#paper').style.backgroundSize.split(',')[0].split(' ').map(parseFloat);assert(Math.abs(dimensions[0]-(297*96/25.4+24)*run('view.scale'))<.01);assert(run('valid(JSON.parse(JSON.stringify(doc)))'));run('flushPersist()');assert.equal(JSON.parse(w.localStorage.getItem('inkspace.document')).background.layout,'a4-landscape');setBackground('#page-layout','infinite');assert.equal(w.document.querySelector('#paper').style.backgroundImage,'none');console.log('Passed A4 portrait/landscape infinite tiling, dimensions, layout persistence and infinite-mode restoration.');
+const pt=app(),pw=pt.w,pr=pt.run;
+pr("doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[],background:{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16,layout:'a4-portrait'}};view={x:0,y:0,scale:1};render()");
+const pages=()=>Array.from(pw.document.querySelectorAll('#a4-pages rect')).map(el=>el.dataset.cell).sort();
+assert.deepEqual(pages(),[]);
+pr("doc.strokes.push({brush:'xournal',width:4,color:'#000000',points:[{x:790,y:100,p:.5},{x:800,y:100,p:.5}]});render()");
+assert.deepEqual(pages(),['0,0','1,0']);
+assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),210*96/25.4);
+assert(pw.document.querySelector('#a4-pages g').getAttribute('stroke-dasharray'));
+pr("doc.strokes[0].points.push({x:800,y:1130,p:.5});view.scale=.4;renderA4Pages()");
+assert.deepEqual(pages(),['0,0','1,0','1,1']);
+pr("doc.strokes=[];render()");assert.deepEqual(pages(),[]);
+pr("doc.shapes=[{kind:'line',x:-5,y:10,x2:5,y2:10,width:2,color:'#000000'}];render()");
+assert.deepEqual(pages(),['-1,0','0,0']);
+pr("doc.shapes=[];doc.strokes=[{brush:'xournal',width:2,color:'#000000',points:[{x:10,y:10,p:.5},{x:1590,y:2250,p:.5}]}];view.scale=.2;render()");
+assert(!pages().includes('0,2'),'a diagonal does not allocate its entire bounding rectangle');
+pr("doc.strokes[0].points=doc.strokes[0].points.map(p=>({...p,x:p.x+3000}));render()");
+assert(!pages().includes('0,0'),'moving a stroke removes its old paper coverage');
+pr("doc.strokes=[];doc.notes=[{id:'paper-image',kind:'image',src:'data:image/png;base64,AA==',aspect:1,markdown:'',x:790,y:20,width:160}];render()");
+assert.deepEqual(pages(),['0,0','1,0'],'images allocate all occupied paper');
+pr("doc.background.layout='a4-landscape';render()");
+assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),297*96/25.4);
+assert(pr('valid(JSON.parse(JSON.stringify(doc)))'));pr('flushPersist()');
+assert.equal(JSON.parse(pw.localStorage.getItem('inkspace.document')).background.layout,'a4-landscape');
+pr("doc.background.layout='infinite';render()");assert.equal(pw.document.querySelector('#a4-pages'),null);
+pt.dom.window.close();
+console.log('Passed gapless dashed A4 borders, occupancy, live expansion, deletion, negative coordinates and persistence.');

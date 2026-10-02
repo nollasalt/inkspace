@@ -1,10 +1,10 @@
 # Inkspace · 墨境
 
-Windows 触控笔无限笔记画布，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.3.6 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
+Windows 触控笔无限笔记画布，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.3.7 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
 
 ## 安装和使用
 
-在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.3.6-win32-x64.vsix`。
+在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.3.7-win32-x64.vsix`。
 
 打开文件夹，文件栏右键选择“墨境：新建笔记”。首次点击“校准触控笔”，依次点击三个圆圈；同一设备与显示配置下自动恢复校准。笔记格式为 `.inkspace.json`。
 
@@ -38,3 +38,5 @@ Windows 触控笔无限笔记画布，集成到普通 Microsoft VS Code。当前
 GPL-2.0-or-later。Xournal++ 轮廓算法、Cairo 与第三方依赖的来源和许可见 [native/UPSTREAM.md](native/UPSTREAM.md) 及安装包中的许可证；跨电脑分发包附对应源码。
 
 当前只提供 Windows x64 原生运行时。后台 Raw Input 已在本机设备验证；其他笔设备仍需测试，笔尾橡皮擦尚未映射。首次安装或显示配置改变需要校准。VS Code 插件版本与根目录独立桌面版本分别管理。
+
+A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张，笔迹、图形、文本和图片越界时自动拓展，删除后收回空纸张。

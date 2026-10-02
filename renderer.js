@@ -39,6 +39,57 @@ function visible(b){const pad=surface.padding,r={x:(-view.x-pad)/view.scale,y:(-
 function backgroundSettings(){return doc.background||{type:'blank',color:'#ffffff',spacing:'auto',fontSize:16}}
 function textSize(){return backgroundSettings().fontSize||16}
 function backgroundSpacing(){const bg=backgroundSettings();return bg.spacing==='auto'?textSize()*1.75:bg.spacing}
+// Paper occupancy is derived from content; completed stroke coverage is cached,
+// and live strokes only add their new segments. No ink raster is rebuilt here.
+const a4StrokeCache=new WeakMap();let a4Frame=null;
+function scheduleA4Pages(){
+  if(!backgroundSettings().layout?.startsWith('a4-')||a4Frame!==null)return;
+  a4Frame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{a4Frame=null;renderA4Pages()});
+}
+function renderA4Pages(){
+  const paper=$('#paper'),layout=backgroundSettings().layout;
+  let layer=paper.querySelector('#a4-pages');
+  if(!layout?.startsWith('a4-')){layer?.remove();return}
+  if(!layer){layer=document.createElement('div');layer.id='a4-pages';layer.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden';paper.append(layer)}
+  const [w,h]=layout==='a4-landscape'?[297*96/25.4,210*96/25.4]:[210*96/25.4,297*96/25.4];
+  layer.dataset.pageWidth=w;layer.dataset.pageHeight=h;
+  const cells=new Set(),add=(x,y,target=cells)=>target.add(`${x},${y}`);
+  // Include every grid crossing, even a brief crossing near a page corner.
+  function segment(a,b,r,target=cells){
+    const cuts=[0,1];
+    for(const [axis,size] of [['x',w],['y',h]])if(a[axis]!==b[axis])for(const offset of [-r,r]){
+      const lo=Math.min(a[axis],b[axis])+offset,hi=Math.max(a[axis],b[axis])+offset;
+      for(let grid=Math.floor(lo/size)+1;grid*size<hi;grid++)cuts.push((grid*size-offset-a[axis])/(b[axis]-a[axis]));
+    }
+    cuts.sort((a,b)=>a-b);
+    for(let i=0;i<cuts.length;i++){
+      const t=i?(cuts[i-1]+cuts[i])/2:cuts[i],x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;
+      for(let cx=Math.floor((x-r)/w);cx<=Math.floor((x+r)/w);cx++)for(let cy=Math.floor((y-r)/h);cy<=Math.floor((y+r)/h);cy++)add(cx,cy,target);
+    }
+  }
+  function box(b){for(let x=Math.floor(b.x/w);x<=Math.floor((b.x+b.w)/w);x++)for(let y=Math.floor(b.y/h);y<=Math.floor((b.y+b.h)/h);y++)add(x,y)}
+  for(const s of doc.strokes){
+    const points=s.points;if(!points.length)continue;
+    let c=a4StrokeCache.get(s);const first=points[0],prior=c&&points[c.length-1];
+    if(!c||c.layout!==layout||c.width!==s.width||c.points!==points||c.length>points.length||c.firstX!==first.x||c.firstY!==first.y||prior?.x!==c.lastX||prior?.y!==c.lastY){c={layout,width:s.width,points,length:0,firstX:first.x,firstY:first.y,cells:new Set()};a4StrokeCache.set(s,c)}
+    for(let i=c.length;i<points.length;i++)segment(points[Math.max(0,i-1)],points[i],s.width/2,c.cells);
+    c.length=points.length;c.lastX=points.at(-1).x;c.lastY=points.at(-1).y;
+    for(const key of c.cells)cells.add(key);
+  }
+  for(const s of doc.shapes){
+    const b=itemBounds('shapes',s),r=s.width/2;
+    if(s.kind==='highlight')box(b);
+    else if(s.kind==='rect'){const p=[{x:b.x,y:b.y},{x:b.x+b.w,y:b.y},{x:b.x+b.w,y:b.y+b.h},{x:b.x,y:b.y+b.h}];for(let i=0;i<4;i++)segment(p[i],p[(i+1)%4],r)}
+    else if(s.kind==='ellipse'){const count=Math.max(32,Math.ceil(Math.PI*(b.w/w+b.h/h)*8));let prev={x:b.x+b.w,y:b.y+b.h/2};for(let i=1;i<=count;i++){const t=i/count*Math.PI*2,q={x:b.x+b.w/2+Math.cos(t)*b.w/2,y:b.y+b.h/2+Math.sin(t)*b.h/2};segment(prev,q,r);prev=q}}
+    else{segment({x:s.x,y:s.y},{x:s.x2,y:s.y2},r);if(s.kind==='arrow'){const [a,z]=arrowPoints(s);segment(a,{x:s.x2,y:s.y2},r);segment(z,{x:s.x2,y:s.y2},r)}}
+  }
+  for(const n of doc.notes)box(itemBounds('notes',n));
+  for(const asset of doc.pdfs||[])for(const p of asset.pages)box({x:p.x,y:p.y,w:p.width,h:p.height});
+  const paths=[];
+  if(Math.min(w,h)*view.scale>=8)for(const key of cells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
+  const markup=`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><g transform="translate(${view.x+surface.padding} ${view.y+surface.padding}) scale(${view.scale})" fill="none" stroke="rgba(100,110,120,.25)" stroke-width="1" stroke-dasharray="4 5">${paths.map(p=>p.replace('/>',' vector-effect="non-scaling-stroke"/>')).join('')}</g></svg>`;
+  if(layer.innerHTML!==markup)layer.innerHTML=markup;
+}
 function renderBackground(){
   const bg=backgroundSettings(),rgb=bg.color.match(/[a-f0-9]{2}/gi).map(c=>parseInt(c,16)),dark=rgb.reduce((a,b)=>a+b,0)<384,line=dark?'rgba(255,255,255,.18)':'rgba(38,63,67,.16)';
   let size=backgroundSpacing()*view.scale;while(size>0&&size<6)size*=10;
@@ -47,11 +98,7 @@ function renderBackground(){
   paper.style.backgroundImage=bg.type==='grid'?`linear-gradient(${line} 1px,transparent 1px),linear-gradient(90deg,${line} 1px,transparent 1px)`:bg.type==='ruled'?`linear-gradient(${line} 1px,transparent 1px)`:bg.type==='dots'?`radial-gradient(${line} 1px,transparent 1px)`:'none';
   paper.style.backgroundSize=`${size}px ${size}px`;paper.style.backgroundPosition=`${view.x+surface.padding}px ${view.y+surface.padding}px`;
   const layout=bg.layout||'infinite';$('#page-layout').value=layout;
-  if(layout==='a4-portrait'||layout==='a4-landscape'){
-    const a4=[210*96/25.4,297*96/25.4];if(layout==='a4-landscape')a4.reverse();const w=a4[0]*view.scale,h=a4[1]*view.scale,gap=24*view.scale,x=w+gap,y=h+gap,border=Math.min(1,w/4,h/4),image=paper.style.backgroundImage;
-    const seams=[`linear-gradient(90deg, transparent 0px, transparent ${Math.max(0,w-border)}px, #cbd0d5 ${Math.max(0,w-border)}px, #cbd0d5 ${w}px, #e8ebee ${w}px, #e8ebee ${x}px)`,`linear-gradient(transparent 0px, transparent ${Math.max(0,h-border)}px, #cbd0d5 ${Math.max(0,h-border)}px, #cbd0d5 ${h}px, #e8ebee ${h}px, #e8ebee ${y}px)`];
-    paper.style.backgroundImage=seams.join(', ')+(image==='none'?'':', '+image);paper.style.backgroundSize=`${x}px ${y}px, ${x}px ${y}px`+(image==='none'?'':`, ${size}px ${size}px`);paper.style.backgroundRepeat='repeat';
-  }
+  renderA4Pages();
   $('#background-kind').value=bg.type;$('#background-color').value=bg.color;$('#background-spacing').value=String(bg.spacing);
   $('#text-size').value=String(textSize());$('#background-spacing').title=bg.spacing==='auto'?`按 ${textSize()}px 字号设置 ${backgroundSpacing()}px 行距`:'自定义世界坐标间距';
 }
@@ -119,6 +166,7 @@ function screenBounds(points,width){
 }
 function paintLive(){
   if(active?.type!=='pen')return;
+  scheduleA4Pages();
   if(active.s.brush==='xournal'&&hasNativeInk()){scheduleCairoInk();return}
   if(active.s.brush==='raw-contour'){paintRawInk();return}
   const s=active.s,settled=inkLayers[1],tail=inkLayers[2];
@@ -227,7 +275,7 @@ function rebasePan(){
   renderStats.scenePaints++;renderStats.stripPaints++;commitScene();
 }
 function settlePan(){cancelInteractionFrame();rebasePan();active=null;$('#scene').style.willChange='auto'}
-function paintShapeLive(){clearLayer(inkLayers[1]);drawShape(active.shape,inkLayers[1].ctx)}
+function paintShapeLive(){scheduleA4Pages();clearLayer(inkLayers[1]);drawShape(active.shape,inkLayers[1].ctx)}
 function beginGroupMove(){
   active.offset={x:0,y:0};active.movingStrokes=new Set(selected.strokes.map(i=>doc.strokes[i]));active.movingShapes=new Set(selected.shapes.map(i=>doc.shapes[i]));
   render();clearLayer(inkLayers[1]);
