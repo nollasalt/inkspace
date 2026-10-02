@@ -137,11 +137,13 @@ function placeNote(n,el,dx=0,dy=0){
   el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
 }
 function renderNotes(){
+  window.inkspaceInlineText?.sync();
   const ids=new Set(doc.notes.map(n=>n.id));
   for(const [id,c] of noteCache)if(!ids.has(id)){c.el.remove();noteCache.delete(id)}
   for(const [index,n] of doc.notes.entries()){
     let c=noteCache.get(n.id);
     if(!c){const el=document.createElement('article');el.className='note';el.dataset.id=n.id;el.innerHTML='<div class="note-bar">⋮⋮ 移动文本框</div><div class="note-body"></div><div class="note-resize" title="拖动调整宽度"></div>';el.addEventListener('dblclick',event=>{if(event.pointerType==='pen'||(typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen'))return;const current=doc.notes.find(item=>item.id===n.id);if(current&&current.kind!=='image')edit(current)});c={el,body:el.querySelector('.note-body'),markdown:null};noteCache.set(n.id,c);notes.append(el)}
+    if(window.inkspaceInlineText?.renderNote(n)){placeNote(n,c.el);continue}
     if(c.markdown!==n.markdown||c.src!==n.src){c.body.replaceChildren();if(n.kind==='image'){const image=document.createElement('img');image.src=n.src;image.alt='粘贴的图片';image.draggable=false;image.style.aspectRatio=String(n.aspect);c.body.append(image)}else c.body.innerHTML=markdown(n.markdown);c.markdown=n.markdown;c.src=n.src;c.el.classList.toggle('image-note',n.kind==='image');const bar=c.el.querySelector('.note-bar');if(bar)bar.textContent=n.kind==='image'?'⋮⋮ 移动图片':'⋮⋮ 移动文本框';renderStats.noteBuilds++}
     placeNote(n,c.el);
     c.el.classList.toggle('selected',selected.notes.includes(index));
