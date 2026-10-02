@@ -16,15 +16,16 @@ function activate(context){
   const provider={async resolveCustomTextEditor(document,panel){
     assertNotebook(document.getText());const media=vscode.Uri.joinPath(context.extensionUri,'media');
     const state={document,panel,ready:false,applying:false,queue:Promise.resolve(),pages:[],activePage:null};states.set(document.uri.toString(),state);
-    const disposables=[];panel.webview.options={enableScripts:true,localResourceRoots:[media]};
+    const disposables=[];disposables.push(vscode.window.onDidChangeWindowState(inputFocus));panel.webview.options={enableScripts:true,localResourceRoots:[media]};
+    function inputFocus(){panel.webview.postMessage({type:'engine-focus',windowFocused:vscode.window.state.focused,editorActive:panel.active})}
     function update(){panel.webview.postMessage({type:'document',text:document.getText(),version:document.version})}
     disposables.push(vscode.workspace.onDidChangeTextDocument(event=>{if(event.document===document&&event.contentChanges.length&&!state.applying&&state.ready)update()}));
-    disposables.push(panel.onDidChangeViewState(()=>{if(panel.active){active=state;refresh()}else if(active===state){active=null;refresh()}}));
+    disposables.push(panel.onDidChangeViewState(()=>{inputFocus();if(panel.active){active=state;refresh()}else if(active===state){active=null;refresh()}}));
     disposables.push(panel.webview.onDidReceiveMessage(message=>{
       if(message.type==='response'){const entry=pending.get(message.id);if(entry?.state===state){clearTimeout(entry.timer);pending.delete(message.id);message.error?entry.reject(Error(message.error)):entry.resolve(message.result)}return}
       state.queue=state.queue.catch(()=>{}).then(async()=>{
         if(message.type==='calibration'){const record=message.record;if(record&&typeof record.deviceKey==='string'&&typeof record.display==='string'&&['x','y'].every(axis=>Array.isArray(record.matrix?.[axis])&&record.matrix[axis].length===3&&record.matrix[axis].every(Number.isFinite))){const records=context.globalState.get('inkspace.calibrations',{});records[record.deviceKey+'|'+record.display]=record;await context.globalState.update('inkspace.calibrations',records)}return}
-        if(message.type==='ready'){state.ready=true;active=state;refresh();update();return}
+        if(message.type==='ready'){inputFocus();state.ready=true;active=state;refresh();update();return}
         if(message.type==='pages'){state.pages=message.pages;state.activePage=message.activePage;if(panel.active){active=state;refresh()}return}
         if(message.type==='edit'){
           try{assertNotebook(message.text);if(message.version!==document.version)throw Error('文件在画布外发生修改，已保留画布草稿。请另存草稿或重新打开文件。');if(message.text!==document.getText()){const edit=new vscode.WorkspaceEdit();edit.replace(document.uri,new vscode.Range(0,0,document.lineCount,0),message.text);state.applying=true;state.lastOwn=message.text;try{if(!await vscode.workspace.applyEdit(edit))throw Error('无法更新笔记文件')}finally{state.applying=false}}if(message.autoSave)await document.save();panel.webview.postMessage({type:'ack',id:message.id,version:document.version})}
@@ -44,7 +45,7 @@ function activate(context){
     disposables.push(panel.webview.onDidReceiveMessage(async message=>{if(message.type!=='save')return;try{await request(state,'flush');await state.queue;if(message.saveAs)await vscode.commands.executeCommand('workbench.action.files.saveAs');else await document.save()}catch(error){vscode.window.showErrorMessage(error.message)}}));
     disposables.push(panel.onDidDispose(()=>{states.delete(document.uri.toString());if(active===state){active=null;refresh()}for(const [id,entry] of pending)if(entry.state===state){clearTimeout(entry.timer);entry.reject(Error('画布已关闭'));pending.delete(id)}for(const item of disposables)item.dispose()}));
     const nativeConfig=await require('./engine-config.cjs').ensure();
-    panel.webview.html=editorHtml(panel.webview,media,vscode,{calibrations:context.globalState.get('inkspace.calibrations',{}),test:context.extensionMode===vscode.ExtensionMode.Test,native:nativeConfig,client:require('node:crypto').randomUUID()});
+    panel.webview.html=editorHtml(panel.webview,media,vscode,{windowFocused:vscode.window.state.focused,editorActive:panel.active,calibrations:context.globalState.get('inkspace.calibrations',{}),test:context.extensionMode===vscode.ExtensionMode.Test,native:nativeConfig,client:require('node:crypto').randomUUID()});
   }};
   context.subscriptions.push(emitter,vscode.window.registerTreeDataProvider('inkspace.pages',pages),vscode.window.registerCustomEditorProvider(VIEW,provider,{webviewOptions:{retainContextWhenHidden:true},supportsMultipleEditorsPerDocument:false}),
     vscode.commands.registerCommand('inkspace.new',newNote),vscode.commands.registerCommand('inkspace.open',openNote),

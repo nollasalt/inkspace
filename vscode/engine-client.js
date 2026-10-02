@@ -1,5 +1,7 @@
 // Direct Raw Input + Cairo transport for unmodified desktop VS Code.
 const nativeBoot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(document.querySelector('#inkspace-boot').content),c=>c.charCodeAt(0))));
+let hostWindowFocused=nativeBoot.windowFocused!==false,hostEditorActive=nativeBoot.editorActive!==false;
+window.addEventListener('message',event=>{const m=event.data;if(m?.type!=='engine-focus')return;hostWindowFocused=m.windowFocused;hostEditorActive=m.editorActive;if(!hostWindowFocused||!hostEditorActive)cancelContacts()});
 const nativeConfig=nativeBoot.native,nativeClient=nativeBoot.client,nativeListeners=[];
 let nativeCachedStatus=null,nativeConnected=false,nativeFailure='Ink Engine 正在连接',nativeLastPrecision=null;
 let calibration=null,calibrating=null,lastDown=null,pendingTap=null,screenOrigin=null,rawSamples=0,deliveredPackets=0;
@@ -24,7 +26,7 @@ for(const type of ['pointermove','pointerdown','pointerover'])document.addEventL
 function consume(samples){const packets=[];for(const raw of samples){rawSamples++;if(calibration&&calibration.display!==displaySignature()){cancelContacts();calibration=null;describe()}if(!calibration&&!calibrating){const deviceKey=raw.deviceKey||String(raw.device),saved=savedCalibrations[deviceKey+'|'+displaySignature()];if(saved){calibration={...saved,device:raw.device};describe()}}const wasCalibrating=!!calibrating;let c=contacts.get(raw.device);if(!c){c={down:false,writing:false};contacts.set(raw.device,c)}const was=c.down;c.down=raw.contact===true;if(c.down&&!was){lastDown={...raw,time:performance.now()};pair()}
   if(wasCalibrating||calibrating||!calibration||calibration.device!==raw.device||!screenOrigin)continue;
   const p=InkCalibration.map(calibration.matrix,raw.x,raw.y),dpr=window.devicePixelRatio||1,sample={x:(p.x-screenOrigin.x)*dpr,y:(p.y-screenOrigin.y)*dpr,p:Math.max(0,Math.min(1,raw.pressure/raw.pressureMax)),id:raw.device,precise:true,eraser:false};
-  const r=viewport.getBoundingClientRect(),inside=sample.x/dpr>=r.left&&sample.x/dpr<r.right&&sample.y/dpr>=r.top&&sample.y/dpr<r.bottom,focused=document.hasFocus()&&!document.hidden&&!document.querySelector('dialog[open]');
+  const r=viewport.getBoundingClientRect(),inside=sample.x/dpr>=r.left&&sample.x/dpr<r.right&&sample.y/dpr>=r.top&&sample.y/dpr<r.bottom,focused=hostWindowFocused&&hostEditorActive&&!document.hidden&&!document.querySelector('dialog[open]');
   if(!focused){if(c.writing)packets.push({type:'pointercancel',source:'raw-hid',samples:[{...(c.last||sample),p:0}]});c.writing=false;continue}
   if(c.down&&!was&&inside){c.writing=true;packets.push({type:'pointerdown',source:'raw-hid',samples:[sample]})}
   else if(c.writing){packets.push({type:c.down?'pointermove':'pointerup',source:'raw-hid',samples:[sample]});if(!c.down)c.writing=false}
