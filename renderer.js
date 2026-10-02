@@ -256,7 +256,9 @@ function finishInk(){
 function scheduleInteractionFrame(){if(interactionFrame!==null)return;interactionFrame=(window.requestAnimationFrame||((fn)=>setTimeout(fn,16)))(()=>{interactionFrame=null;presentInteraction()})}
 function cancelInteractionFrame(){if(interactionFrame===null)return;(window.cancelAnimationFrame||clearTimeout)(interactionFrame);interactionFrame=null}
 function presentInteraction(){
-  if(active?.type==='pan'){
+  if(active?.type==='erase'){
+    flushErasing();
+  }else if(active?.type==='pan'){
     $('#scene').style.willChange='transform';
     const dx=view.x-paintedView.x,dy=view.y-paintedView.y;
     if(Math.max(Math.abs(dx),Math.abs(dy))>surface.padding*.7)rebasePan();
@@ -305,14 +307,14 @@ function finishGroupScale(){
   $('#selection').style.transform='';$('#selection').style.transformOrigin='';clearLayer(inkLayers[1]);render();
 }
 function finishGroupMove(){const offset=active.offset;detachSelection();moveSelection(offset.x,offset.y);active=null;inkLayers[1].canvas.style.transform='';$('#selection').style.transform='';clearLayer(inkLayers[1]);render()}
-function finishInteraction(){if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='pan')settlePan();else{const wasNote=active?.type==='note';if(wasNote){active.n.x+=active.offset.x;active.n.y+=active.offset.y}active=null;if(wasNote)renderNotes()}pointers.clear();gesture=null;selectionRect=null}
+function finishInteraction(){if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='erase'){finishErasing();active=null}else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='pan')settlePan();else{const wasNote=active?.type==='note';if(wasNote){active.n.x+=active.offset.x;active.n.y+=active.offset.y}active=null;if(wasNote)renderNotes()}pointers.clear();gesture=null;selectionRect=null}
 function snapshot(){return {...doc,strokes:doc.strokes.slice(),notes:doc.notes.map(n=>({...n})),shapes:doc.shapes.map(s=>({...s}))}}
 function detachSelection(){for(const i of selected.strokes){const s=doc.strokes[i];doc.strokes[i]={...s,points:s.points.map(p=>({...p}))}}}
 function persist(){clearTimeout(saveTimer);saveTimer=setTimeout(flushPersist,700)}
 function flushPersist(){if(active){persist();return}try{localStorage.setItem('inkspace.document',JSON.stringify(doc))}catch{toast('自动保存失败，请下载 JSON 保存。')}}
 
 // History updates preserve the existing scene and native stroke caches.
-function renderHistoryChange(previous){
+function renderHistoryChange(previous,inkOnly=false){
   if(!sceneBuffer||zoomBase||renderedScale!==view.scale||paintedView.x!==view.x||paintedView.y!==view.y||JSON.stringify(previous.background)!==JSON.stringify(doc.background)||previous.pdfs!==doc.pdfs){render();return}
   const old=new Set(previous.strokes),current=new Set(doc.strokes),changed=previous.strokes.filter(s=>!current.has(s)).concat(doc.strokes.filter(s=>!old.has(s)));
   const regions=changed.map(s=>cachedStroke(s).bounds);
@@ -331,6 +333,46 @@ function renderHistoryChange(previous){
       renderStats.historyRegionPaints=(renderStats.historyRegionPaints||0)+1;
     }
   }
-  clearLayer(inkLayers[1]);clearLayer(inkLayers[2]);renderNotes();window.inkspaceDiagram?.render();renderBackground();overlaySelection();
+  clearLayer(inkLayers[1]);clearLayer(inkLayers[2]);if(!inkOnly){renderNotes();window.inkspaceDiagram?.render();renderBackground();overlaySelection()}
   $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
 }
+
+// One spatial index per eraser contact; completed stroke objects are immutable.
+// Hit testing sweeps between samples, so a fast/coalesced move cannot skip ink.
+function eraseInk(p){
+  if(active?.type!=='erase'||!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
+  const contact=active;
+  if(!contact.eraseIndex){
+    if(typeof settleRetainedInk==='function')settleRetainedInk();
+    contact.eraseIndex=new Map();contact.eraseLarge=new Set();contact.eraseRemoved=new Set();contact.eraseDirty=new Set();contact.eraseCell=128/view.scale;
+    for(const stroke of doc.strokes){const b=cachedStroke(stroke).bounds,c=contact.eraseCell,x=Math.floor(b.x/c),y=Math.floor(b.y/c),right=Math.floor((b.x+b.w)/c),bottom=Math.floor((b.y+b.h)/c);
+      if((right-x+1)*(bottom-y+1)>256){contact.eraseLarge.add(stroke);continue}
+      for(let i=x;i<=right;i++)for(let j=y;j<=bottom;j++){const key=i+','+j;let cell=contact.eraseIndex.get(key);if(!cell)contact.eraseIndex.set(key,cell=[]);cell.push(stroke)}
+    }
+  }
+  const a=contact.eraseLast||p,r=12/view.scale,c=contact.eraseCell,left=Math.min(a.x,p.x)-r,top=Math.min(a.y,p.y)-r,right=Math.max(a.x,p.x)+r,bottom=Math.max(a.y,p.y)+r;
+  const candidates=new Set(contact.eraseLarge),x=Math.floor(left/c),y=Math.floor(top/c),x2=Math.floor(right/c),y2=Math.floor(bottom/c);
+  if((x2-x+1)*(y2-y+1)>4096)for(const stroke of doc.strokes)candidates.add(stroke);
+  else for(let i=x;i<=x2;i++)for(let j=y;j<=y2;j++)for(const stroke of contact.eraseIndex.get(i+','+j)||[])candidates.add(stroke);
+  renderStats.eraseSamples=(renderStats.eraseSamples||0)+1;
+  const cross=(a,b,p)=>(b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x);
+  const hits=(u,v,radius)=>{
+    if(Math.max(u.x,v.x)+radius<Math.min(a.x,p.x)||Math.min(u.x,v.x)-radius>Math.max(a.x,p.x)||Math.max(u.y,v.y)+radius<Math.min(a.y,p.y)||Math.min(u.y,v.y)-radius>Math.max(a.y,p.y))return false;
+    renderStats.eraseSegmentChecks=(renderStats.eraseSegmentChecks||0)+1;
+    if(Math.min(distance(u,v,a),distance(u,v,p),distance(a,p,u),distance(a,p,v))<=radius)return true;
+    // Strict crossing; collinear/disjoint segments use endpoint distances above.
+    return cross(u,v,a)*cross(u,v,p)<0&&cross(a,p,u)*cross(a,p,v)<0;
+  };
+  for(const stroke of candidates){if(contact.eraseRemoved.has(stroke))continue;renderStats.eraseCandidates=(renderStats.eraseCandidates||0)+1;
+    const b=cachedStroke(stroke).bounds;if(b.x>right||b.y>bottom||b.x+b.w<left||b.y+b.h<top)continue;
+    const radius=r+stroke.width/2,points=stroke.points;
+    if(points.length===1?hits(points[0],points[0],radius):points.some((point,i)=>i&&hits(points[i-1],point,radius))){contact.eraseRemoved.add(stroke);contact.eraseDirty.add(stroke)}
+  }
+  contact.eraseLast=p;
+}
+function flushErasing(){
+  if(active?.type!=='erase'||!active.eraseDirty?.size)return;
+  const previous={...doc,strokes:doc.strokes};doc.strokes=doc.strokes.filter(stroke=>!active.eraseDirty.has(stroke));active.eraseDirty.clear();
+  renderHistoryChange(previous,true);renderStats.eraseFrames=(renderStats.eraseFrames||0)+1;
+}
+function finishErasing(){cancelInteractionFrame();flushErasing();renderBackground();overlaySelection()}
