@@ -2,48 +2,213 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
-  "repository": {"type": "git", "url": "https://github.com/nollasalt/inkspace.git"},
-  "engines": {"vscode": "^1.90.0"},
-  "categories": ["Other"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nollasalt/inkspace.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./extension.cjs",
-  "extensionKind": ["ui"],
-  "capabilities": {"untrustedWorkspaces": {"supported": true}, "virtualWorkspaces": {"supported": true}},
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
   "contributes": {
-    "customEditors": [{"viewType": "inkspace.notebook", "displayName": "墨境笔记", "selector": [{"filenamePattern": "*.inkspace.json"}], "priority": "default"}],
-    "commands": [
-      {"command": "inkspace.new", "title": "新建笔记", "category": "墨境"},
-      {"command": "inkspace.open", "title": "用墨境打开笔记", "category": "墨境"},
-      {"command": "inkspace.copy", "title": "复制选中内容", "category": "墨境"},
-      {"command": "inkspace.paste", "title": "粘贴到画布", "category": "墨境"},
-      {"command": "inkspace.undo", "title": "撤销笔记操作", "category": "墨境"},
-      {"command": "inkspace.redo", "title": "重做笔记操作", "category": "墨境"},
-      {"command": "inkspace.save", "title": "保存当前笔记", "category": "墨境"},
-      {"command": "inkspace.showPages", "title": "显示笔记页面", "category": "墨境"},
-      {"command": "inkspace.addPage", "title": "添加页面", "category": "墨境", "icon": "$(add)"},
-      {"command": "inkspace.renamePage", "title": "重命名页面", "category": "墨境", "icon": "$(edit)"},
-      {"command": "inkspace.deletePage", "title": "删除页面", "category": "墨境", "icon": "$(trash)"},
-      {"command": "inkspace.switchPage", "title": "切换页面", "category": "墨境"}
+    "customEditors": [
+      {
+        "viewType": "inkspace.notebook",
+        "displayName": "墨境笔记",
+        "selector": [
+          {
+            "filenamePattern": "*.inkspace.json"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "inkspace.binary",
+        "displayName": "墨境二进制笔记",
+        "selector": [
+          {
+            "filenamePattern": "*.ink"
+          }
+        ],
+        "priority": "default"
+      }
     ],
-    "viewsContainers": {"activitybar": [{"id": "inkspace", "title": "墨境页面", "icon": "page.svg"}]},
-    "views": {"inkspace": [{"id": "inkspace.pages", "name": "笔记页面", "when": "inkspace.hasNotebook"}]},
-    "viewsWelcome": [{"view": "inkspace.pages", "contents": "打开 .inkspace.json 笔记即可切换页面。\n[新建笔记](command:inkspace.new)"}],
+    "commands": [
+      {
+        "command": "inkspace.new",
+        "title": "新建笔记",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.open",
+        "title": "用墨境打开笔记",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.copy",
+        "title": "复制选中内容",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.paste",
+        "title": "粘贴到画布",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.undo",
+        "title": "撤销笔记操作",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.redo",
+        "title": "重做笔记操作",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.save",
+        "title": "保存当前笔记",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.showPages",
+        "title": "显示笔记页面",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.addPage",
+        "title": "添加页面",
+        "category": "墨境",
+        "icon": "$(add)"
+      },
+      {
+        "command": "inkspace.renamePage",
+        "title": "重命名页面",
+        "category": "墨境",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "inkspace.deletePage",
+        "title": "删除页面",
+        "category": "墨境",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "inkspace.switchPage",
+        "title": "切换页面",
+        "category": "墨境"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "inkspace",
+          "title": "墨境页面",
+          "icon": "page.svg"
+        }
+      ]
+    },
+    "views": {
+      "inkspace": [
+        {
+          "id": "inkspace.pages",
+          "name": "笔记页面",
+          "when": "inkspace.hasNotebook"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "inkspace.pages",
+        "contents": "打开 .ink 笔记即可切换页面。\n[新建笔记](command:inkspace.new)"
+      }
+    ],
     "menus": {
-      "explorer/context": [{"command": "inkspace.new", "when": "explorerViewletVisible && resourceScheme == file", "group": "navigation@1"}, {"command": "inkspace.open", "when": "resourceExtname == .json", "group": "navigation"}],
-      "view/title": [{"command": "inkspace.addPage", "when": "view == inkspace.pages && inkspace.hasNotebook", "group": "navigation"}],
+      "explorer/context": [
+        {
+          "command": "inkspace.new",
+          "when": "explorerViewletVisible && resourceScheme == file",
+          "group": "navigation@1"
+        },
+        {
+          "command": "inkspace.open",
+          "when": "resourceExtname == .json || resourceExtname == .ink",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "inkspace.addPage",
+          "when": "view == inkspace.pages && inkspace.hasNotebook",
+          "group": "navigation"
+        }
+      ],
       "view/item/context": [
-        {"command": "inkspace.renamePage", "when": "view == inkspace.pages && viewItem == inkspace.page", "group": "inline"},
-        {"command": "inkspace.deletePage", "when": "view == inkspace.pages && viewItem == inkspace.page", "group": "navigation"}
+        {
+          "command": "inkspace.renamePage",
+          "when": "view == inkspace.pages && viewItem == inkspace.page",
+          "group": "inline"
+        },
+        {
+          "command": "inkspace.deletePage",
+          "when": "view == inkspace.pages && viewItem == inkspace.page",
+          "group": "navigation"
+        }
       ]
     },
     "keybindings": [
-      {"command": "inkspace.copy", "key": "ctrl+c", "mac": "cmd+c", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
-      {"command": "inkspace.paste", "key": "ctrl+v", "mac": "cmd+v", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
-      {"command": "inkspace.undo", "key": "ctrl+z", "mac": "cmd+z", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
-      {"command": "inkspace.redo", "key": "ctrl+shift+z", "mac": "cmd+shift+z", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
-      {"command": "inkspace.redo", "key": "ctrl+y", "mac": "cmd+y", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"},
-      {"command": "inkspace.save", "key": "ctrl+s", "mac": "cmd+s", "when": "activeCustomEditorId == inkspace.notebook && !inputFocus && !inkspace.canvasKeyboardFocused"}]
+      {
+        "command": "inkspace.copy",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.paste",
+        "key": "ctrl+v",
+        "mac": "cmd+v",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.undo",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.redo",
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.redo",
+        "key": "ctrl+y",
+        "mac": "cmd+y",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.save",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !inkspace.canvasKeyboardFocused"
+      }
+    ]
   }
 }

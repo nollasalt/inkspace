@@ -84,7 +84,7 @@ document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[conte
 // The cursor lives outside the transformed scene, so its size follows zoom once.
 const penCursor=$('#pen-cursor');let penPosition=null,lastPenCursorTime=-Infinity;
 function clearPenCursor(){penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true}
-function updatePenCursor(e){
+function updatePenCursor(e,rect){
   if(e.pointerType==='mouse'){
     // Lifting a Windows pen can emit compatibility mouse/hover transitions.
     // A mouse click is intentional; passive transitions immediately after pen
@@ -94,7 +94,7 @@ function updatePenCursor(e){
     clearPenCursor();return;
   }
   if(e.pointerType!=='pen')return;
-  lastPenCursorTime=performance.now();penPosition=local(e);viewport.classList.add('pen-input');refreshPenCursor();
+  lastPenCursorTime=performance.now();const bounds=rect||(active?.type==='pen'?active.rect:null);penPosition=bounds?{x:e.clientX-bounds.left,y:e.clientY-bounds.top}:local(e);viewport.classList.add('pen-input');refreshPenCursor();
 }
 function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#width').value)*view.scale;penCursor.style.width=penCursor.style.height=diameter+'px';penCursor.style.left=penPosition.x+'px';penCursor.style.top=penPosition.y+'px';penCursor.style.backgroundColor=$('#color').value;penCursor.hidden=false}
 for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown','pointerup'])viewport.addEventListener(type,updatePenCursor,{capture:true});

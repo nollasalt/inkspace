@@ -165,7 +165,7 @@ function render(){
 }
 function beginInk(){
   clearTimeout(saveTimer);active.rect=viewport.getBoundingClientRect();active.inkState=InkContent.createStrokeState(active.s);active.inkCursor=0;active.liveDirty=null;
-  clearLayer(inkLayers[1]);clearLayer(inkLayers[2]);paintLive();overlaySelection();
+  clearLayer(inkLayers[1]);if(!window.inkspacePreserveCompletedInk)clearLayer(inkLayers[2]);paintLive();overlaySelection();
 }
 function screenBounds(points,width){
   let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;

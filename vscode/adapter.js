@@ -3,6 +3,17 @@ const codium=(window.inkspaceCalibrationApi||acquireVsCodeApi()),boot=JSON.parse
 if(typeof codium.getState()?.diagramSidebarCollapsed==='boolean')setDiagramSidebarCollapsed(codium.getState().diagramSidebarCollapsed,false);
 window.addEventListener('inkspace-sidebar-change',event=>codium.setState({...codium.getState(),diagramSidebarCollapsed:event.detail.collapsed}));
 let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,flushWaiters=[],draftTimer=null;
+let binaryBaseline=null,binaryRevision=0;
+const originalContentSignature=contentSignature;
+if(boot.binary)contentSignature=()=>binaryRevision;
+function captureBinary(){return InkNotebookDelta.capture(documentData(),active?.type==='pen'?active.s:null)}
+function sendBinaryEdit(){
+  if(!hostLoaded||applyingHost||conflict||editFlight||active&&active.type!=='pen'||window.inkspaceDiagram?.interacting()||!binaryBaseline)return;
+  const captured=captureBinary(),patch=InkNotebookDelta.diff(binaryBaseline,captured);
+  if(!patch){lastContent=contentSignature();return}
+  editFlight={id:++editSequence,captured,signature:contentSignature()};
+  codium.postMessage({type:'delta-edit',id:editFlight.id,patch,version:hostVersion});
+}
 // Browser clipboard events keep image/text paste intact when the webview has
 // keyboard focus. A raw-pen-only focus uses VS Code's system clipboard bridge.
 function clipboardFocus(){codium.postMessage({type:'clipboard-focus',focused:document.hasFocus()})}
@@ -21,10 +32,10 @@ window.addEventListener('keydown',event=>{
 window.inkspacePdfWorkerReady=fetch(PdfApi.GlobalWorkerOptions.workerSrc).then(async response=>{if(!response.ok)throw Error('PDF worker resource '+response.status);const url=URL.createObjectURL(new Blob([await response.text()],{type:'text/javascript'})),worker=new Worker(url,{type:'module'});PdfApi.GlobalWorkerOptions.workerPort=worker;window.addEventListener('beforeunload',()=>{worker.terminate();URL.revokeObjectURL(url)},{once:true});return worker});
 window.inkspacePdfWorkerReady.catch(error=>toast('PDF 初始化失败：'+error.message));
 function pageMessage(){codium.postMessage({type:'pages',pages:notebook.pages.map(p=>({id:p.id,title:p.title})),activePage:notebook.activePage})}
-function rememberDraft(){codium.setState({...codium.getState(),text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})}
-function sendEdit(){if(!hostLoaded||applyingHost||active||window.inkspaceDiagram?.interacting()||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,baseText:lastHostText,autoSave:true})}
+function rememberDraft(){if(boot.binary){codium.setState({...codium.getState(),text:undefined,version:hostVersion,dirty:contentSignature()!==lastContent,patch:binaryBaseline?InkNotebookDelta.diff(binaryBaseline,captureBinary()):null});return}codium.setState({...codium.getState(),text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})}
+function sendEdit(){if(boot.binary){sendBinaryEdit();return}if(!hostLoaded||applyingHost||active||window.inkspaceDiagram?.interacting()||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,baseText:lastHostText,autoSave:true})}
 function flushed(){return new Promise((resolve,reject)=>{if(conflict){reject(Error('文件冲突，请另存草稿或重新打开'));return}finishInteraction();clearTimeout(draftTimer);draftTimer=null;forceSaveView=true;sendEdit();if(!editFlight){forceSaveView=false;resolve();return}flushWaiters.push({resolve,reject})})}
-persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active||window.inkspaceDiagram?.interacting()){persist();return}pageMessage();forceSaveView=true;sendEdit()},700)};
+persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;if(boot.binary){binaryRevision++;clearTimeout(draftTimer);draftTimer=null;sendBinaryEdit();return}clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active&&(!boot.binary||active.type!=='pen')||window.inkspaceDiagram?.interacting()){persist();return}pageMessage();forceSaveView=true;sendEdit()},boot.binary?80:700)};
 viewport.addEventListener('wheel',()=>persist(),{passive:true});for(const id of ['#in','#out','#home'])$(id)?.addEventListener('click',()=>persist());
 flushPersist=function(){clearTimeout(draftTimer);draftTimer=null;sendEdit()};
 saveNotebook=async function(saveAs=false){if(conflict&&saveAs){download(documentJSON(true),'application/json',notebook.title+'-草稿.inkspace.json');return true}codium.postMessage({type:'save',saveAs});return true};
@@ -46,11 +57,40 @@ function receiveDocument(message){
   }catch(error){applyingHost=false;toast('打开失败：'+error.message);statusText.textContent='笔记无法打开：'+error.message}
 }
 window.addEventListener('message',async event=>{const message=event.data;
+  if(message.type==='binary-external-change'){conflict=true;rememberDraft();toast('笔记在外部发生变化，已保留草稿；请重新打开文件');return}
+  if(message.type==='binary-document'){
+    try{if(!valid(message.model))throw Error('二进制笔记内容无效');if(hostLoaded&&!message.history&&(editFlight||contentSignature()!==lastContent))throw Error('文件在外部改变，请保存草稿后重新打开');const state=codium.getState();applyingHost=true;finishInteraction();clearTimeout(draftTimer);draftTimer=null;editFlight=null;adoptDocument(message.model);hostVersion=message.version;binaryBaseline=captureBinary();binaryRevision=0;lastContent=0;savedDocument=0;hostLoaded=true;conflict=false;
+      if(state?.dirty&&state.patch&&state.version===hostVersion){InkNotebookDelta.apply(notebook,state.patch);adoptDocument(notebook);binaryRevision++;}
+      resize();applyingHost=false;pageMessage();if(binaryRevision)persist();
+    }catch(error){applyingHost=false;conflict=true;toast('打开失败：'+error.message)}return;
+  }
   if(message.type==='document'){receiveDocument(message);return}
-  if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight&&!active&&draftTimer===null){forceSaveView=false;codium.setState({...codium.getState(),text:documentJSON(true),version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
+  if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}if(boot.binary)binaryBaseline=sent.captured;lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight&&!active&&draftTimer===null){forceSaveView=false;codium.setState({...codium.getState(),text:boot.binary?undefined:documentJSON(true),patch:undefined,version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
   if(message.type==='request'){try{let result=true;if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
+  if(action==='binary-writing'){
+    if(!boot.binary)throw Error('Binary editor required');await window.inkspaceCairoIdle();
+    const serialize=documentJSON,raster=desktop.inkRasterAsync,paints=renderStats.fullScenePaints,initial=doc.strokes.length;let serializations=0;
+    documentJSON=()=>{serializations++;throw Error('Full JSON serialization entered the writing path')};
+    desktop.inkRasterAsync=async payload=>{const bytes=await raster(payload);if(payload.points.length<100)await new Promise(r=>setTimeout(r,60));return bytes};
+    try{
+      tool='pen';const r=viewport.getBoundingClientRect(),sample=(x,y,id=151)=>({x:r.left+view.x+x*view.scale,y:r.top+view.y+y*view.scale,p:.6,id,precise:true,eraser:false}),fixture=packets=>window.inkspaceNative.test('fixture',{packets});
+      await fixture([{type:'pointerdown',samples:[sample(30,400)]},{type:'pointermove',samples:[sample(60,400)]}]);await window.inkspaceCairoIdle();
+      await fixture([{type:'pointerup',samples:[sample(60,400)]}]);
+      if(!window.inkspaceRetainedInkCount())throw Error('Completed ink not retained');
+      await fixture([{type:'pointerdown',samples:[sample(90,400)]}]);
+      const c=inkLayers[2].ctx,px=Math.round((view.x+surface.padding+45*view.scale)*surface.dpr),py=Math.round((view.y+surface.padding+400*view.scale)*surface.dpr);
+      if(!c.getImageData(px-4,py-4,8,8).data.some((v,i)=>i%4===3&&v))throw Error('Previous stroke disappeared on next pen-down');
+      await fixture([{type:'pointermove',samples:[sample(120,400)]},{type:'pointerup',samples:[sample(120,400)]}]);
+      for(let i=0;i<28;i++)await fixture([{type:'pointerdown',samples:[sample(30+i*6,430)]},{type:'pointermove',samples:[sample(31+i*6,435)]},{type:'pointerup',samples:[sample(31+i*6,435)]}]);
+      await window.inkspaceCairoIdle();await flushed();
+      if(doc.strokes.length!==initial+30||window.inkspaceRetainedInkCount())throw Error('Completed ink failed to commit');
+      if(renderStats.fullScenePaints!==paints)throw Error('Writing rebuilt complete scene');
+      const stroke=doc.strokes.at(-1);undo();await flushed();redo();await flushed();if(doc.strokes.at(-1)!==stroke)throw Error('Binary undo/redo lost stroke');
+      return{baselineStrokes:initial,addedStrokes:30,fullJsonSerializations:serializations,fullScenePaintsDuringWriting:0,previousStrokeStayedVisible:true,retainedLayerDrained:true,autoSaved:true,undoRedo:true};
+    }finally{documentJSON=serialize;desktop.inkRasterAsync=raster}
+  }
   if(action==='selection-scale'){
     await window.inkspaceCairoIdle();const oldDoc=doc,oldHistory=history,oldFuture=future,oldTool=tool;
     const image=document.createElement('canvas');image.width=image.height=1;

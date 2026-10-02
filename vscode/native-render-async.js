@@ -3,13 +3,20 @@ let cairoRedrawFrame=null,cairoScenePreview=false;
 function cairoVisibleReady(){const key=inkTileSignature();return doc.strokes.every(s=>s===active?.s||active?.movingStrokes?.has(s)||s.brush!=='xournal'||!visible(cachedStroke(s).bounds)||(()=>{const c=cachedStroke(s);return c.cairoKey===key||c.cairoFull&&c.cairoCanvas&&c.cairoView.scale===view.scale*surface.dpr})())}
 function paintCairoPreview(context,s,cache){if(!cache.cairoPreviewPath)cache.cairoPreviewPath=new Path2D(cache.d);context.save();context.fillStyle=s.color;context.fill(cache.cairoPreviewPath);context.restore()}
 
-let cairoHeldStroke=null;
-let cairoHeldKey=null;
+window.inkspacePreserveCompletedInk=true;
+const cairoRetained=new Map();
+function retainFinishedInk(s){
+  const b=clippedInkRect(screenBounds(s.points,s.width));if(!b.w||!b.h)return;
+  const image=document.createElement('canvas');image.width=b.w;image.height=b.h;image.getContext('2d',{willReadFrequently:true}).drawImage(inkLayers[1].canvas,b.x,b.y,b.w,b.h,0,0,b.w,b.h);
+  cairoRetained.set(s,{image,b,key:inkTileSignature()});const c=inkLayers[2].ctx;c.save();c.setTransform(1,0,0,1,0,0);c.drawImage(image,b.x,b.y);c.restore();
+}
+function releaseRetainedInk(s){const held=cairoRetained.get(s);if(!held)return;cairoRetained.delete(s);const c=inkLayers[2].ctx,b=held.b;c.save();c.setTransform(1,0,0,1,0,0);c.clearRect(b.x,b.y,b.w,b.h);c.beginPath();c.rect(b.x,b.y,b.w,b.h);c.clip();for(const item of cairoRetained.values())if(item.key===inkTileSignature()&&item.b.x< b.x+b.w&&item.b.y<b.y+b.h&&item.b.x+item.b.w>b.x&&item.b.y+item.b.h>b.y)c.drawImage(item.image,item.b.x,item.b.y);c.restore()}
+window.inkspaceRetainedInkCount=()=>cairoRetained.size;
 const renderBeforeReleaseOptimization=render;
 render=function(){
   cairoScenePreview=!cairoVisibleReady();
+  if(cairoRetained.size){cairoRetained.clear();clearLayer(inkLayers[2])}
   renderBeforeReleaseOptimization();
-  if(cairoHeldStroke&&active?.type!=='pen'&&(!doc.strokes.includes(cairoHeldStroke)||cairoHeldKey!==inkTileSignature())){clearLayer(inkLayers[1]);cairoHeldStroke=null}
 };
 const cairoFinishedStrokes=new WeakSet();
 function commitFinishedInk(s){
@@ -21,7 +28,7 @@ function commitFinishedInk(s){
     bufferContext.save();bufferContext.setTransform(1,0,0,1,0,0);bufferContext.clearRect(b.x,b.y,b.w,b.h);bufferContext.beginPath();bufferContext.rect(b.x,b.y,b.w,b.h);bufferContext.clip();worldTransform(bufferContext);paintScene(bufferContext,[region]);bufferContext.restore();
     ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.beginPath();ctx.rect(b.x,b.y,b.w,b.h);ctx.clip();ctx.globalCompositeOperation='copy';ctx.drawImage(sceneBuffer,0,0);ctx.restore();
   }
-  if(cairoHeldStroke===s&&active?.type!=='pen'){clearLayer(inkLayers[1]);cairoHeldStroke=null}
+  releaseRetainedInk(s);
 }
 const cairoPending=new Set();
 const cairoRasterQueue=[];let cairoRasterRunning=0;
@@ -40,7 +47,7 @@ cachedStroke=function(s){
   }
   return cache;
 };
-function requestCairoRedraw(){if(!cairoVisibleReady())return;if(cairoRedrawFrame===null)cairoRedrawFrame=requestAnimationFrame(()=>{cairoRedrawFrame=null;render();if(cairoHeldStroke&&active?.type!=='pen'){const cache=strokeCache.get(cairoHeldStroke);if(!doc.strokes.includes(cairoHeldStroke)||cache?.cairoKey===inkTileSignature()){clearLayer(inkLayers[1]);cairoHeldStroke=null}}})}
+function requestCairoRedraw(){if(!cairoVisibleReady())return;if(cairoRedrawFrame===null)cairoRedrawFrame=requestAnimationFrame(()=>{cairoRedrawFrame=null;render()})}
 function asyncCairoBitmap(s,b){
   const task=desktop.inkRasterAsync({points:nativePoints(s),width:s.width,hasPressure:s.hasPressure!==false,color:parseInt(s.color.slice(1),16),pixelWidth:b.w,pixelHeight:b.h,scale:view.scale*surface.dpr,tx:(view.x+surface.padding)*surface.dpr-b.x,ty:(view.y+surface.padding)*surface.dpr-b.y}).then(data=>new ImageData(new Uint8ClampedArray(data.buffer,data.byteOffset,data.byteLength),b.w,b.h));
   cairoPending.add(task);task.finally(()=>cairoPending.delete(task)).catch(()=>{});return task;
@@ -68,7 +75,7 @@ flushCairoInk=function(){
   cancelCairoInk();if(active?.type!=='pen'||active.s.brush!=='xournal')return;
   const contact=active,s=contact.s,key=inkTileSignature();
   if(contact.cairoBusy)return;
-  if(contact.cairoKey!==key){contact.cairoKey=key;contact.cairoCursor=0;clearLayer(inkLayers[1]);clearLayer(inkLayers[2])}
+  if(contact.cairoKey!==key){contact.cairoKey=key;contact.cairoCursor=0;clearLayer(inkLayers[1])}
   const count=s.points.length;if(contact.cairoCursor===count)return;
   const b=clippedInkRect(screenBounds(s.points.slice(Math.max(0,contact.cairoCursor-3)),s.width));
   if(!b.w||!b.h){contact.cairoCursor=count;return}
@@ -83,7 +90,7 @@ const finishCairoInteraction=finishInk;
 finishInk=function(){
   const stroke=active.s;
   if(stroke.brush!=='xournal'){finishCairoInteraction();return}
-  cancelCairoInk();active=null;cairoHeldStroke=stroke;cairoHeldKey=inkTileSignature();cairoFinishedStrokes.add(stroke);
+  cancelCairoInk();retainFinishedInk(stroke);active=null;cairoFinishedStrokes.add(stroke);
   $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
   // Leave the live preview visible; no scene copy or DOM rebuild on pointerup.
   requestAnimationFrame(()=>{if(!doc.strokes.includes(stroke))return;paintCairoStroke(bufferContext,stroke);if(strokeCache.get(stroke)?.cairoKey===inkTileSignature()){cairoFinishedStrokes.delete(stroke);commitFinishedInk(stroke)}});

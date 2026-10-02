@@ -8,7 +8,7 @@ function editorHtml(webview,mediaUri,vscode,boot){
   html=html.replace(/(src|href)="([^":]+)"/g,(_all,attribute,file)=>`${attribute}="${resource(file)}"`);
   html=html.replace(/<script /g,`<script nonce="${nonce}" `);
   if(boot.native?.transport==='raw-input')html=html.replace('<body>',`<body><script nonce="${nonce}" src="${resource('engine-calibration.js')}"></script>`);
-  html=html.replace('</body>',`<script nonce="${nonce}" src="${resource('native-render-async.js')}"></script><script nonce="${nonce}" src="${resource('adapter.js')}"></script></body>`);
+  html=html.replace('</body>',`<script nonce="${nonce}" src="${resource('native-render-async.js')}"></script><script nonce="${nonce}" src="${resource('notebook-delta.js')}"></script><script nonce="${nonce}" src="${resource('adapter.js')}"></script></body>`);
   html=html.replace('<body>',`<body class="vscodium-mode"><meta id="inkspace-native-client" content="${boot.client}"><meta id="inkspace-assets" content="${resource('index.html')}"><meta id="inkspace-boot" content="${Buffer.from(JSON.stringify(boot)).toString('base64')}"><link rel="stylesheet" href="${resource('codium.css')}"><script nonce="${nonce}" src="${resource(boot.native?.transport==='raw-input'?'engine-client.js':'native-client.js')}"></script>`);
   return html;
 }

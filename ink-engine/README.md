@@ -1,6 +1,6 @@
 # 独立 Ink Engine + 普通 VS Code
 
-0.4.4 已提供普通 VS Code 安装包 `dist/Inkspace-VSCode-0.4.4-win32-x64.vsix`，包含引擎运行时、Raw Input 探针、Cairo 模块及所需依赖；无需项目源码目录。构建：`node scripts/build-vscode.cjs` 后运行 `node scripts/package-vscode-engine.cjs`。安装后直接打开 `.inkspace.json` 文件即可自动启动引擎。
+0.5.0 已提供普通 VS Code 安装包 `dist/Inkspace-VSCode-0.5.0-win32-x64.vsix`，包含引擎运行时、Raw Input 探针、Cairo 模块及所需依赖；无需项目源码目录。构建：`node scripts/build-vscode.cjs` 后运行 `node scripts/package-vscode-engine.cjs`。安装后直接打开 `.ink` 或旧 `.inkspace.json` 文件即可自动启动引擎。
 
 当前验证版使用未修改的 Microsoft VS Code 和标准 Custom Editor 插件。无需修改 Electron 主进程或注入 IDE 窗口钩子。
 
@@ -36,3 +36,6 @@ VS Code 文件栏右键可选择「墨境：新建笔记」，直接在所选文
 2026-10-02，Microsoft VS Code 1.140.0 自动验证通过：无宿主钩子；300 个连续小数坐标完整保留；60 次快速打点在乱序绘制任务完成后像素完全一致；Cairo 返回像素与原生直接渲染一致；笔记保存成功。结果位于 `artifacts/engine-vscode-test/result.json`，其中 `physicalPenTested:false` 明确表示该自动测试没有替代真实触控笔验证。原 VSCodium 路线回归测试也通过。
 
 此前本机独立探针真实测试收到 5022 个后台坐标/压力报告、30 对落笔/抬笔事件和 0 个解码错误。这证明后台采集可行；接入 VS Code 后的真实坐标和手感仍需上述校准书写测试确认。
+
+
+新笔记默认 `.ink`，采用校验、压缩的二进制增量记录。普通 VS Code 的自定义二进制编辑器直接追加变化，保存不经过 JSON 文本文档；精确笔迹和原生输入路径保持不变。
