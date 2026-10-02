@@ -101,6 +101,15 @@ for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown',
 viewport.addEventListener('pointerleave',e=>{if(penPosition&&e.pointerType!=='pen')return;const p=local(e);if(p.x>=0&&p.y>=0&&p.x<viewport.clientWidth&&p.y<viewport.clientHeight)return;clearPenCursor()});window.addEventListener('blur',clearPenCursor);
 $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventListener('input',refreshPenCursor);
 function refreshToolOptions(){refreshPenCursor();$('#diagram-sidebar').hidden=false;$('#diagram-options').hidden=false;$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'}
+function setDiagramSidebarCollapsed(collapsed,remember=true){
+  finishInteraction();document.body.classList.toggle('diagram-sidebar-hidden',collapsed);
+  const button=$('#diagram-sidebar-toggle'),label=(collapsed?'展开':'收起')+'图形与 PDF 侧栏';
+  button.setAttribute('aria-expanded',String(!collapsed));button.setAttribute('aria-label',label);button.title=label;
+  if(remember){try{localStorage.setItem('inkspace.diagramSidebarCollapsed',String(collapsed))}catch{}window.dispatchEvent(new CustomEvent('inkspace-sidebar-change',{detail:{collapsed}}))}
+  resize();
+}
+$('#diagram-sidebar-toggle').onclick=()=>setDiagramSidebarCollapsed(!document.body.classList.contains('diagram-sidebar-hidden'));
+try{if(localStorage.getItem('inkspace.diagramSidebarCollapsed')==='true')setDiagramSidebarCollapsed(true,false)}catch{}
 const originalRender=render;render=function(){originalRender();refreshToolOptions()};
 document.querySelectorAll('.menu').forEach(menu=>menu.addEventListener('toggle',()=>{if(menu.open)document.querySelectorAll('.menu').forEach(other=>{if(other!==menu)other.open=false})}));
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('.menu'))document.querySelectorAll('.menu').forEach(m=>m.open=false)});

@@ -40,3 +40,10 @@ Shift（或 Ctrl/Alt）点击可多选，空白处拖动框选图形。中键或
 验证脚本在普通 VS Code 独立测试窗口中覆盖 400 个移动事件合并为一帧，并在 202 个节点、移动节点连接 21 条边的场景连续拖动 60 帧。报告记录交互处理耗时的 95 分位及最大值；不包含浏览器最终合成、屏幕显示或真实输入设备延迟，因此不等同于与完整 draw.io 的手感比较。
 
 交互参照上游[鼠标快捷键](https://www.drawio.com/docs/reference/shortcuts/modifier-shortcuts-in-diagrams/)、[对齐辅助工具](https://www.drawio.com/docs/manual/editor/alignment-tools/)和[画布平移](https://www.drawio.com/docs/manual/editor/pan-scroll/)。
+
+
+## 收起侧栏与移动文本区域
+
+工具栏的“◧ 侧栏”按钮收起或展开画布内的图形/PDF 库，收起后扩大画布，状态会记住。VS Code 自身的资源管理器仍使用原来的侧栏开关。
+
+移动工具（H）下，触控笔可从文本框正文、链接、顶部栏、缩放手柄和图片上拖动画布；内容不会移动或缩放。按住空格，或使用鼠标中键/右键拖动，也优先执行画布平移。其他工具保留文本框的编辑、移动与缩放操作。
