@@ -1,6 +1,15 @@
 // Writing is allowed only through the high-precision native host bridge.
 const codium=(window.inkspaceCalibrationApi||acquireVsCodeApi()),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
 let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,flushWaiters=[],draftTimer=null;
+// A focused webview owns its history key. Stop the shared canvas listener and
+// VS Code's forwarded key event; an unfocused webview uses the host keybinding.
+window.addEventListener('keydown',event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
+  const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;
+  if(!command||$('#editor').open||event.target.matches?.('input,textarea,select')||event.target.closest?.('[contenteditable="true"],.monaco-editor,#terminal-panel'))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  if(!event.repeat)codium.postMessage({type:'history-shortcut',command});
+},{capture:true});
 // Load the bundled module through the webview resource service, then keep its
 // worker on a same-origin blob URL. Cross-origin module imports can stall here.
 window.inkspacePdfWorkerReady=fetch(PdfApi.GlobalWorkerOptions.workerSrc).then(async response=>{if(!response.ok)throw Error('PDF worker resource '+response.status);const url=URL.createObjectURL(new Blob([await response.text()],{type:'text/javascript'})),worker=new Worker(url,{type:'module'});PdfApi.GlobalWorkerOptions.workerPort=worker;window.addEventListener('beforeunload',()=>{worker.terminate();URL.revokeObjectURL(url)},{once:true});return worker});
@@ -74,6 +83,21 @@ async function runCodiumDiagnostic(action){
     finally{desktop.inkRasterAsync=raster;doc=oldDoc;Object.assign(view,oldView);render();await window.inkspaceCairoIdle()}
   }
   if(action==='a4-layout'){const layout=$('#page-layout');layout.value='a4-portrait';layout.dispatchEvent(new Event('change'));await flushed();const portrait=$('#a4-pages').dataset.pageWidth;layout.value='a4-landscape';layout.dispatchEvent(new Event('change'));await flushed();const landscape=$('#a4-pages').dataset.pageWidth;if(portrait===landscape||!$('#a4-pages g').getAttribute('stroke-dasharray'))throw Error('A4 layout dimensions failed');return{layout:doc.background.layout,portrait,landscape}}
+  if(action==='history-key-once'){
+    const count=doc.strokes.length;
+    for(let i=0;i<3;i++){checkpoint();doc.strokes.push({brush:'xournal',width:3,color:'#000000',points:[{x:130+i*10,y:130,p:.5}]})}persist();await flushed();
+    async function keyOnce(key,shiftKey=false){
+      const before=doc.strokes.length,direction=shiftKey||key==='y'?1:-1;
+      window.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key,code:key==='z'?'KeyZ':'KeyY',ctrlKey:true,shiftKey}));
+      for(let i=0;i<5;i++)window.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key,ctrlKey:true,shiftKey,repeat:true}));
+      for(let i=0;i<100&&doc.strokes.length===before;i++)await new Promise(r=>setTimeout(r,10));
+      await flushed();if(doc.strokes.length!==before+direction)throw Error('A history key changed multiple strokes');
+    }
+    await keyOnce('z');await keyOnce('z');await keyOnce('z');
+    if(doc.strokes.length!==count)throw Error('Three keys did not undo three strokes');
+    await keyOnce('z',true);await keyOnce('y');await keyOnce('y');
+    return{strokes:doc.strokes.length,oneStepPerKey:true,repeatedKeyIgnored:true};
+  }
   if(action==='pending-edit'){checkpoint();doc.strokes.push({brush:'xournal',width:3,color:'#000000',points:[{x:120,y:120,p:.5}]});persist();return true}
   if(action==='undo-edit'){
     const count=doc.strokes.length;checkpoint();doc.strokes.push({brush:'xournal',width:3,color:'#000000',points:[{x:100,y:100,p:.5}]});persist();await flushed();return{strokes:count+1};

@@ -342,6 +342,8 @@ pr("doc.strokes[0].points=doc.strokes[0].points.map(p=>({...p,x:p.x+3000}));rend
 assert(!pages().includes('0,0'),'moving a stroke removes its old paper coverage');
 pr("doc.strokes=[];doc.notes=[{id:'paper-image',kind:'image',src:'data:image/png;base64,AA==',aspect:1,markdown:'',x:790,y:20,width:160}];render()");
 assert.deepEqual(pages(),['0,0','1,0'],'images allocate all occupied paper');
+pr("doc.background.color='#fffefb';doc.background.type='blank';renderA4Pages()");
+assert.equal(pw.document.querySelector('#a4-pages g').getAttribute('fill'),'#ffffff','A4 paper is pure white even for an older cream background');
 pr("doc.background.layout='a4-landscape';render()");
 assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),297*96/25.4);
 assert(pr('valid(JSON.parse(JSON.stringify(doc)))'));pr('flushPersist()');

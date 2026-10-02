@@ -87,7 +87,7 @@ function renderA4Pages(){
   for(const asset of doc.pdfs||[])for(const p of asset.pages)box({x:p.x,y:p.y,w:p.width,h:p.height});
   const paths=[];
   for(const key of cells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
-  const bg=backgroundSettings(),dark=bg.color.match(/[a-f0-9]{2}/gi).reduce((sum,c)=>sum+parseInt(c,16),0)<384;
+  const bg={...backgroundSettings(),color:'#ffffff'},dark=bg.color.match(/[a-f0-9]{2}/gi).reduce((sum,c)=>sum+parseInt(c,16),0)<384;
   const line=dark?'rgba(255,255,255,.18)':'rgba(38,63,67,.16)';
   let spacing=backgroundSpacing();while(spacing*view.scale<6)spacing*=10;
   const pixel=1/view.scale;
