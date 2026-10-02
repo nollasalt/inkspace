@@ -2,12 +2,20 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),crypto=require('node:crypto'),readline=require('node:readline'),{spawn,fork}=require('node:child_process'),{WebSocketServer}=require('ws');
 const root=path.resolve(__dirname,'..'),home=process.env.INKSPACE_ENGINE_HOME||path.join(os.homedir(),'.inkspace-engine');fs.mkdirSync(home,{recursive:true});
 const key=crypto.randomBytes(32).toString('hex'),test=process.argv.includes('--test'),clients=new Set();let samples=0,sequence=0;
-const worker=fork(path.join(__dirname,'raster-worker.cjs'),[],{silent:true,serialization:'advanced'}),pending=new Map();
-worker.on('message',m=>{const entry=pending.get(m.id);if(!entry)return;pending.delete(m.id);clearTimeout(entry.timer);m.error?entry.reject(Error(m.error)):entry.resolve(m.data)});
-worker.on('exit',()=>{for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('Cairo worker stopped'))}pending.clear()});
-function raster(operation,payload){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('Cairo timeout'))},10000);pending.set(id,{resolve,reject,timer});worker.send({id,operation,payload});})}
+let worker,workerReady=false,stopping=false,restartTimer;
+const pending=new Map();
+function failRequests(error){for(const entry of pending.values()){clearTimeout(entry.timer);entry.reject(error)}pending.clear()}
+function startWorker(){
+ workerReady=false;const current=fork(path.join(__dirname,'raster-worker.cjs'),[],{silent:true,serialization:'advanced',execArgv:[]});worker=current;
+ current.stderr.on('data',data=>process.stderr.write(data));
+ current.on('message',m=>{if(m.ready){workerReady=true;return}const entry=pending.get(m.id);if(!entry)return;pending.delete(m.id);clearTimeout(entry.timer);m.error?entry.reject(Error(m.error)):entry.resolve(m.data)});
+ current.on('error',error=>{workerReady=false;console.error('Cairo worker error:',error.message);failRequests(error)});
+ current.on('exit',(code,signal)=>{workerReady=false;console.error('Cairo worker exited:',code,signal);failRequests(Error('Cairo worker stopped'));if(!stopping)restartTimer=setTimeout(startWorker,1000)});
+}
+startWorker();
+function raster(operation,payload){return new Promise((resolve,reject)=>{if(!workerReady||!worker?.connected){reject(Error('Cairo worker is restarting'));return}const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('Cairo timeout'))},10000);pending.set(id,{resolve,reject,timer});try{worker.send({id,operation,payload},error=>{if(!error)return;const entry=pending.get(id);if(entry){pending.delete(id);clearTimeout(entry.timer);entry.reject(error)}})}catch(error){pending.delete(id);clearTimeout(timer);reject(error)}})}
 function validOrigin(origin){return !origin||origin==='null'||/^vscode-webview:\/\//.test(origin)||/^https:\/\/[a-z0-9-]+\.vscode-webview\.net$/i.test(origin)}
-const status=()=>({cairo:'1.18.4',hooks:0,inputReady:!!probe&&probe.exitCode===null,inputBackend:'raw-hid',independentEngine:true,samples,clients:clients.size,rasterPending:pending.size,physicalInput:!!probe&&probe.exitCode===null});
+const status=()=>({cairo:'1.18.4',hooks:0,rendererReady:workerReady,rendererPid:worker?.pid,inputReady:workerReady&&!!probe&&probe.exitCode===null,inputBackend:'raw-hid',independentEngine:true,samples,clients:clients.size,rasterPending:pending.size,physicalInput:!!probe&&probe.exitCode===null});
 const server=http.createServer(async(req,res)=>{
   if(!validOrigin(req.headers.origin)){res.writeHead(403);return res.end()}
   if(req.headers.origin)res.setHeader('Access-Control-Allow-Origin',req.headers.origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Inkspace-Key');res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');res.setHeader('Access-Control-Allow-Private-Network','true');res.setHeader('Cache-Control','no-store');
@@ -32,5 +40,5 @@ server.listen(0,'127.0.0.1',()=>{
   readline.createInterface({input:probe.stdout}).on('line',line=>{try{enqueue(JSON.parse(line))}catch{}});probe.on('error',e=>console.error(e));
   console.log('Ink Engine ready:',config.endpoint);
 });
-function stop(){probe?.kill();worker.kill();try{const current=JSON.parse(fs.readFileSync(path.join(home,'connection.json')));if(current.pid===process.pid)fs.unlinkSync(path.join(home,'connection.json'))}catch{}server.close();for(const c of clients)c.close();process.exit(0)}
+function stop(){stopping=true;clearTimeout(restartTimer);probe?.kill();worker?.kill();try{const current=JSON.parse(fs.readFileSync(path.join(home,'connection.json')));if(current.pid===process.pid)fs.unlinkSync(path.join(home,'connection.json'))}catch{}server.close();for(const c of clients)c.close();process.exit(0)}
 process.on('SIGTERM',stop);process.on('SIGINT',stop);
