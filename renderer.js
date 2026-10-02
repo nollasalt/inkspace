@@ -260,6 +260,14 @@ function presentInteraction(){
     if(Math.max(Math.abs(dx),Math.abs(dy))>surface.padding*.7)rebasePan();
     else{const d=surface.dpr;$('#scene').style.transform=`translate(${Math.round(dx*d)/d}px,${Math.round(dy*d)/d}px)`}
     renderStats.panFrames++;
+  }else if(active?.type==='select'){
+    overlaySelection();
+  }else if(active?.type==='resize-selection'){
+    const {bounds:b,factor}=active,origin={x:view.x+b.x*view.scale,y:view.y+b.y*view.scale};
+    inkLayers[1].canvas.style.transformOrigin=`${origin.x+surface.padding}px ${origin.y+surface.padding}px`;
+    inkLayers[1].canvas.style.transform=`scale(${factor})`;
+    for(const i of selected.notes){const n=doc.notes[i],el=noteCache.get(n.id).el;placeNote(n,el,(n.x-b.x)*view.scale*(factor-1),(n.y-b.y)*view.scale*(factor-1));el.style.transform=`scale(${view.scale*(n.scale||1)*factor})`}
+    const selection=$('#selection');selection.style.transformOrigin='4px 4px';selection.style.transform=`scale(${factor})`;
   }else if(active?.type==='move-selection'){
     const dx=active.offset.x*view.scale,dy=active.offset.y*view.scale;
     inkLayers[1].canvas.style.transform=`translate3d(${dx}px,${dy}px,0)`;
@@ -289,8 +297,13 @@ function beginGroupMove(){
   for(const s of active.movingStrokes)paintStroke(inkLayers[1].ctx,s);
   for(const s of active.movingShapes)drawShape(s,inkLayers[1].ctx);
 }
+function finishGroupScale(){
+  const {factor,bounds,items}=active;scaleSelection(factor,bounds,items);active=null;
+  inkLayers[1].canvas.style.transform='';inkLayers[1].canvas.style.transformOrigin='';
+  $('#selection').style.transform='';$('#selection').style.transformOrigin='';clearLayer(inkLayers[1]);render();
+}
 function finishGroupMove(){const offset=active.offset;detachSelection();moveSelection(offset.x,offset.y);active=null;inkLayers[1].canvas.style.transform='';$('#selection').style.transform='';clearLayer(inkLayers[1]);render()}
-function finishInteraction(){if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='pan')settlePan();else{const wasNote=active?.type==='note';if(wasNote){active.n.x+=active.offset.x;active.n.y+=active.offset.y}active=null;if(wasNote)renderNotes()}pointers.clear();gesture=null;selectionRect=null}
+function finishInteraction(){if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='pan')settlePan();else{const wasNote=active?.type==='note';if(wasNote){active.n.x+=active.offset.x;active.n.y+=active.offset.y}active=null;if(wasNote)renderNotes()}pointers.clear();gesture=null;selectionRect=null}
 function snapshot(){return {...doc,strokes:doc.strokes.slice(),notes:doc.notes.map(n=>({...n})),shapes:doc.shapes.map(s=>({...s}))}}
 function detachSelection(){for(const i of selected.strokes){const s=doc.strokes[i];doc.strokes[i]={...s,points:s.points.map(p=>({...p}))}}}
 function persist(){clearTimeout(saveTimer);saveTimer=setTimeout(flushPersist,700)}

@@ -7,7 +7,7 @@ window.inkspacePdfWorkerReady=fetch(PdfApi.GlobalWorkerOptions.workerSrc).then(a
 window.inkspacePdfWorkerReady.catch(error=>toast('PDF 初始化失败：'+error.message));
 function pageMessage(){codium.postMessage({type:'pages',pages:notebook.pages.map(p=>({id:p.id,title:p.title})),activePage:notebook.activePage})}
 function rememberDraft(){codium.setState({text:documentJSON(true),version:hostVersion,dirty:contentSignature()!==lastContent})}
-function sendEdit(){if(!hostLoaded||applyingHost||active||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,autoSave:true})}
+function sendEdit(){if(!hostLoaded||applyingHost||active||draftTimer!==null&&!forceSaveView)return;if(conflict)return;const signature=contentSignature();if(signature===lastContent&&!editFlight&&(!forceSaveView||documentJSON(true)===lastHostText))return;rememberDraft();if(editFlight)return;editFlight={id:++editSequence,text:documentJSON(true),signature};codium.postMessage({type:'edit',id:editFlight.id,text:editFlight.text,version:hostVersion,baseText:lastHostText,autoSave:true})}
 function flushed(){return new Promise((resolve,reject)=>{if(conflict){reject(Error('文件冲突，请另存草稿或重新打开'));return}finishInteraction();clearTimeout(draftTimer);draftTimer=null;forceSaveView=true;sendEdit();if(!editFlight){forceSaveView=false;resolve();return}flushWaiters.push({resolve,reject})})}
 persist=function(){clearTimeout(saveTimer);if(!hostLoaded||applyingHost)return;clearTimeout(draftTimer);draftTimer=setTimeout(()=>{draftTimer=null;if(active){persist();return}pageMessage();forceSaveView=true;sendEdit()},700)};
 viewport.addEventListener('wheel',()=>persist(),{passive:true});for(const id of ['#in','#out','#home'])$(id)?.addEventListener('click',()=>persist());
@@ -22,16 +22,18 @@ const nativeStatusTimer=setInterval(updateNativeStatus,1000);updateNativeStatus(
 download=async function(data,mime,name){try{const bytes=typeof data==='string'?null:Array.from(new Uint8Array(await new Blob([data]).arrayBuffer()));codium.postMessage({type:'export',mime,name,...(bytes?{bytes}:{text:data})})}catch(error){toast('导出失败：'+error.message)}};
 const hostPageRender=renderPageList;renderPageList=function(){hostPageRender();if(hostLoaded&&!applyingHost)pageMessage()};
 function receiveDocument(message){
+  const initial=!hostLoaded;
+  if(message.history){finishInteraction();clearTimeout(draftTimer);draftTimer=null;editFlight=null;forceSaveView=false;conflict=false;codium.setState({text:message.text,version:message.version,dirty:false})}
   if(editFlight||contentSignature()!==lastContent&&hostLoaded){conflict=true;rememberDraft();toast('文件在画布外改变，已保留草稿；请另存或重新打开');return}
-  try{const data=JSON.parse(message.text);if(!valid(data))throw Error('笔记内容无效');const state=codium.getState();applyingHost=true;adoptDocument(data);hostVersion=message.version;lastHostText=message.text;lastContent=contentSignature();savedDocument=lastContent;hostLoaded=true;applyingHost=false;
-    if(state?.dirty&&state.text!==message.text){const draft=JSON.parse(state.text);if(valid(draft)){adoptDocument(draft);toast('已恢复尚未写入文件的画布草稿');persist()}}
-    pageMessage();resize();
+  try{const data=JSON.parse(message.text);if(!valid(data))throw Error('笔记内容无效');const state=codium.getState();applyingHost=true;adoptDocument(data);hostVersion=message.version;lastHostText=message.text;lastContent=contentSignature();savedDocument=lastContent;hostLoaded=true;applyingHost=false;conflict=false;
+    if(initial&&state?.dirty&&state.text!==message.text){const draft=JSON.parse(state.text);if(valid(draft)){adoptDocument(draft);toast('已恢复尚未写入文件的画布草稿');persist()}}
+    pageMessage();applyingHost=true;resize();applyingHost=false;if(message.history){codium.postMessage({type:'save-history',version:hostVersion});for(const waiter of flushWaiters.splice(0))waiter.resolve()}
   }catch(error){applyingHost=false;toast('打开失败：'+error.message);statusText.textContent='笔记无法打开：'+error.message}
 }
 window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='document'){receiveDocument(message);return}
   if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight&&!active&&draftTimer===null){forceSaveView=false;codium.setState({text:documentJSON(true),version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
-  if(message.type==='request'){try{let result=true;if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
+  if(message.type==='request'){try{let result=true;if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
   if(action==='selection-scale'){
@@ -41,6 +43,29 @@ async function runCodiumDiagnostic(action){
     try{const b=selectionBounds(),rect=viewport.getBoundingClientRect(),handle=$('#selection').querySelector('.selection-scale');if(!handle)throw Error('Missing scale handle');const pointer=(type,factor,target)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:41,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,clientX:rect.left+view.x+(b.x+b.w*factor)*view.scale,clientY:rect.top+view.y+(b.y+b.h*factor)*view.scale}));pointer('pointerdown',1,handle);pointer('pointermove',2,viewport);pointer('pointerup',2,viewport);await window.inkspaceCairoIdle();if(Math.abs(doc.strokes[0].width-6)>1e-6||Math.abs(doc.notes[0].scale-2)>1e-6||doc.notes[0].width!==160)throw Error('Mixed scale drag failed');if(Math.abs(doc.notes[1].scale-2)>1e-6||doc.notes[1].aspect!==1)throw Error('Image scale failed');if(doc.strokes[0].points[1].p!==.8)throw Error('Scale changed pressure');undo();if(doc.strokes[0].width!==3||doc.notes[0].scale!==undefined)throw Error('Scale undo failed');redo();if(Math.abs(doc.notes[0].scale-2)>1e-6)throw Error('Scale redo failed');return{mouseHandle:true,mixedBlocks:true,imageScaled:true,textLayoutPreserved:true,undoRedo:true};}
     finally{doc=oldDoc;history=oldHistory;future=oldFuture;tool=oldTool;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
   }
+  if(action==='selection-pen-preview'){
+    await window.inkspaceCairoIdle();const saved={doc,history,future,tool,view:{...view}};
+    try{
+      doc={...doc,strokes:[{brush:'xournal',color:'#000000',width:3,points:Array.from({length:1000},(_,i)=>({x:40+i*.1,y:40+i*.04,p:.5}))}],notes:[],shapes:[]};history=[];future=[];tool='select';view={x:80,y:60,scale:1};clearSelection();render();await window.inkspaceCairoIdle();await window.inkspaceNative.register();
+      const rect=viewport.getBoundingClientRect(),sample=(x,y)=>({x:rect.left+view.x+x,y:rect.top+view.y+y,p:.6,id:91,precise:true,eraser:false});
+      const fixture=packets=>window.inkspaceNative.test('fixture',{packets});
+      const selectPaints=renderStats.scenePaints;
+      await fixture([{type:'pointerdown',samples:[sample(20,20)]},...Array.from({length:200},(_,i)=>({type:'pointermove',samples:[sample(20+(i+1)*.9,20+(i+1)*.9)]}))]);
+      if(active?.type!=='select'||renderStats.scenePaints!==selectPaints)throw Error('Pen selection repainted the scene');
+      await fixture([{type:'pointerup',samples:[sample(200,200)]}]);
+      if(selected.strokes.length!==1)throw Error('Native pen selection failed');
+      const b=selectionBounds(),h=$('#selection .selection-scale').getBoundingClientRect();
+      await fixture([{type:'pointerdown',samples:[{...sample(0,0),x:h.left+h.width/2,y:h.top+h.height/2}]}]);
+      if(active?.type!=='resize-selection')throw Error('Native pen scale handle failed');
+      const paints=renderStats.scenePaints,outlines=renderStats.outlineBuilds;
+      await fixture(Array.from({length:200},(_,i)=>({type:'pointermove',samples:[sample(b.x+b.w*(1+(i+1)/400),b.y+b.h*(1+(i+1)/400))]})));
+      await new Promise(requestAnimationFrame);
+      if(renderStats.scenePaints!==paints||renderStats.outlineBuilds!==outlines||doc.strokes[0].width!==3)throw Error('Pen scale regenerated ink during drag');
+      await fixture([{type:'pointerup',samples:[sample(b.x+b.w*1.5,b.y+b.h*1.5)]}]);await window.inkspaceCairoIdle();
+      if(Math.abs(doc.strokes[0].width-4.5)>1e-6)throw Error('Pen scale commit failed');
+      return{nativePen:true,samples:400,scenePaintsDuringDrag:0,outlineBuildsDuringDrag:0,committed:true};
+    }finally{finishInteraction();doc=saved.doc;history=saved.history;future=saved.future;tool=saved.tool;view=saved.view;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
+  }
   if(action==='view-loading'){
     await window.inkspaceCairoIdle();const oldDoc=doc,oldView={...view},raster=desktop.inkRasterAsync;
     const strokes=Array.from({length:20},(_,i)=>({brush:'xournal',color:'#18232a',width:3,hasPressure:true,points:[{x:25000+100+(i%5)*60,y:25000+100+Math.floor(i/5)*40,p:.8},{x:25000+130+(i%5)*60,y:25000+110+Math.floor(i/5)*40,p:.8}]}));
@@ -49,6 +74,10 @@ async function runCodiumDiagnostic(action){
     finally{desktop.inkRasterAsync=raster;doc=oldDoc;Object.assign(view,oldView);render();await window.inkspaceCairoIdle()}
   }
   if(action==='a4-layout'){const layout=$('#page-layout');layout.value='a4-portrait';layout.dispatchEvent(new Event('change'));await flushed();const portrait=$('#a4-pages').dataset.pageWidth;layout.value='a4-landscape';layout.dispatchEvent(new Event('change'));await flushed();const landscape=$('#a4-pages').dataset.pageWidth;if(portrait===landscape||!$('#a4-pages g').getAttribute('stroke-dasharray'))throw Error('A4 layout dimensions failed');return{layout:doc.background.layout,portrait,landscape}}
+  if(action==='pending-edit'){checkpoint();doc.strokes.push({brush:'xournal',width:3,color:'#000000',points:[{x:120,y:120,p:.5}]});persist();return true}
+  if(action==='undo-edit'){
+    const count=doc.strokes.length;checkpoint();doc.strokes.push({brush:'xournal',width:3,color:'#000000',points:[{x:100,y:100,p:.5}]});persist();await flushed();return{strokes:count+1};
+  }
   if(action==='auto-save'){await window.inkspaceNative.register();const rect=viewport.getBoundingClientRect(),sample={x:rect.left+160,y:rect.top+140,p:.7,id:51,precise:true,eraser:false};await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[sample]},{type:'pointerup',samples:[{...sample,p:0}]}]});await new Promise(r=>setTimeout(r,1200));return{strokes:doc.strokes.length,pending:!!editFlight}}
   if(action==='settings'){const input=$('#background-kind');input.value='grid';input.dispatchEvent(new Event('change'));await flushed();return{background:doc.background.type}}
   if(action==='inspect')return{model:documentData(),hasNativeInk:hasNativeInk(),native:window.desktop?.inkStatus()||null,nativeState:window.inkspaceNative.status(),formula:!!document.querySelector('.katex'),version:hostVersion,dirty:contentSignature()!==lastContent,conflict,width:viewport.clientWidth,height:viewport.clientHeight};

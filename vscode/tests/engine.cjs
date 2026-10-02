@@ -9,11 +9,29 @@ exports.run=async()=>{const root=process.env.INKSPACE_ENGINE_TEST_ROOT,report=pa
  const zoom=await api.diagnostic(uri,'zoom');assert(zoom.continuous&&zoom.finalPixelsExact);
  const cairo=await api.diagnostic(uri,'cairo'),expected=require('../../desktop/native/ink-native.node').raster({...cairo.payload,points:new Float64Array(cairo.payload.points)});assert.deepEqual(Buffer.from(cairo.rgba),expected);
  const selectionScale=await api.diagnostic(uri,'selection-scale');assert(selectionScale.mouseHandle&&selectionScale.undoRedo);
+ const penPreview=await api.diagnostic(uri,'selection-pen-preview');assert(penPreview.nativePen&&penPreview.committed);
  const viewLoading=await api.diagnostic(uri,'view-loading');assert(viewLoading.immediateCompletePreview);
  const settings=await api.diagnostic(uri,'settings');assert.equal(settings.background,'grid');assert.equal((await vscode.workspace.openTextDocument(uri)).isDirty,false);assert.equal(JSON.parse(fs.readFileSync(uri.fsPath)).pages[0].document.background.type,'grid');
  const a4Layout=await api.diagnostic(uri,'a4-layout');assert.equal(JSON.parse(fs.readFileSync(uri.fsPath)).pages[0].document.background.layout,'a4-landscape');
  const autoSaved=await api.diagnostic(uri,'auto-save');assert.equal((await vscode.workspace.openTextDocument(uri)).isDirty,false);assert.equal(JSON.parse(fs.readFileSync(uri.fsPath)).pages[0].document.strokes.length,autoSaved.strokes);
+ const undoEdit=await api.diagnostic(uri,'undo-edit');
+ await vscode.commands.executeCommand('inkspace.undo');
+ let undoState=await api.diagnostic(uri,'inspect');assert(!undoState.conflict);assert.equal(undoState.model.pages[0].document.strokes.length,undoEdit.strokes-1);
+ assert.equal(JSON.parse(fs.readFileSync(uri.fsPath)).pages[0].document.strokes.length,undoEdit.strokes-1);
+ await vscode.commands.executeCommand('inkspace.redo');
+ assert.equal((await api.diagnostic(uri,'inspect')).model.pages[0].document.strokes.length,undoEdit.strokes);
+ // The host's Edit > Undo/Redo also synchronizes, without reviving a stale draft.
+ await vscode.commands.executeCommand('undo');await new Promise(r=>setTimeout(r,200));
+ undoState=await api.diagnostic(uri,'inspect');assert(!undoState.conflict);assert.equal(undoState.model.pages[0].document.strokes.length,undoEdit.strokes-1);
+ await vscode.commands.executeCommand('redo');await new Promise(r=>setTimeout(r,200));
+ undoState=await api.diagnostic(uri,'inspect');assert(!undoState.conflict);assert.equal(undoState.model.pages[0].document.strokes.length,undoEdit.strokes,JSON.stringify({version:undoState.version,dirty:undoState.dirty,disk:JSON.parse(fs.readFileSync(uri.fsPath)).pages[0].document.strokes.length,host:JSON.parse((await vscode.workspace.openTextDocument(uri)).getText()).pages[0].document.strokes.length}));
+ await vscode.commands.executeCommand('inkspace.save');assert.equal((await vscode.workspace.openTextDocument(uri)).isDirty,false);
  await vscode.commands.executeCommand('inkspace.save');const doc=await vscode.workspace.openTextDocument(uri);assert.equal(doc.isDirty,false);
  const createdFolder=vscode.Uri.file(path.join(root,'workspace','new-notes'));await vscode.workspace.fs.createDirectory(createdFolder);await vscode.commands.executeCommand('inkspace.new',createdFolder);await vscode.commands.executeCommand('inkspace.new',createdFolder);assert((await vscode.workspace.fs.readDirectory(createdFolder)).filter(([name])=>name.endsWith('.inkspace.json')).length>=2);
- fs.writeFileSync(report,JSON.stringify({autoSaved:true,a4Layout,settingsAutoSaved:true,newNoteInSelectedFolder:true,passed:true,host:vscode.env.appName,version:vscode.version,independentEngine:true,hostHooks:0,dense,dots,zoom,viewLoading,selectionScale,cairoPixelsExact:true,cairoRoundTripMs:cairo.elapsed,saved:true,physicalPenTested:false},null,2));
+ // A genuine external edit must still protect an unflushed local draft.
+ await api.diagnostic(uri,'pending-edit');
+ const externalDoc=await vscode.workspace.openTextDocument(uri),externalModel=JSON.parse(externalDoc.getText());externalModel.title='External edit must be preserved';
+ const externalEdit=new vscode.WorkspaceEdit();externalEdit.replace(uri,new vscode.Range(0,0,externalDoc.lineCount,0),JSON.stringify(externalModel,null,2));assert(await vscode.workspace.applyEdit(externalEdit));await externalDoc.save();
+ await new Promise(r=>setTimeout(r,900));assert((await api.diagnostic(uri,'inspect')).conflict);assert.equal(JSON.parse(fs.readFileSync(uri.fsPath)).title,externalModel.title);
+ fs.writeFileSync(report,JSON.stringify({externalConflictProtected:true,undoSaveWithoutConflict:true,autoSaved:true,a4Layout,settingsAutoSaved:true,newNoteInSelectedFolder:true,passed:true,host:vscode.env.appName,version:vscode.version,independentEngine:true,hostHooks:0,dense,dots,zoom,viewLoading,penPreview,selectionScale,cairoPixelsExact:true,cairoRoundTripMs:cairo.elapsed,saved:true,physicalPenTested:false},null,2));
 }catch(e){fs.writeFileSync(report,JSON.stringify({passed:false,error:e.stack},null,2));throw e}finally{if(process.env.INKSPACE_ENGINE_HOME===path.join(root,'engine')){try{const config=JSON.parse(fs.readFileSync(path.join(root,'engine','connection.json')));await fetch(config.endpoint+'/shutdown',{method:'POST',headers:{'X-Inkspace-Key':config.key},body:'{}'})}catch{}}}};

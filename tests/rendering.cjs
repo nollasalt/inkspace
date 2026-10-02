@@ -145,6 +145,30 @@ pointer('pointerup',180,160);assert.ok(Math.abs(run('doc.strokes[1000].points[0]
 assert.equal(run('renderStats.outlineBuilds'),groupBefore.outlineBuilds+1);
 run('undo()');assert.equal(run('doc.strokes[1000].points[0].x'),groupX);
 
+// High-rate pen selection and scaling must leave the scene and geometry intact.
+run("view={x:0,y:0,scale:1};tool='select';clearSelection();render()");
+const selectionPaints=run('renderStats.scenePaints');
+pointer('pointerdown',900,500);
+for(let i=0;i<1000;i++)pointer('pointermove',900+i*.01,500+i*.01);
+run('presentInteraction()');assert.equal(run('renderStats.scenePaints'),selectionPaints);
+pointer('pointerup',910,510);
+run("selected={strokes:[1000],notes:[],shapes:[]};render()");
+const scaleBounds=read('selectionBounds()'),scaleWidth=run('doc.strokes[1000].width');
+const scaleHandle=w.document.querySelector('.selection-scale');
+const down=new w.Event('pointerdown',{bubbles:true});Object.assign(down,{pointerId:1,pointerType:'pen',button:0,clientX:scaleBounds.x+scaleBounds.w,clientY:scaleBounds.y+scaleBounds.h});scaleHandle.dispatchEvent(down);
+const scaleBefore=read('renderStats');
+for(let i=1;i<=1000;i++)pointer('pointermove',scaleBounds.x+scaleBounds.w*(1+i/1000),scaleBounds.y+scaleBounds.h*(1+i/1000));
+run('presentInteraction()');
+assert.equal(run('renderStats.scenePaints'),scaleBefore.scenePaints);
+assert.equal(run('renderStats.outlineBuilds'),scaleBefore.outlineBuilds);
+assert.equal(run('doc.strokes[1000].width'),scaleWidth);
+assert.equal(w.document.querySelector('#ink-stream').style.transform,'scale(2)');
+pointer('pointerup',scaleBounds.x+scaleBounds.w*2,scaleBounds.y+scaleBounds.h*2);
+assert.equal(run('doc.strokes[1000].width'),scaleWidth*2);
+assert.equal(w.document.querySelector('#ink-stream').style.transform,'');
+run('undo()');assert.equal(run('doc.strokes[1000].width'),scaleWidth);
+console.log('Passed 1000 pen selection and 1000 scaling samples with zero scene paints/geometry rebuilds during drag.');
+
 // Background styles follow world coordinates and survive save, validation and undo.
 const setBackground=(id,value)=>{const el=w.document.querySelector(id);el.value=value;el.dispatchEvent(new w.Event('change'))};
 setBackground('#background-kind','grid');assert.equal(run('doc.background.type'),'grid');assert.ok(w.document.querySelector('#paper').style.backgroundImage.includes('90deg'));
