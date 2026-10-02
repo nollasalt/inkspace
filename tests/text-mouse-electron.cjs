@@ -34,6 +34,20 @@ app.whenReady().then(async()=>{
 
       }
     }
+
+    const alignment=await run(
+      '('+async function(){
+        await document.fonts.ready;
+        const firstGlyph=root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(!node.textContent.trim()||node.parentElement.closest('.katex'))continue;const range=document.createRange();range.setStart(node,node.textContent.search(/\S/));range.setEnd(node,node.textContent.trimEnd().length);const rect=range.getClientRects()[0];if(rect?.height)return rect.top}throw Error('Missing glyph')};
+        const editorGlyph=input=>{const mirror=document.createElement('div'),r=input.getBoundingClientRect(),style=getComputedStyle(input),scale=view.scale*(doc.notes[0].scale||1);Object.assign(mirror.style,{position:'fixed',left:r.left+'px',top:r.top+'px',width:input.clientWidth+'px',font:style.font,lineHeight:style.lineHeight,whiteSpace:'pre-wrap',transform:'scale('+scale+')',transformOrigin:'0 0',visibility:'hidden'});mirror.textContent=input.value;document.body.append(mirror);const top=firstGlyph(mirror);mirror.remove();return top};
+        const cases=['Plain text','## Heading','- List item','> Quote','~~~js\nconst n=1;\n~~~','\n\nParagraph after blank lines'];let checked=0,maxError=0;
+        for(const source of cases)for(const zoom of [.75,1,2])for(const noteScale of [1,1.7]){
+          window.inkspaceInlineText.finish();finishInteraction();doc={...doc,notes:[{id:'alignment',x:40,y:40,width:320,scale:noteScale,markdown:source}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:zoom};clearSelection();render();const n=doc.notes[0],el=noteCache.get(n.id).el,before=firstGlyph(el.querySelector('.note-body'));edit(n);const input=el.querySelector('textarea'),during=editorGlyph(input),error=Math.abs(before-during);maxError=Math.max(maxError,error);if(error>.2)throw Error(JSON.stringify({source,zoom,noteScale,before,during,error}));
+          input.value=source+' extra';input.dispatchEvent(new Event('input',{bubbles:true}));const edited=editorGlyph(input);window.inkspaceInlineText.finish();const after=firstGlyph(el.querySelector('.note-body'));if(Math.abs(after-edited)>.2)throw Error('Changed text moved after commit');if(n.x!==40||n.y!==40||n.scale!==noteScale)throw Error('Text model moved');checked++;
+        }
+        return {checked,maxError};
+      }.toString()+')()');
+    console.log(JSON.stringify({textEditAlignment:alignment}));
     console.log(JSON.stringify({passed:true,chromiumMouseInput:true,doubleClickTools:['pen','pan','select'],correctText:true,noExtraNote:true,penHoverHidden:true,realMouseScale:true,selectedTextHandleUnobscured:true,continuousGrowShrinkGrow:true,repeatedResizeGestures:4,quickSecondResize:true,noSelectionAfterDirectScale:true,fullWidthThinToolbar:true}));fs.rmSync(testHtml,{force:true});app.exit(0);
   }catch(error){console.error(error);fs.rmSync(testHtml,{force:true});app.exit(1)}
 });
