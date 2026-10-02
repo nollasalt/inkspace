@@ -7,7 +7,7 @@
   viewport.addEventListener('pointerleave',()=>mouseHover(null));window.addEventListener('blur',()=>mouseHover(null));
   const cursorBeforeTextHover=updatePenCursor;
   updatePenCursor=function(event,rect){cursorBeforeTextHover(event,rect);if(event.pointerType==='pen')mouseHover(null)};
-  function bounds(note){const el=noteCache.get(note.id)?.el;if(!el||note.kind==='image')return itemBounds('notes',note);const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key));return{x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)}}
+  function bounds(note){if(!note||note.kind==='image')return null;const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
   function finish(redraw=true){
     const current=session;if(!current)return;session=null;
     current.el.classList.remove('editing-text');current.cache.markdown=null;
