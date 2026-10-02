@@ -6,7 +6,7 @@ let worker,workerReady=false,stopping=false,restartTimer;
 const pending=new Map();
 function failRequests(error){for(const entry of pending.values()){clearTimeout(entry.timer);entry.reject(error)}pending.clear()}
 function startWorker(){
- workerReady=false;const current=fork(path.join(__dirname,'raster-worker.cjs'),[],{silent:true,serialization:'advanced',execArgv:[]});worker=current;
+ workerReady=false;const current=fork(path.join(__dirname,'raster-worker.cjs'),[],{silent:true,windowsHide:true,serialization:'advanced',execArgv:[]});worker=current;
  current.stderr.on('data',data=>process.stderr.write(data));
  current.on('message',m=>{if(m.ready){workerReady=true;return}const entry=pending.get(m.id);if(!entry)return;pending.delete(m.id);clearTimeout(entry.timer);m.error?entry.reject(Error(m.error)):entry.resolve(m.data)});
  current.on('error',error=>{workerReady=false;console.error('Cairo worker error:',error.message);failRequests(error)});
