@@ -94,17 +94,18 @@ async function runCodiumDiagnostic(action){
   if(action==='text-guides'){
     await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool};
     try{
-      doc={...doc,notes:[{id:'guide-text',x:40,y:40,width:280,markdown:'Alpha beta\n\nGamma'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};history=[];future=[];tool='pen';clearSelection();
+      doc={...doc,notes:[{id:'guide-text',x:40,y:40,width:280,markdown:'Alpha beta\n\nGamma'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};history=[];future=[];tool='pan';clearSelection();
       for(const scale of [.75,1,2]){
         view={x:80,y:60,scale};render();const cache=noteCache.get('guide-text'),n=doc.notes[0],paragraphs=cache.body.querySelectorAll('p'),first=document.createRange(),last=document.createRange();first.selectNodeContents(paragraphs[0].firstChild);last.selectNodeContents(paragraphs[1].firstChild);
         const start=first.getClientRects()[0],end=[...last.getClientRects()].at(-1),bar=cache.el.querySelector('.note-bar'),handle=cache.el.querySelector('.note-resize'),barRect=bar.getBoundingClientRect(),handleRect=handle.getBoundingClientRect();
         if(Math.abs(barRect.left-(start.left-6*scale))>.6||barRect.bottom>start.top||Math.abs(handleRect.right-barRect.right)>.6||Math.abs(handleRect.top-barRect.top)>.6)throw Error('Text handles do not align at scale '+scale);
         if(getComputedStyle(cache.el,'::after').borderTopStyle!=='solid')throw Error('Missing solid text guide');
+        for(const y of [start.top-1,start.top-3,start.top-5]){const hit=document.elementFromPoint(start.left+5*scale,y);if(hit?.closest('.note')!==cache.el)throw Error('Gap interrupts text control hover at scale '+scale)}cache.el.classList.add('selected');for(const control of [bar,handle]){const r=control.getBoundingClientRect();if(!control.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)))throw Error('Text control obscured')}
         const pointer=(target,type,x,y)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:221,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,clientX:x,clientY:y}));
-        let x=handleRect.left+handleRect.width/2,y=handleRect.top+handleRect.height/2,width=n.width;pointer(handle,'pointerdown',x,y);pointer(viewport,'pointermove',x+8*scale,y);pointer(viewport,'pointerup',x+8*scale,y);if(Math.abs(n.width-width-8)>1e-6)throw Error('Text resize jumped to container edge');
-        const move=bar.getBoundingClientRect(),oldX=n.x,oldY=n.y;x=move.left+move.width/2;y=move.top+move.height/2;pointer(bar,'pointerdown',x,y);pointer(viewport,'pointermove',x+10*scale,y+5*scale);pointer(viewport,'pointerup',x+10*scale,y+5*scale);if(Math.abs(n.x-oldX-10)>1e-6||Math.abs(n.y-oldY-5)>1e-6)throw Error('Text move handle failed');
+        const originalView={...view};let x=handleRect.left+handleRect.width/2,y=handleRect.top+handleRect.height/2,width=n.width;pointer(handle,'pointerdown',x,y);pointer(viewport,'pointermove',x+8*scale,y);pointer(viewport,'pointerup',x+8*scale,y);if(Math.abs(n.width-width-8)>1e-6)throw Error('Text resize jumped to container edge');
+        const move=bar.getBoundingClientRect(),oldX=n.x,oldY=n.y;x=move.left+move.width/2;y=move.top+move.height/2;pointer(bar,'pointerdown',x,y);pointer(viewport,'pointermove',x+10*scale,y+5*scale);pointer(viewport,'pointerup',x+10*scale,y+5*scale);if(Math.abs(n.x-oldX-10)>1e-6||Math.abs(n.y-oldY-5)>1e-6)throw Error('Text move handle failed');if(view.x!==originalView.x||view.y!==originalView.y)throw Error('Canvas pan intercepted text controls');
       }
-      return{solidGrayGuide:true,controlsAboveText:true,scales:3,resizeWithoutJump:true,moveHandle:true};
+      return{solidGrayGuide:true,controlsAboveText:true,continuousHoverRegion:true,controlsOverrideMousePan:true,scales:3,resizeWithoutJump:true,moveHandle:true};
     }finally{finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
   }
   if(action==='inline-text'){
