@@ -1,6 +1,10 @@
 // Writing is allowed only through the high-precision native host bridge.
 const codium=(window.inkspaceCalibrationApi||acquireVsCodeApi()),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
 let hostVersion=0,hostLoaded=false,applyingHost=false,editFlight=null,editSequence=0,lastHostText='',lastContent='',conflict=false,forceSaveView=false,flushWaiters=[],draftTimer=null;
+// Browser clipboard events keep image/text paste intact when the webview has
+// keyboard focus. A raw-pen-only focus uses VS Code's system clipboard bridge.
+function clipboardFocus(){codium.postMessage({type:'clipboard-focus',focused:document.hasFocus()})}
+window.addEventListener('focus',clipboardFocus);window.addEventListener('blur',clipboardFocus);clipboardFocus();
 // A focused webview owns its history key. Stop the shared canvas listener and
 // VS Code's forwarded key event; an unfocused webview uses the host keybinding.
 window.addEventListener('keydown',event=>{
@@ -42,7 +46,7 @@ function receiveDocument(message){
 window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='document'){receiveDocument(message);return}
   if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight&&!active&&draftTimer===null){forceSaveView=false;codium.setState({text:documentJSON(true),version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
-  if(message.type==='request'){try{let result=true;if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
+  if(message.type==='request'){try{let result=true;if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
   if(action==='selection-scale'){
@@ -83,6 +87,21 @@ async function runCodiumDiagnostic(action){
     finally{desktop.inkRasterAsync=raster;doc=oldDoc;Object.assign(view,oldView);render();await window.inkspaceCairoIdle()}
   }
   if(action==='a4-layout'){const layout=$('#page-layout');layout.value='a4-portrait';layout.dispatchEvent(new Event('change'));await flushed();const portrait=$('#a4-pages').dataset.pageWidth;layout.value='a4-landscape';layout.dispatchEvent(new Event('change'));await flushed();const landscape=$('#a4-pages').dataset.pageWidth;if(portrait===landscape||!$('#a4-pages g').getAttribute('stroke-dasharray'))throw Error('A4 layout dimensions failed');return{layout:doc.background.layout,portrait,landscape}}
+  if(action==='clipboard-roundtrip'){
+    const before={strokes:doc.strokes.length,notes:doc.notes.length,shapes:doc.shapes.length};
+    checkpoint();doc.strokes.push({brush:'xournal',color:'#000000',width:3,points:[{x:100,y:100,p:0},{x:130,y:120,p:.8}]});doc.shapes.push({kind:'rect',color:'#000000',width:2,x:140,y:100,x2:180,y2:140});
+    const image=document.createElement('canvas');image.width=image.height=1;
+    doc.notes.push({id:crypto.randomUUID(),x:200,y:100,width:160,markdown:'Copied text',scale:1.5},{id:crypto.randomUUID(),x:380,y:100,width:160,markdown:'',kind:'image',src:image.toDataURL('image/png'),aspect:1});
+    selected={strokes:[before.strokes],shapes:[before.shapes],notes:[before.notes,before.notes+1]};render();
+    const text=selectionClipboardText();pasteAnchor={x:viewport.clientWidth/2,y:viewport.clientHeight/2};
+    if(!pasteSelectionText(text))throw Error('Selection paste not recognized');await flushed();
+    if(doc.strokes.length!==before.strokes+2||doc.notes.length!==before.notes+4||doc.shapes.length!==before.shapes+2)throw Error('Mixed selection paste lost items');
+    const stroke=doc.strokes.at(-1);if(stroke.points[0].p!==0||stroke.points[1].p!==.8||doc.notes.at(-2).scale!==1.5||doc.notes.at(-1).src!==doc.notes[before.notes+1].src)throw Error('Copied pressure/image/text changed');
+    if(new Set(doc.notes.map(n=>n.id)).size!==doc.notes.length)throw Error('Copied note IDs reused');
+    undo();await flushed();if(doc.strokes.length!==before.strokes+1||doc.notes.length!==before.notes+2)throw Error('Paste undo was not atomic');
+    redo();await flushed();if(doc.strokes.length!==before.strokes+2)throw Error('Paste redo failed');
+    return{mixedBlocks:true,pressurePreserved:true,imagesPreserved:true,uniqueIds:true,atomicUndoRedo:true,saved:true};
+  }
   if(action==='history-key-once'){
     const count=doc.strokes.length;
     for(let i=0;i<3;i++){checkpoint();doc.strokes.push({brush:'xournal',width:3,color:'#000000',points:[{x:130+i*10,y:130,p:.5}]})}persist();await flushed();

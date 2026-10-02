@@ -361,3 +361,25 @@ assert.equal(JSON.parse(pw.localStorage.getItem('inkspace.document')).background
 pr("doc.background.layout='infinite';render()");assert.equal(pw.document.querySelector('#a4-pages'),null);
 pt.dom.window.close();
 console.log('Passed gapless dashed A4 borders, occupancy, live expansion, deletion, negative coordinates and persistence.');
+
+const clip=app(),cw=clip.w,cr=clip.run;
+vm.runInContext(fs.readFileSync('desktop/workspace.js','utf8'),clip.dom.getInternalVMContext());
+cr("doc={...newCanvas(),strokes:[{brush:'xournal',color:'#000000',width:3,points:[{x:10,y:10,p:0},{x:30,y:20,p:.8}]},{color:'#000000',width:2,points:[{x:900,y:900,p:.5}]}],shapes:[{kind:'rect',color:'#000000',width:2,x:40,y:10,x2:80,y2:40}],notes:[{id:'copy-text',x:100,y:10,width:160,markdown:'**copy**',scale:2},{id:'copy-image',x:300,y:10,width:160,markdown:'',kind:'image',src:'data:image/png;base64,AA==',aspect:1.5}]};view={x:0,y:0,scale:2};selected={strokes:[0],shapes:[0],notes:[0,1]};render()");
+const clipboardData=new Map(),copyEvent=new cw.Event('copy',{bubbles:true,cancelable:true});
+copyEvent.clipboardData={setData:(type,text)=>clipboardData.set(type,text)};cw.document.body.dispatchEvent(copyEvent);
+assert(copyEvent.defaultPrevented);const fragment=clipboardData.get('text/plain');assert(fragment.startsWith('INKSPACE_SELECTION_V1\n'));
+cr('pasteAnchor={x:1000,y:600}');
+const pasteEvent=new cw.Event('paste',{bubbles:true,cancelable:true});pasteEvent.clipboardData={items:[],getData:()=>fragment};cw.document.body.dispatchEvent(pasteEvent);
+assert(pasteEvent.defaultPrevented);assert.equal(cr('doc.strokes.length'),3);assert.equal(cr('doc.shapes.length'),2);assert.equal(cr('doc.notes.length'),4);
+assert.equal(cr('doc.strokes[2].points[0].p'),0);assert.equal(cr('doc.strokes[2].points[1].p'),.8);
+assert.equal(cr('doc.notes[2].scale'),2);assert.equal(cr('doc.notes[3].aspect'),1.5);
+assert.equal(cr('new Set(doc.notes.map(n=>n.id)).size'),4);assert.equal(cr('selectionBounds().x'),500);assert.equal(cr('selectionBounds().y'),300);
+assert.equal(cr('selected.strokes[0]'),2);assert(cr('valid(JSON.parse(JSON.stringify(doc)))'));
+cr('undo()');assert.equal(cr('doc.strokes.length'),2);assert.equal(cr('doc.notes.length'),2);cr('redo()');assert.equal(cr('doc.notes.length'),4);
+assert.throws(()=>cr("pasteSelectionText('INKSPACE_SELECTION_V1\\n{}')"));
+const savedFragment=JSON.parse(fragment.slice('INKSPACE_SELECTION_V1\n'.length));
+cr('adoptDocument(newCanvas());pasteAnchor={x:100,y:100}');
+assert(clip.run('pasteSelectionText('+JSON.stringify(fragment.replace('INKSPACE_SELECTION_V1\n','INKSPACE_SELECTION_V1\r\n'))+')'));assert.equal(cr('doc.strokes.length'),1);assert.equal(cr('doc.notes.length'),2);
+assert.equal(cr('doc.strokes[0].points[1].p'),savedFragment.document.strokes[0].points[1].p);
+const textEvent=new cw.Event('copy',{bubbles:true,cancelable:true});textEvent.clipboardData=copyEvent.clipboardData;cw.document.querySelector('#source').dispatchEvent(textEvent);assert(!textEvent.defaultPrevented);
+clip.dom.window.close();console.log('Passed mixed selection copy/paste, original pressure, unique image/text IDs, cursor placement, cross-page paste and atomic undo/redo.');

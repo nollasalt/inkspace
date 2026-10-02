@@ -12,17 +12,20 @@ function activate(context){
   }};
   function refresh(){vscode.commands.executeCommand('setContext','inkspace.hasNotebook',!!active);emitter.fire()}
   function request(state,command,args={}){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('画布响应超时'))},15000);pending.set(id,{state,resolve,reject,timer});state.panel.webview.postMessage({type:'request',id,command,...args})})}
+  async function copySelection(state=active){if(!state)return;const text=await request(state,'copy');if(text)await vscode.env.clipboard.writeText(text)}
+  async function pasteSelection(state=active){if(!state)return;const text=await vscode.env.clipboard.readText();if(text)await request(state,'paste',{text})}
   async function newNote(folder){let base=vscode.workspace.workspaceFolders?.[0]?.uri;if(folder instanceof vscode.Uri){const info=await vscode.workspace.fs.stat(folder);base=info.type&vscode.FileType.Directory?folder:folder.with({path:path.posix.dirname(folder.path)})}else if(active)base=active.document.uri.with({path:path.posix.dirname(active.document.uri.path)});else if(vscode.window.activeTextEditor)base=vscode.window.activeTextEditor.document.uri.with({path:path.posix.dirname(vscode.window.activeTextEditor.document.uri.path)});if(!base){vscode.window.showInformationMessage('请先打开文件夹');return}let target;for(let i=0;i<10000;i++){target=vscode.Uri.joinPath(base,(i?'笔记 '+i:'笔记')+'.inkspace.json');try{await vscode.workspace.fs.stat(target)}catch(error){if(error.code!=='FileNotFound')throw error;break}target=null}if(!target)throw Error('无法生成新笔记名称');await vscode.workspace.fs.writeFile(target,Buffer.from(JSON.stringify(emptyNotebook(path.basename(target.path).replace(/\.inkspace\.json$/,'')),null,2)));await vscode.commands.executeCommand('vscode.openWith',target,VIEW)}
   async function openNote(uri){if(!uri){const files=await vscode.window.showOpenDialog({canSelectMany:false,filters:{'墨境笔记':['json']}});uri=files?.[0]}if(uri)await vscode.commands.executeCommand('vscode.openWith',uri,VIEW)}
   const provider={async resolveCustomTextEditor(document,panel){
     assertNotebook(document.getText());const media=vscode.Uri.joinPath(context.extensionUri,'media');
     const state={document,panel,ready:false,applying:false,queue:Promise.resolve(),pages:[],activePage:null};states.set(document.uri.toString(),state);
     const disposables=[];disposables.push(vscode.window.onDidChangeWindowState(inputFocus));panel.webview.options={enableScripts:true,localResourceRoots:[media]};
-    function inputFocus(){panel.webview.postMessage({type:'engine-focus',windowFocused:vscode.window.state.focused,editorActive:panel.active})}
+    function inputFocus(){if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',!!state.clipboardFocused);panel.webview.postMessage({type:'engine-focus',windowFocused:vscode.window.state.focused,editorActive:panel.active})}
     function update(history=false){panel.webview.postMessage({type:'document',text:normalizedText(document.getText()),version:document.version,history})}
     disposables.push(vscode.workspace.onDidChangeTextDocument(event=>{if(event.document===document&&event.contentChanges.length&&state.ready){const history=event.reason===vscode.TextDocumentChangeReason.Undo||event.reason===vscode.TextDocumentChangeReason.Redo;if(history){state.historyVersion=document.version;update(true)}else if(!state.applying&&normalizedText(document.getText())!==state.lastOwn)update()}}));
     disposables.push(panel.onDidChangeViewState(()=>{inputFocus();if(panel.active){active=state;refresh()}else if(active===state){active=null;refresh()}}));
     disposables.push(panel.webview.onDidReceiveMessage(message=>{
+      if(message.type==='clipboard-focus'){state.clipboardFocused=!!message.focused;if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',state.clipboardFocused);return}
       if(message.type==='history-shortcut'&&['undo','redo'].includes(message.command)){request(state,message.command).catch(error=>vscode.window.showErrorMessage(error.message));return}
       if(message.type==='response'){const entry=pending.get(message.id);if(entry?.state===state){clearTimeout(entry.timer);pending.delete(message.id);message.error?entry.reject(Error(message.error)):entry.resolve(message.result)}return}
       state.queue=state.queue.catch(()=>{}).then(async()=>{
@@ -56,6 +59,8 @@ function activate(context){
     vscode.commands.registerCommand('inkspace.renamePage',async item=>{const state=active,page=state?.pages.find(p=>p.id===(item?.id||state.activePage));if(!page)return;const title=await vscode.window.showInputBox({title:'页面名称',value:page.title,validateInput:value=>value.trim()?null:'请输入名称'});if(title!==undefined)await request(state,'renamePage',{page:page.id,title:title.trim().slice(0,100)})}),
     vscode.commands.registerCommand('inkspace.deletePage',async item=>{const state=active,page=state?.pages.find(p=>p.id===(item?.id||state.activePage));if(!page)return;if(state.pages.length===1){vscode.window.showInformationMessage('至少保留一个页面');return}if(await vscode.window.showWarningMessage('删除“'+page.title+'”及其全部内容？',{modal:true},'删除')==='删除')await request(state,'deletePage',{page:page.id})}),
     vscode.commands.registerCommand('inkspace.switchPage',id=>active&&request(active,'page',{page:id})),
+    vscode.commands.registerCommand('inkspace.copy',()=>copySelection()),
+    vscode.commands.registerCommand('inkspace.paste',()=>pasteSelection()),
     vscode.commands.registerCommand('inkspace.undo',()=>active&&request(active,'undo')),
     vscode.commands.registerCommand('inkspace.redo',()=>active&&request(active,'redo')),
     vscode.commands.registerCommand('inkspace.save',async()=>{if(active){await request(active,'flush');await active.queue;await active.document.save()}}));

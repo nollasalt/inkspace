@@ -44,13 +44,41 @@ $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.si
 flushPersist=function(){if(active){persist();return}const data=documentJSON();if(window.desktop)desktop.backup(data).catch(()=>toast('自动恢复保存失败，请手动保存'));else try{localStorage.setItem('inkspace.document',data)}catch{toast('自动恢复保存失败，请手动保存')}};
 let pasteAnchor=null;
 viewport.addEventListener('pointermove',e=>{if(e.pointerType!=='touch')pasteAnchor=local(e)});
+const selectionClipboardHeader='INKSPACE_SELECTION_V1\n';
+function selectionClipboardText(){
+  finishInteraction();const origin=selectionBounds();if(!origin)return '';
+  const fragment={format:'inkspace',version:1,background:{...backgroundSettings()},strokes:[],notes:[],shapes:[]};
+  for(const {kind,value}of selectionScaleSnapshot())fragment[kind].push(value);
+  return selectionClipboardHeader+JSON.stringify({origin:{x:origin.x,y:origin.y},document:fragment});
+}
+function pasteSelectionText(text){
+  const header=typeof text==='string'&&text.match(/^INKSPACE_SELECTION_V1\r?\n/);if(!header)return false;
+  if(text.length>150*1024*1024)throw Error('选中内容超过 150 MB');
+  const data=JSON.parse(text.slice(header[0].length));
+  if(![data.origin?.x,data.origin?.y].every(Number.isFinite)||!valid(data.document))throw Error('剪贴板中的笔记内容无效');
+  if(!['strokes','notes','shapes'].some(kind=>data.document[kind].length))return true;
+  finishInteraction();const point=world(pasteAnchor?.x??viewport.clientWidth/2,pasteAnchor?.y??viewport.clientHeight/2),dx=point.x-data.origin.x,dy=point.y-data.origin.y;
+  const translate=p=>({...p,x:p.x+dx,y:p.y+dy});
+  const fragment=data.document;
+  fragment.strokes=fragment.strokes.map(s=>({...s,points:s.points.map(translate)}));
+  fragment.shapes=fragment.shapes.map(s=>({...translate(s),x2:s.x2+dx,y2:s.y2+dy}));
+  fragment.notes=fragment.notes.map(n=>({...translate(n),id:crypto.randomUUID()}));
+  checkpoint();clearSelection();
+  for(const kind of ['strokes','notes','shapes']){const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
+  render();persist();return true;
+}
+document.addEventListener('copy',event=>{
+  if(event.target.closest?.('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||tool==='pdftext'||window.getSelection?.().toString())return;
+  const text=selectionClipboardText();if(!text||!event.clipboardData)return;
+  event.preventDefault();event.clipboardData.setData('text/plain',text);
+});
 async function pasteItems(items,text){
   finishInteraction();const pageId=notebook.activePage,point=world(pasteAnchor?.x??viewport.clientWidth/2,pasteAnchor?.y??viewport.clientHeight/2);const inserted=[];
   for(const file of items){if(!file.type.startsWith('image/'))continue;if(file.size>30*1024*1024){toast('图片超过 30 MB');continue}const src=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file)});if(!imageSource(src)){toast('支持 PNG、JPEG、WebP 和 GIF 图片');continue}const image=new Image();image.src=src;await image.decode();const width=Math.max(160,Math.min(image.naturalWidth,640));inserted.push({id:crypto.randomUUID(),kind:'image',markdown:'',src,aspect:image.naturalWidth/image.naturalHeight,x:point.x+inserted.length*24,y:point.y+inserted.length*24,width})}
   if(!inserted.length&&text)inserted.push({id:crypto.randomUUID(),x:point.x,y:point.y,width:560,markdown:text});
   if(pageId!==notebook.activePage){toast('粘贴期间切换了页面，请重新粘贴');return}if(!inserted.length)return;checkpoint();doc.notes.push(...inserted);clearSelection();selected.notes=inserted.map(n=>doc.notes.indexOf(n));render();persist();toast('已粘贴，可拖动顶部移动，拖动右下角调整大小');
 }
-document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;const files=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean),text=e.clipboardData?.getData('text/plain');if(!files.length&&!text)return;e.preventDefault();pasteItems(files,text).catch(()=>toast('粘贴失败，请重试'))});
+document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;const files=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean),text=e.clipboardData?.getData('text/plain');if(!files.length&&!text)return;e.preventDefault();try{if(pasteSelectionText(text))return;pasteItems(files,text).catch(()=>toast('粘贴失败，请重试'))}catch(error){toast('粘贴失败：'+error.message)}});
 // The cursor lives outside the transformed scene, so its size follows zoom once.
 const penCursor=$('#pen-cursor');let penPosition=null,lastPenCursorTime=-Infinity;
 function clearPenCursor(){penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true}
