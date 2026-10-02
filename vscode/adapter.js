@@ -10,7 +10,7 @@ window.addEventListener('focus',clipboardFocus);window.addEventListener('blur',c
 window.addEventListener('keydown',event=>{
   if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
   const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;
-  if(!command||$('#editor').open||event.target.matches?.('input,textarea,select')||event.target.closest?.('[contenteditable="true"],.monaco-editor,#terminal-panel'))return;
+  if(!command||window.inkspaceDiagram?.editing()||$('#editor').open||event.target.matches?.('input,textarea,select')||event.target.closest?.('[contenteditable="true"],.monaco-editor,#terminal-panel'))return;
   event.preventDefault();event.stopImmediatePropagation();
   if(!event.repeat)codium.postMessage({type:'history-shortcut',command});
 },{capture:true});
@@ -87,6 +87,39 @@ async function runCodiumDiagnostic(action){
     finally{desktop.inkRasterAsync=raster;doc=oldDoc;Object.assign(view,oldView);render();await window.inkspaceCairoIdle()}
   }
   if(action==='a4-layout'){const layout=$('#page-layout');layout.value='a4-portrait';layout.dispatchEvent(new Event('change'));await flushed();const portrait=$('#a4-pages').dataset.pageWidth;layout.value='a4-landscape';layout.dispatchEvent(new Event('change'));await flushed();const landscape=$('#a4-pages').dataset.pageWidth;if(portrait===landscape||!$('#a4-pages g').getAttribute('stroke-dasharray'))throw Error('A4 layout dimensions failed');return{layout:doc.background.layout,portrait,landscape}}
+  if(action==='diagram'){
+    const api=window.inkspaceDiagram;if(!api?.graph)throw Error('Diagram editor did not initialize');
+    const g=api.graph,model=g.getModel();
+    const a=api.add('rect');g.cellLabelChanged(a,'Node $x^2$');g.moveCells([a],-400,0);
+    const state=g.view.getState(a),rect=viewport.getBoundingClientRect(),target=state.shape.node,start={x:rect.left+state.x+state.width/2,y:rect.top+state.y+state.height/2},oldX=a.geometry.x,strokeCount=doc.strokes.length;
+    const mouse=(type,dx,dy)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerType:'mouse',pointerId:97,button:0,buttons:type==='pointerup'?0:1,clientX:start.x+dx,clientY:start.y+dy}));
+    mouse('pointerdown',0,0);mouse('pointermove',40,20);mouse('pointerup',40,20);
+    if(a.geometry.x===oldX||doc.strokes.length!==strokeCount||g.getSelectionCell()!==a)throw Error('Actual mouse drag failed or started ink');
+    const b=api.add('ellipse');g.cellLabelChanged(b,'Target');g.setSelectionCells([a,b]);const edge=api.connect();
+    if(!edge||edge.source!==a||edge.target!==b)throw Error('Attached connector failed');
+    const before=edge.geometry?.clone(),oldState=g.view.getState(edge).absolutePoints.map(p=>p&&{x:p.x,y:p.y});
+    g.moveCells([a],60,30);const after=g.view.getState(edge).absolutePoints;
+    if(after[0].x===oldState[0].x&&after[0].y===oldState[0].y)throw Error('Connector did not follow its node');
+    const geo=a.geometry.clone();geo.width*=1.5;geo.height*=1.5;g.resizeCell(a,geo);
+    if(Math.abs(a.geometry.width-240)>1e-6)throw Error('Node resize failed');
+    if(!$('#diagram-layer .katex'))throw Error('Offline formula label did not render');
+    g.view.getState(a).shape.node.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,button:0}));if(!g.isEditing()||!nodeEditor())throw Error('Node text editor failed');g.cellEditor.textarea.textContent='Edited $\\frac{a}{b}$';g.stopEditing(false);
+    if(!String(a.value).includes('Edited'))throw Error('Node text edit not committed');
+    g.setSelectionCells([a,b,edge]);const clip=selectionClipboardText();pasteAnchor={x:viewport.clientWidth/2,y:viewport.clientHeight/2+200};
+    const initial=g.getChildCells(g.getDefaultParent(),true,true).length;if(!pasteSelectionText(clip))throw Error('Diagram clipboard not accepted');
+    if(g.getChildCells(g.getDefaultParent(),true,true).length!==initial+3)throw Error('Diagram copy/paste lost cells');
+    const pastedEdge=g.getSelectionCells().find(c=>c.edge);if(!pastedEdge?.source||!pastedEdge.target||pastedEdge.source===a)throw Error('Pasted connector did not reference new nodes');
+    undo();if(g.getChildCells(g.getDefaultParent(),true,true).length!==initial)throw Error('Diagram undo failed');redo();if(g.getChildCells(g.getDefaultParent(),true,true).length!==initial+3)throw Error('Diagram redo failed');
+    const exportXML=doc.diagram,encoded=encodeURIComponent(exportXML),compressed=new Uint8Array(await new Response(new Blob([encoded]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+    let binary='';for(const byte of compressed)binary+=String.fromCharCode(byte);
+    const count=g.getChildCells(g.getDefaultParent(),true,true).length;
+    await api.importXML('<mxfile><diagram>'+btoa(binary)+'</diagram></mxfile>');
+    if(g.getChildCells(g.getDefaultParent(),true,true).length!==count*2)throw Error('Compressed draw.io import failed');undo();
+    const formulaNode=$('#diagram-layer .katex .vlist');if(!formulaNode||getComputedStyle(formulaNode).position!=='relative')throw Error('Formula layout styles missing');
+    const previewContainer=document.createElement('div');previewContainer.style.cssText='position:absolute;left:0;top:0;width:'+viewport.clientWidth+'px;height:'+viewport.clientHeight+'px';previewContainer.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="'+viewport.clientWidth+'" height="'+viewport.clientHeight+'">'+api.svg()+'</svg>';document.body.appendChild(previewContainer);const preview=await PdfApi.toPng(previewContainer,{backgroundColor:'#ffffff'});previewContainer.remove();
+    await flushed();return{mouseEditor:true,mouseDragEvents:true,nodeResize:true,attachedArrows:true,formula:true,textEditing:true,copyPaste:true,undoRedo:true,drawioImport:true,xml:doc.diagram,preview};
+    function nodeEditor(){return $('#diagram-layer [contenteditable="true"]')}
+  }
   if(action==='clipboard-roundtrip'){
     const before={strokes:doc.strokes.length,notes:doc.notes.length,shapes:doc.shapes.length};
     checkpoint();doc.strokes.push({brush:'xournal',color:'#000000',width:3,points:[{x:100,y:100,p:0},{x:130,y:120,p:.8}]});doc.shapes.push({kind:'rect',color:'#000000',width:2,x:140,y:100,x2:180,y2:140});

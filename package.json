@@ -41,6 +41,7 @@
     "markdown-it-task-lists": "^2.1.1",
     "markdown-it-texmath": "^1.0.0",
     "monaco-editor": "^0.57.0",
+    "mxgraph": "4.2.2",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",
     "ws": "8.22.0"
@@ -97,5 +98,5 @@
   },
   "description": "Windows infinite handwriting canvas with Markdown, equations and selectable PDF annotations",
   "author": "Inkspace",
-  "license": "GPL-2.0-or-later"
+  "license": "GPL-3.0-or-later"
 }

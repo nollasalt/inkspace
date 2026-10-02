@@ -83,6 +83,7 @@ function renderA4Pages(){
     else if(s.kind==='ellipse'){const count=Math.max(32,Math.ceil(Math.PI*(b.w/w+b.h/h)*8));let prev={x:b.x+b.w,y:b.y+b.h/2};for(let i=1;i<=count;i++){const t=i/count*Math.PI*2,q={x:b.x+b.w/2+Math.cos(t)*b.w/2,y:b.y+b.h/2+Math.sin(t)*b.h/2};segment(prev,q,r);prev=q}}
     else{segment({x:s.x,y:s.y},{x:s.x2,y:s.y2},r);if(s.kind==='arrow'){const [a,z]=arrowPoints(s);segment(a,{x:s.x2,y:s.y2},r);segment(z,{x:s.x2,y:s.y2},r)}}
   }
+  const diagramCoverage=window.inkspaceDiagram?.coverage();for(const b of diagramCoverage?.boxes||[])box(b);for(const l of diagramCoverage?.lines||[])for(let i=1;i<l.points.length;i++)segment(l.points[i-1],l.points[i],l.width/2);
   for(const n of doc.notes)box(itemBounds('notes',n));
   for(const asset of doc.pdfs||[])for(const p of asset.pages)box({x:p.x,y:p.y,w:p.width,h:p.height});
   const paths=[];
@@ -151,7 +152,7 @@ function paintScene(context,regions=null){
 }
 function commitScene(){
   ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='copy';ctx.drawImage(sceneBuffer,0,0);ctx.globalCompositeOperation='source-over';worldTransform(ctx);
-  $('#scene').style.transform='';$('#scene').style.willChange=active?.type==='pan'?'transform':'auto';paintedView={x:view.x,y:view.y};renderedScale=view.scale;renderNotes();if(typeof renderPdfs==='function')renderPdfs();renderBackground();overlaySelection();
+  $('#scene').style.transform='';$('#scene').style.willChange=active?.type==='pan'?'transform':'auto';paintedView={x:view.x,y:view.y};renderedScale=view.scale;renderNotes();window.inkspaceDiagram?.render();if(typeof renderPdfs==='function')renderPdfs();renderBackground();overlaySelection();
 }
 function render(){
   cancelZoomPreview();

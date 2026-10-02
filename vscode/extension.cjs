@@ -41,7 +41,7 @@ function activate(context){
           return;
         }
         if(message.type==='export'){
-          if(typeof message.name!=='string'||!['application/pdf','image/svg+xml','application/json'].includes(message.mime))return;const target=await vscode.window.showSaveDialog({defaultUri:vscode.Uri.file(path.join(path.dirname(document.uri.fsPath),path.basename(message.name)))});if(!target)return;
+          if(typeof message.name!=='string'||!['application/pdf','image/svg+xml','application/json','application/xml'].includes(message.mime))return;const target=await vscode.window.showSaveDialog({defaultUri:vscode.Uri.file(path.join(path.dirname(document.uri.fsPath),path.basename(message.name)))});if(!target)return;
           const bytes=typeof message.text==='string'?Buffer.from(message.text):Buffer.from(message.bytes);if(bytes.length>150*1024*1024)throw Error('导出内容过大');await vscode.workspace.fs.writeFile(target,bytes);vscode.window.showInformationMessage('已导出 '+path.basename(target.path));
         }
       }).catch(error=>vscode.window.showErrorMessage(error.message));

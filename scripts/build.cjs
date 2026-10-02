@@ -1,5 +1,8 @@
 const fs=require('node:fs'),path=require('node:path'),esbuild=require('esbuild');
 fs.mkdirSync('vendor',{recursive:true});
+esbuild.buildSync({entryPoints:['src/diagram.js'],bundle:true,format:'iife',outfile:'vendor/diagram.js',minify:true,keepNames:true,target:'es2022',legalComments:'eof'});
+fs.copyFileSync('node_modules/mxgraph/LICENSE','vendor/mxgraph-LICENSE');
+fs.cpSync('node_modules/mxgraph/javascript/src/images','vendor/mxgraph/images',{recursive:true});
 esbuild.buildSync({entryPoints:['src/file-move.js'],bundle:true,platform:'node',format:'cjs',outfile:'vendor/file-move.cjs',minify:true,target:'node22',legalComments:'eof'});
 esbuild.buildSync({entryPoints:['src/content.js'],bundle:true,format:'iife',globalName:'InkContent',outfile:'vendor/content.js',minify:true,target:'es2022',legalComments:'eof'});
 esbuild.buildSync({entryPoints:['src/pdf-api.js'],bundle:true,format:'iife',globalName:'PdfApi',outfile:'vendor/pdf-api.js',minify:true,target:'es2022',legalComments:'eof'});

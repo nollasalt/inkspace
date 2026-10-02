@@ -46,9 +46,10 @@ let pasteAnchor=null;
 viewport.addEventListener('pointermove',e=>{if(e.pointerType!=='touch')pasteAnchor=local(e)});
 const selectionClipboardHeader='INKSPACE_SELECTION_V1\n';
 function selectionClipboardText(){
-  finishInteraction();const origin=selectionBounds();if(!origin)return '';
+  finishInteraction();const diagram=window.inkspaceDiagram?.copy(),origin=union([selectionBounds(),diagram?.bounds].filter(Boolean));if(!origin)return '';
   const fragment={format:'inkspace',version:1,background:{...backgroundSettings()},strokes:[],notes:[],shapes:[]};
   for(const {kind,value}of selectionScaleSnapshot())fragment[kind].push(value);
+  if(diagram)fragment.diagram=diagram.xml;
   return selectionClipboardHeader+JSON.stringify({origin:{x:origin.x,y:origin.y},document:fragment});
 }
 function pasteSelectionText(text){
@@ -56,7 +57,7 @@ function pasteSelectionText(text){
   if(text.length>150*1024*1024)throw Error('选中内容超过 150 MB');
   const data=JSON.parse(text.slice(header[0].length));
   if(![data.origin?.x,data.origin?.y].every(Number.isFinite)||!valid(data.document))throw Error('剪贴板中的笔记内容无效');
-  if(!['strokes','notes','shapes'].some(kind=>data.document[kind].length))return true;
+  if(!['strokes','notes','shapes'].some(kind=>data.document[kind].length)&&!data.document.diagram)return true;
   finishInteraction();const point=world(pasteAnchor?.x??viewport.clientWidth/2,pasteAnchor?.y??viewport.clientHeight/2),dx=point.x-data.origin.x,dy=point.y-data.origin.y;
   const translate=p=>({...p,x:p.x+dx,y:p.y+dy});
   const fragment=data.document;
@@ -65,6 +66,7 @@ function pasteSelectionText(text){
   fragment.notes=fragment.notes.map(n=>({...translate(n),id:crypto.randomUUID()}));
   checkpoint();clearSelection();
   for(const kind of ['strokes','notes','shapes']){const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
+  if(fragment.diagram)window.inkspaceDiagram?.paste(fragment.diagram,dx,dy);
   render();persist();return true;
 }
 document.addEventListener('copy',event=>{
@@ -98,7 +100,7 @@ function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#wid
 for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown','pointerup'])viewport.addEventListener(type,updatePenCursor,{capture:true});
 viewport.addEventListener('pointerleave',e=>{if(penPosition&&e.pointerType!=='pen')return;const p=local(e);if(p.x>=0&&p.y>=0&&p.x<viewport.clientWidth&&p.y<viewport.clientHeight)return;clearPenCursor()});window.addEventListener('blur',clearPenCursor);
 $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventListener('input',refreshPenCursor);
-const originalRender=render;render=function(){originalRender();refreshPenCursor();$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'};
+const originalRender=render;render=function(){originalRender();refreshPenCursor();$('#diagram-options').hidden=tool!=='diagram';$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'};
 document.querySelectorAll('.menu').forEach(menu=>menu.addEventListener('toggle',()=>{if(menu.open)document.querySelectorAll('.menu').forEach(other=>{if(other!==menu)other.open=false})}));
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('.menu'))document.querySelectorAll('.menu').forEach(m=>m.open=false)});
 document.querySelectorAll('.menu button').forEach(button=>button.addEventListener('click',()=>button.closest('.menu').open=false));
@@ -106,7 +108,7 @@ $('#sidebar-toggle').onclick=()=>{document.body.classList.toggle('sidebar-hidden
 window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const key=e.key.toLowerCase();if(['s','o','n'].includes(key)&&!document.querySelector('dialog[open]')){e.preventDefault();if(key==='s')saveNotebook(e.shiftKey);if(key==='o')openNotebook();if(key==='n')$('#new').click()}});
 let lastCanvasPointer='mouse';
 viewport.addEventListener('pointerdown',e=>{lastCanvasPointer=e.pointerType},{capture:true});
-viewport.addEventListener('dblclick',e=>{if(e.button!==0||lastCanvasPointer!=='mouse'||e.pointerType==='pen'||e.sourceCapabilities?.firesTouchEvents||e.target.closest('.note,.zoom,.pdf-page')||document.querySelector('dialog[open]'))return;finishInteraction();clearSelection();const p=local(e),position=world(p.x,p.y);edit({id:crypto.randomUUID(),...position,width:560,markdown:''})});
+viewport.addEventListener('dblclick',e=>{if(e.button!==0||lastCanvasPointer!=='mouse'||e.pointerType==='pen'||e.sourceCapabilities?.firesTouchEvents||e.target.closest('.note,.zoom,.pdf-page,#diagram-layer')||document.querySelector('dialog[open]'))return;finishInteraction();clearSelection();const p=local(e),position=world(p.x,p.y);edit({id:crypto.randomUUID(),...position,width:560,markdown:''})});
 // app.js already recovered legacy browser files; now accept the notebook envelope.
 let initial=doc;try{const stored=JSON.parse(localStorage.getItem('inkspace.document'));if(valid(stored))initial=stored}catch{}
 adoptDocument(initial);savedDocument=contentSignature();
