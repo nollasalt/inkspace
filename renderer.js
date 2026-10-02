@@ -46,6 +46,12 @@ function renderBackground(){
   viewport.style.backgroundColor=bg.color;viewport.style.backgroundImage='none';paper.style.backgroundColor=bg.color;
   paper.style.backgroundImage=bg.type==='grid'?`linear-gradient(${line} 1px,transparent 1px),linear-gradient(90deg,${line} 1px,transparent 1px)`:bg.type==='ruled'?`linear-gradient(${line} 1px,transparent 1px)`:bg.type==='dots'?`radial-gradient(${line} 1px,transparent 1px)`:'none';
   paper.style.backgroundSize=`${size}px ${size}px`;paper.style.backgroundPosition=`${view.x+surface.padding}px ${view.y+surface.padding}px`;
+  const layout=bg.layout||'infinite';$('#page-layout').value=layout;
+  if(layout==='a4-portrait'||layout==='a4-landscape'){
+    const a4=[210*96/25.4,297*96/25.4];if(layout==='a4-landscape')a4.reverse();const w=a4[0]*view.scale,h=a4[1]*view.scale,gap=24*view.scale,x=w+gap,y=h+gap,border=Math.min(1,w/4,h/4),image=paper.style.backgroundImage;
+    const seams=[`linear-gradient(90deg, transparent 0px, transparent ${Math.max(0,w-border)}px, #cbd0d5 ${Math.max(0,w-border)}px, #cbd0d5 ${w}px, #e8ebee ${w}px, #e8ebee ${x}px)`,`linear-gradient(transparent 0px, transparent ${Math.max(0,h-border)}px, #cbd0d5 ${Math.max(0,h-border)}px, #cbd0d5 ${h}px, #e8ebee ${h}px, #e8ebee ${y}px)`];
+    paper.style.backgroundImage=seams.join(', ')+(image==='none'?'':', '+image);paper.style.backgroundSize=`${x}px ${y}px, ${x}px ${y}px`+(image==='none'?'':`, ${size}px ${size}px`);paper.style.backgroundRepeat='repeat';
+  }
   $('#background-kind').value=bg.type;$('#background-color').value=bg.color;$('#background-spacing').value=String(bg.spacing);
   $('#text-size').value=String(textSize());$('#background-spacing').title=bg.spacing==='auto'?`按 ${textSize()}px 字号设置 ${backgroundSpacing()}px 行距`:'自定义世界坐标间距';
 }

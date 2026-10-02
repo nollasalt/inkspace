@@ -294,3 +294,5 @@ for(const dpr of [1,1.25,2]){
 console.log('通过：实时/保存墨迹覆盖一致（DPR 1/1.25/2）、raw 事件缺失回退、零压力落笔与抬笔坐标跳变。');
 a.dom.window.close();b.dom.window.close();
 
+
+setBackground('#background-kind','blank');setBackground('#page-layout','a4-portrait');assert.equal(run('doc.background.layout'),'a4-portrait');let dimensions=w.document.querySelector('#paper').style.backgroundSize.split(',')[0].split(' ').map(parseFloat);assert(Math.abs(dimensions[0]-(210*96/25.4+24)*run('view.scale'))<.01);setBackground('#page-layout','a4-landscape');dimensions=w.document.querySelector('#paper').style.backgroundSize.split(',')[0].split(' ').map(parseFloat);assert(Math.abs(dimensions[0]-(297*96/25.4+24)*run('view.scale'))<.01);assert(run('valid(JSON.parse(JSON.stringify(doc)))'));run('flushPersist()');assert.equal(JSON.parse(w.localStorage.getItem('inkspace.document')).background.layout,'a4-landscape');setBackground('#page-layout','infinite');assert.equal(w.document.querySelector('#paper').style.backgroundImage,'none');console.log('Passed A4 portrait/landscape infinite tiling, dimensions, layout persistence and infinite-mode restoration.');

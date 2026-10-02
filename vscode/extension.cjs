@@ -28,7 +28,7 @@ function activate(context){
         if(message.type==='ready'){inputFocus();state.ready=true;active=state;refresh();update();return}
         if(message.type==='pages'){state.pages=message.pages;state.activePage=message.activePage;if(panel.active){active=state;refresh()}return}
         if(message.type==='edit'){
-          try{assertNotebook(message.text);if(message.version!==document.version)throw Error('文件在画布外发生修改，已保留画布草稿。请另存草稿或重新打开文件。');if(message.text!==document.getText()){const edit=new vscode.WorkspaceEdit();edit.replace(document.uri,new vscode.Range(0,0,document.lineCount,0),message.text);state.applying=true;state.lastOwn=message.text;try{if(!await vscode.workspace.applyEdit(edit))throw Error('无法更新笔记文件')}finally{state.applying=false}}if(message.autoSave)await document.save();panel.webview.postMessage({type:'ack',id:message.id,version:document.version})}
+          try{assertNotebook(message.text);if(message.version!==document.version)throw Error('文件在画布外发生修改，已保留画布草稿。请另存草稿或重新打开文件。');if(message.text!==document.getText()){const edit=new vscode.WorkspaceEdit();edit.replace(document.uri,new vscode.Range(0,0,document.lineCount,0),message.text);state.applying=true;state.lastOwn=message.text;try{if(!await vscode.workspace.applyEdit(edit))throw Error('无法更新笔记文件')}finally{state.applying=false}}if(message.autoSave){state.applying=true;try{if(!await document.save())throw Error('自动保存失败，请检查文件权限或磁盘空间')}finally{state.applying=false}} panel.webview.postMessage({type:'ack',id:message.id,version:document.version})}
           catch(error){panel.webview.postMessage({type:'ack',id:message.id,version:document.version,error:error.message});vscode.window.showErrorMessage(error.message)}return;
         }
         if(message.type==='command'){
