@@ -30,6 +30,10 @@ export function codeBlock(source,language=''){
   return `<pre><code class="hljs${known?' language-'+language:''}">${value}</code></pre>`;
 }
 const parser=new MarkdownIt({html:false,linkify:true,breaks:true,highlight:(source,language)=>codeBlock(source,language)}).use(taskLists).use(texmath,{engine:katex,delimiters:['dollars','brackets'],katexOptions:{trust:false,maxExpand:500,maxSize:20,strict:'ignore',output:'htmlAndMathml'}});
+// Reuse texmath's recognizers to let display math interrupt a paragraph.
+// This preserves fenced/inline code and requires no source rewriting.
+const mathBlockStarts=texmath.mergeDelimiters(['dollars','brackets']).block.map(rule=>texmath.block(rule));
+parser.block.ruler.before('paragraph','inkspace_math_start',(state,start,end,silent)=>silent&&state.sCount[start]-state.blkIndent<4&&mathBlockStarts.some(rule=>rule(state,start,end,true)),{alt:['paragraph']});
 const imageRule=parser.renderer.rules.image;
 parser.renderer.rules.image=(tokens,index,options,env,self)=>{const token=tokens[index],src=token.attrGet('src');if(src&&!/^(https?:|data:image\/)/i.test(src)){token.attrSet('data-inkspace-src',src);token.attrSet('src','data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=')}token.attrSet('loading','lazy');return imageRule(tokens,index,options,env,self)};
 parser.renderer.rules.link_open=(tokens,index,options,env,self)=>{tokens[index].attrSet('target','_blank');tokens[index].attrSet('rel','noopener noreferrer');return self.renderToken(tokens,index,options)};

@@ -60,6 +60,15 @@ assert.equal(w.document.querySelectorAll('.katex').length,4);
 assert.equal(w.document.querySelectorAll('.katex-error').length,0);
 assert.ok(w.document.querySelector('code.language-python .hljs-keyword'));
 assert.ok(w.document.querySelector('math'));
+
+// Display math may follow ordinary text without an intervening blank line.
+const schedulerSource="于是 Scheduler 估算：\n\\[\n\\text{Expected useful tokens}\n\\times\n\\text{Engine step rate}\n\\]";
+for(const source of [schedulerSource,schedulerSource.replaceAll('\n','\r\n'),schedulerSource+'\n下一段文字',schedulerSource.replace('\\[',()=> '$$').replace('\\]',()=> '$$')]){
+  const rendered=new JSDOM(run('markdown('+JSON.stringify(source)+')')).window.document;
+  assert.equal(rendered.querySelectorAll('.katex-display').length,1);assert.equal(rendered.querySelectorAll('.katex-error').length,0);assert.equal(rendered.querySelector('math mtext').textContent.replace(/\s/g,' '),'Expected useful tokens');assert.ok(rendered.querySelector('math').textContent.replace(/\s/g,' ').includes('Engine step rate'));
+}
+const literalMath=new JSDOM(run('markdown('+JSON.stringify('\x60\x60\x60text\n'+schedulerSource+'\n\x60\x60\x60')+')')).window.document;
+assert.equal(literalMath.querySelectorAll('.katex').length,0);assert.ok(literalMath.querySelector('code').textContent.includes('\\['));
 const note=w.document.querySelector('.note'),body=note.querySelector('.note-body');
 run('zoom(2,400,300)');assert.equal(w.document.querySelector('.note'),note);assert.equal(note.querySelector('.note-body'),body);
 run("doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[]};view={x:0,y:0,scale:1};render()");
