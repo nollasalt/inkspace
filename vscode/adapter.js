@@ -80,6 +80,22 @@ window.addEventListener('message',async event=>{const message=event.data;
   if(message.type==='request'){try{let result=true;if(message.command==='tool'){if(!['pen','erase','pan','text','select','shape','diagram'].includes(message.tool))throw Error('未知工具');if(!window.inkspaceDiagram?.editing()&&!$('#editor').open){activateTool(message.tool,true,false);await flushed()}}else if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){message.command==='undo'?undo():redo();await flushed()}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 async function runCodiumDiagnostic(action){
+  if(action==='text-guides'){
+    await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool};
+    try{
+      doc={...doc,notes:[{id:'guide-text',x:40,y:40,width:280,markdown:'Alpha beta\n\nGamma'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};history=[];future=[];tool='pen';clearSelection();
+      for(const scale of [.75,1,2]){
+        view={x:80,y:60,scale};render();const cache=noteCache.get('guide-text'),n=doc.notes[0],paragraphs=cache.body.querySelectorAll('p'),first=document.createRange(),last=document.createRange();first.selectNodeContents(paragraphs[0].firstChild);last.selectNodeContents(paragraphs[1].firstChild);
+        const start=first.getClientRects()[0],end=[...last.getClientRects()].at(-1),bar=cache.el.querySelector('.note-bar'),handle=cache.el.querySelector('.note-resize'),barRect=bar.getBoundingClientRect(),handleRect=handle.getBoundingClientRect();
+        if(Math.abs(barRect.right-start.left)>.6||Math.abs(barRect.bottom-start.top)>.6||Math.abs(handleRect.left+handleRect.width/2-end.right)>.6||Math.abs(handleRect.top+handleRect.height/2-end.bottom)>.6)throw Error('Text handles do not align at scale '+scale);
+        if(getComputedStyle(cache.el,'::after').borderTopStyle!=='dashed')throw Error('Missing dashed text guide');
+        const pointer=(target,type,x,y)=>target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:221,pointerType:'mouse',button:0,buttons:type==='pointerup'?0:1,clientX:x,clientY:y}));
+        let x=handleRect.left+handleRect.width/2,y=handleRect.top+handleRect.height/2,width=n.width;pointer(handle,'pointerdown',x,y);pointer(viewport,'pointermove',x+8*scale,y);pointer(viewport,'pointerup',x+8*scale,y);if(Math.abs(n.width-width-8)>1e-6)throw Error('Text resize jumped to container edge');
+        const move=bar.getBoundingClientRect(),oldX=n.x,oldY=n.y;x=move.left+move.width/2;y=move.top+move.height/2;pointer(bar,'pointerdown',x,y);pointer(viewport,'pointermove',x+10*scale,y+5*scale);pointer(viewport,'pointerup',x+10*scale,y+5*scale);if(Math.abs(n.x-oldX-10)>1e-6||Math.abs(n.y-oldY-5)>1e-6)throw Error('Text move handle failed');
+      }
+      return{dashedHoverGuide:true,startAndEndAligned:true,scales:3,resizeWithoutJump:true,moveHandle:true};
+    }finally{finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
+  }
   if(action==='inline-text'){
     await window.inkspaceCairoIdle();const saved={doc,view:{...view},history,future,tool};
     try{
