@@ -23,8 +23,8 @@
     if(created){checkpoint();note.markdown='';doc.notes.push(note)}
     renderNotes();const cache=noteCache.get(note.id),input=document.createElement('textarea');
     input.className='inline-note-editor';input.spellcheck=false;input.placeholder='输入文本或 Markdown…';input.setAttribute('aria-label','文本框内容');input.value=note.markdown;
-    session={note,created,checkpointed:created,page:notebook.activePage,input,el:cache.el,cache};cache.el.classList.add('editing-text');cache.body.replaceChildren(input);
-    const resizeInput=()=>{input.style.height='0px';input.style.height=Math.max(textSize()*1.75,input.scrollHeight)+'px';layoutNote(note,cache);scheduleA4Pages()};
+    session={note,created,creationAnchor:created?{x:note.x,y:note.y}:null,checkpointed:created,page:notebook.activePage,input,el:cache.el,cache};cache.el.classList.add('editing-text');cache.body.replaceChildren(input);
+    const resizeInput=()=>{input.style.height='0px';input.style.height=Math.max(textSize()*1.75,input.scrollHeight)+'px';layoutNote(note,cache);if(session?.creationAnchor){const size=note.scale||1,style=getComputedStyle(cache.el),anchor=session.creationAnchor;note.x=anchor.x-(parseFloat(cache.el.style.getPropertyValue('--text-startX'))+parseFloat(style.borderLeftWidth))*size;note.y=anchor.y-(parseFloat(cache.el.style.getPropertyValue('--text-startY'))+parseFloat(style.borderTopWidth))*size;placeNote(note,cache.el);if(input.value.length)session.creationAnchor=null}scheduleA4Pages()};
     input.addEventListener('input',()=>{if(session?.input!==input)return;if(!session.checkpointed){checkpoint();session.checkpointed=true}note.markdown=input.value;resizeInput();persist()});
     input.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0&&!space)event.stopPropagation()});
     input.addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
