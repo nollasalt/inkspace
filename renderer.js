@@ -134,7 +134,7 @@ function placeNote(n,el,dx=0,dy=0){
   el.style.transform='';el.style.left=(Math.round((view.x+n.x*view.scale+dx)*dpr)/dpr)+'px';el.style.top=(Math.round((view.y+n.y*view.scale+dy)*dpr)/dpr)+'px';
   // Layout lives in world units. Zoom must never change line breaking, font
   // metrics, fixed CSS padding, or browser minimum-font-size decisions.
-  el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
+  el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.setProperty('--control-unit',(1/s)+'px');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
 }
 function renderNotes(){
   window.inkspaceInlineText?.sync();
@@ -272,12 +272,12 @@ function presentInteraction(){
   }else if(active?.type==='select'){
     overlaySelection();
   }else if(active?.type==='resize-text'){
-    const {n,base,bounds:b,factor}=active,el=noteCache.get(n.id)?.el;if(el){placeNote(n,el,(base.x-b.x)*view.scale*(factor-1),(base.y-b.y)*view.scale*(factor-1));el.style.transform=`scale(${view.scale*base.scale*factor})`}
+    const {n,base,bounds:b,factor}=active,el=noteCache.get(n.id)?.el;if(el){placeNote(n,el,(base.x-b.x)*view.scale*(factor-1),(base.y-b.y)*view.scale*(factor-1));el.style.setProperty('--control-unit',(1/(view.scale*base.scale*factor))+'px');el.style.transform=`scale(${view.scale*base.scale*factor})`}
   }else if(active?.type==='resize-selection'){
     const {bounds:b,factor}=active,origin={x:view.x+b.x*view.scale,y:view.y+b.y*view.scale};
     inkLayers[1].canvas.style.transformOrigin=`${origin.x+surface.padding}px ${origin.y+surface.padding}px`;
     inkLayers[1].canvas.style.transform=`scale(${factor})`;
-    for(const i of selected.notes){const n=doc.notes[i],el=noteCache.get(n.id).el;placeNote(n,el,(n.x-b.x)*view.scale*(factor-1),(n.y-b.y)*view.scale*(factor-1));el.style.transform=`scale(${view.scale*(n.scale||1)*factor})`}
+    for(const i of selected.notes){const n=doc.notes[i],el=noteCache.get(n.id).el;placeNote(n,el,(n.x-b.x)*view.scale*(factor-1),(n.y-b.y)*view.scale*(factor-1));el.style.setProperty('--control-unit',(1/(view.scale*(n.scale||1)*factor))+'px');el.style.transform=`scale(${view.scale*(n.scale||1)*factor})`}
     const selection=$('#selection');selection.style.transformOrigin='4px 4px';selection.style.transform=`scale(${factor})`;
   }else if(active?.type==='move-selection'){
     const dx=active.offset.x*view.scale,dy=active.offset.y*view.scale;
