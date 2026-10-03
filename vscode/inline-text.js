@@ -17,7 +17,7 @@
   function sync(){if(session&&(session.page!==notebook.activePage||!doc.notes.includes(session.note)))finish(false)}
   edit=function(note){
     if(note.kind==='image')return;
-    if(session?.note===note){session.input.focus();return}
+    if(session?.note===note){session.input.focus({preventScroll:true});return}
     finish();finishInteraction();clearSelection();
     const created=!doc.notes.includes(note);
     if(created){checkpoint();note.markdown='';doc.notes.push(note)}
@@ -29,7 +29,7 @@
     input.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0&&!space)event.stopPropagation()});
     input.addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
     input.addEventListener('blur',()=>{if(session?.input===input)finish()});
-    input.focus();input.setSelectionRange(input.value.length,input.value.length);resizeInput();renderBackground();overlaySelection();if(created)persist();
+    input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);resizeInput();renderBackground();overlaySelection();if(created)persist();
   };
   document.addEventListener('pointerdown',event=>{if(session&&event.pointerType==='mouse'&&!session.input.contains(event.target))finish()},{capture:true});
   const switchBeforeInlineText=switchPage;
@@ -56,7 +56,7 @@
     }
     const rects=contentRects(root);
     const outer=cache.el.getBoundingClientRect(),scale=view.scale*(note.scale||1),style=getComputedStyle(cache.el),origin={left:outer.left+parseFloat(style.borderLeftWidth)*scale,top:outer.top+parseFloat(style.borderTopWidth)*scale},first=rects[0],last=rects.at(-1);
-    if(first){const x=Math.min(...rects.map(r=>r.left)),y=Math.min(...rects.map(r=>r.top)),right=Math.max(...rects.map(r=>r.right)),bottom=Math.max(...rects.map(r=>r.bottom));
+    if(first){const boxes=[...rects,...root.querySelectorAll('pre')].map(r=>r instanceof Element?r.getBoundingClientRect():r);const x=Math.min(...boxes.map(r=>r.left)),y=Math.min(...boxes.map(r=>r.top)),right=Math.max(...boxes.map(r=>r.right)),bottom=Math.max(...boxes.map(r=>r.bottom));
       for(const [key,value]of Object.entries({left:(x-origin.left)/scale,top:(y-origin.top)/scale,width:(right-x)/scale,height:(bottom-y)/scale,startX:(first.left-origin.left)/scale,startY:(first.top-origin.top)/scale,endX:(last.right-origin.left)/scale,endY:(last.bottom-origin.top)/scale}))cache.el.style.setProperty('--text-'+key,value+'px');
     }else{for(const [key,value]of Object.entries({left:21,top:33,width:Math.max(0,(note.width||320)-42),height:textSize()*1.75,startX:21,startY:33,endX:21,endY:33+textSize()*1.75}))cache.el.style.setProperty('--text-'+key,value+'px')}
     mirror?.remove();cache.guideSignature=signature;

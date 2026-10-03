@@ -35,6 +35,20 @@ app.whenReady().then(async()=>{
       }
     }
 
+
+    const codeLayout=await run('('+async function(){
+      await document.fonts.ready;let checked=0;
+      const code='    const value = "'+('long_identifier_'.repeat(30))+'";\n'+Array.from({length:55},(_,i)=>'    console.log('+i+', value);').join('\n');
+      for(const language of ['js','unknown'])for(const width of [100,180,320])for(const zoom of [.75,1,2])for(const noteScale of [1,1.7]){
+        window.inkspaceInlineText.finish();finishInteraction();const source='~~~'+language+'\n'+code+'\n~~~';doc={...doc,notes:[{id:'code-wrap',x:40,y:40,width,scale:noteScale,markdown:source}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:zoom};clearSelection();render();const n=doc.notes[0],el=noteCache.get(n.id).el,pre=el.querySelector('pre'),r=pre.getBoundingClientRect(),body=el.querySelector('.note-body').getBoundingClientRect(),bounds=window.inkspaceInlineText.bounds(n),totalScale=zoom*noteScale;
+        if(pre.textContent!==code+'\n')throw Error('Code source changed');if(r.left<body.left-.2||r.right>body.right+.2||pre.scrollWidth>pre.clientWidth+1||pre.scrollHeight>pre.clientHeight+1||pre.clientHeight<=420)throw Error(JSON.stringify({width,zoom,noteScale,rect:r.toJSON(),scrollWidth:pre.scrollWidth,clientWidth:pre.clientWidth,scrollHeight:pre.scrollHeight,clientHeight:pre.clientHeight}));
+        const walker=document.createTreeWalker(pre,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){const range=document.createRange();range.selectNodeContents(node);for(const glyph of range.getClientRects())if(glyph.width&&(glyph.left<r.left-.2||glyph.right>r.right+.2||glyph.bottom>r.bottom+.2))throw Error('Code glyph escaped code block')}
+        const top=el.getBoundingClientRect().top+parseFloat(getComputedStyle(el).borderTopWidth)*totalScale,guideTop=top+(bounds.y-n.y)*zoom,guideBottom=guideTop+bounds.h*zoom;if(guideTop>r.top+.2||guideBottom<r.bottom-.2||bounds.w*zoom<r.width-.2)throw Error('Code background escaped text controls');
+        edit(n);const input=el.querySelector('textarea');if(input.scrollWidth>input.clientWidth+1||input.scrollHeight>input.clientHeight+1)throw Error('Code source escaped editor');input.value+='\n';input.dispatchEvent(new Event('input',{bubbles:true}));window.inkspaceInlineText.finish();if(n.markdown!==source+'\n'||n.width!==width||n.scale!==noteScale)throw Error('Wrapping changed saved source or geometry');checked++;
+      }
+      return {checked,longLinesWrapped:true,wholeBlockVisible:true,backgroundInsideControls:true,sourcePreserved:true};
+    }.toString()+')()');
+    console.log(JSON.stringify({codeLayout}));
     const alignment=await run(
       '('+async function(){
         await document.fonts.ready;
