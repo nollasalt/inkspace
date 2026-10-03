@@ -11,3 +11,9 @@
 .note.note .note-bar,.note.note .note-resize,.note.note .note-scale{opacity:0;pointer-events:none}.note.note.mouse-hover .note-bar,.note.note.mouse-hover .note-resize,.note.note.mouse-hover .note-scale,.note.note.selected .note-bar,.note.note.selected .note-resize,.note.note.selected .note-scale,.note.note.editing-text .note-bar,.note.note.editing-text .note-resize,.note.note.editing-text .note-scale{opacity:1;pointer-events:auto}.note.note.mouse-hover::after,.note.note.selected::after,.note.note.editing-text::after{opacity:1}
 
 .note.note.scaling-text .note-bar,.note.note.scaling-text .note-resize,.note.note.scaling-text .note-scale{opacity:1;pointer-events:auto}.note.note.scaling-text::after{opacity:1}
+
+/* Image controls overlay the image; keep saved image positions unchanged. */
+.note.note.image-note .note-hit,.note.note.image-note::after{left:var(--text-left);top:var(--text-top);width:var(--text-width);height:var(--text-height)}
+.note.note.image-note .note-bar{left:calc(var(--text-left) + 1px);top:calc(var(--text-top) + 1px);width:calc(var(--text-width) - 2px)}
+.note.note.image-note .note-resize{left:calc(var(--text-left) + var(--text-width) - 13px);top:calc(var(--text-top) + 1px)}
+.note.note.image-note .note-scale{left:calc(var(--text-left) + var(--text-width) - 11px);top:calc(var(--text-top) + var(--text-height) - 11px)}
