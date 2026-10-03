@@ -12,7 +12,7 @@ function activate(context){
   const pages={onDidChangeTreeData:emitter.event,getTreeItem:item=>item,getChildren:()=>{
     if(!active?.pages)return[];return active.pages.map((page,index)=>{const item=new vscode.TreeItem(`${String(index+1).padStart(2,'0')}  ${page.title}`);item.id=page.id;item.contextValue='inkspace.page';item.iconPath=new vscode.ThemeIcon(page.id===active.activePage?'circle-filled':'circle-outline');item.command={command:'inkspace.switchPage',title:'切换页面',arguments:[page.id]};return item})
   }};
-  function refresh(){vscode.commands.executeCommand('setContext','inkspace.hasNotebook',!!active);emitter.fire()}
+  function refresh(){vscode.commands.executeCommand('setContext','inkspace.inlineTextFocused',!!active?.textEditing&&!!active?.clipboardFocused);vscode.commands.executeCommand('setContext','inkspace.hasNotebook',!!active);emitter.fire()}
   function request(state,command,args={}){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('画布响应超时'))},15000);pending.set(id,{state,resolve,reject,timer});state.panel.webview.postMessage({type:'request',id,command,...args})})}
   async function copySelection(state=active){if(!state)return;const text=await request(state,'copy');if(text)await vscode.env.clipboard.writeText(text)}
   async function pasteSelection(state=active){if(!state)return;const text=await vscode.env.clipboard.readText();if(text)await request(state,'paste',{text})}
@@ -30,7 +30,7 @@ function activate(context){
     disposables.push(vscode.workspace.onDidChangeTextDocument(event=>{if(event.document===document&&event.contentChanges.length&&state.ready){const history=event.reason===vscode.TextDocumentChangeReason.Undo||event.reason===vscode.TextDocumentChangeReason.Redo;if(history){state.historyVersion=document.version;update(true)}else if(!state.applying&&normalizedText(document.getText())!==state.lastOwn)update()}}));
     disposables.push(panel.onDidChangeViewState(()=>{inputFocus();if(panel.active){active=state;refresh()}else{if(active===state){active=null;refresh()}if(state.ready&&document.autoSave)document.autoSave.flush().catch(error=>vscode.window.showErrorMessage(error.message))}}));
     disposables.push(panel.webview.onDidReceiveMessage(message=>{
-      if(message.type==='clipboard-focus'){state.clipboardFocused=!!message.focused;if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',state.clipboardFocused);return}
+      if(message.type==='clipboard-focus'){state.clipboardFocused=!!message.focused;state.textEditing=!!message.textEditing;if(panel.active)vscode.commands.executeCommand('setContext','inkspace.inlineTextFocused',state.textEditing&&state.clipboardFocused);if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',state.clipboardFocused);return}
       if(message.type==='history-shortcut'&&['undo','redo'].includes(message.command)){request(state,message.command).catch(error=>vscode.window.showErrorMessage(error.message));return}
       if(message.type==='response'){const entry=pending.get(message.id);if(entry?.state===state){clearTimeout(entry.timer);pending.delete(message.id);message.error?entry.reject(Error(message.error)):entry.resolve(message.result)}return}
       state.queue=state.queue.catch(()=>{}).then(async()=>{

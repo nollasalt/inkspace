@@ -37,6 +37,17 @@ app.whenReady().then(async()=>{
 
 
 
+
+    for(const created of [false,true]){
+      await run('window.inkspaceInlineText.finish();finishInteraction();doc={...doc,notes:[],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:1};clearSelection();render();'+(!created?'doc.notes.push({id:"text-history",x:40,y:40,width:320,markdown:"Original text"});renderNotes();edit(doc.notes[0]);':'edit({id:"text-history",x:40,y:40,width:320,markdown:""});'));
+      const original=created?'':'Original text';w.webContents.insertText(' 中文追加');await pause(40);
+      const key=async(code,modifiers)=>{w.webContents.sendInputEvent({type:'keyDown',keyCode:code,modifiers});w.webContents.sendInputEvent({type:'keyUp',keyCode:code,modifiers});await pause(30)};
+      const check=async text=>assert(await run('(()=>{const input=document.querySelector(".inline-note-editor");return window.inkspaceInlineText.isEditing()&&input===document.activeElement&&input.value==='+JSON.stringify(text)+'&&doc.notes.length===1&&doc.notes[0].markdown===input.value})()'),'Text undo altered canvas or lost editor');
+      await check(original+' 中文追加');await key('Z',['control']);await check(original);await key('Y',['control']);await check(original+' 中文追加');await key('Z',['control']);await check(original);await key('Z',['control','shift']);await check(original+' 中文追加');
+      await run('document.querySelector(".inline-note-editor").setSelectionRange(0,document.querySelector(".inline-note-editor").value.length)');w.webContents.insertText('Replacement');await pause(40);await check('Replacement');await key('Z',['control']);await check(original+' 中文追加');await key('Y',['control']);await check('Replacement');
+      await run('renderNotes();persist();');await key('Z',['control']);await check(original+' 中文追加');
+    }
+    console.log(JSON.stringify({nativeTextUndoRedo:true,chineseInput:true,selectionReplacement:true,ctrlZ:true,ctrlY:true,ctrlShiftZ:true,editorRemainsFocused:true,newAndExistingText:true,historySurvivesSave:true}));
     for(const zoom of [.75,1,2]){
       w.webContents.sendInputEvent({type:'mouseMove',x:5,y:5});await pause(20);
       const imagePoint=await run('('+async function(zoom){window.inkspaceInlineText.finish();finishInteraction();clearPenCursor();const canvas=document.createElement('canvas');canvas.width=200;canvas.height=100;canvas.getContext('2d').fillRect(0,0,200,100);doc={...doc,notes:[{id:'image-style',kind:'image',src:canvas.toDataURL(),aspect:2,markdown:'',x:40,y:40,width:200}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:zoom};tool='pan';clearSelection();render();const el=noteCache.get('image-style').el,img=el.querySelector('img');await img.decode();renderNotes();const image=img.getBoundingClientRect(),outer=el.getBoundingClientRect();if(Math.abs(image.top-outer.top-29*zoom)>.2)throw Error(JSON.stringify({reason:'Existing image position changed',image:image.toJSON(),outer:outer.toJSON(),padding:getComputedStyle(el.querySelector('.note-body')).paddingTop,border:getComputedStyle(el).borderTopWidth,zoom}));if(getComputedStyle(el,'::after').opacity!=='0'||getComputedStyle(el).boxShadow!=='none')throw Error(JSON.stringify({reason:'Image frame is permanently visible',opacity:getComputedStyle(el,'::after').opacity,shadow:getComputedStyle(el).boxShadow,className:el.className}));return{x:Math.round(image.left+20*zoom),y:Math.round(image.top+20*zoom)}}.toString()+')('+zoom+')');
