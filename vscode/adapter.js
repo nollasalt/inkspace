@@ -41,7 +41,6 @@ flushPersist=function(){clearTimeout(draftTimer);draftTimer=null;sendEdit()};
 saveNotebook=async function(saveAs=false){if(conflict&&saveAs){download(documentJSON(true),'application/json',notebook.title+'-草稿.inkspace.json');return true}codium.postMessage({type:'save',saveAs});return true};
 openNotebook=function(){codium.postMessage({type:'command',command:'open'})};
 $('#new').onclick=()=>codium.postMessage({type:'command',command:'new'});$('#load').onclick=openNotebook;$('#save').onclick=()=>saveNotebook();$('#save-as').onclick=()=>saveNotebook(true);
-document.querySelector('header').insertBefore($('#tool-options'),$('.toolbar-actions'));
 // VS Code owns file navigation and saving. Keep document resources beside the
 // palette, and leave a narrow edge rail available when the sidebar is closed.
 const sidebar=$('#diagram-sidebar'),rail=document.createElement('nav');rail.id='sidebar-rail';rail.setAttribute('aria-label','画布侧栏');
@@ -50,6 +49,10 @@ const diagramHeading=document.createElement('div');diagramHeading.className='sid
 for(const [id,text,title]of [['diagram-import','⇥','导入 draw.io 图形'],['diagram-export','⇧','导出 draw.io 图形']]){const button=$('#'+id);button.textContent=text;button.title=title;button.setAttribute('aria-label',title);diagramHeading.append(button)}sidebar.querySelector('h3').replaceWith(diagramHeading);
 const pdfHeading=document.createElement('div');pdfHeading.className='sidebar-section-heading';pdfHeading.innerHTML='<strong>PDF</strong>';const importPdf=$('#pdf-import');importPdf.textContent='＋';importPdf.title='导入 PDF 到当前页';importPdf.setAttribute('aria-label',importPdf.title);pdfHeading.append(importPdf);$('#pdf-library').before(pdfHeading);$('#pdf-library h3').remove();
 for(const id of ['pdf-manage','pdf-export'])$('#pdf-library').append($('#'+id));
+const properties=document.createElement('section');properties.id='tool-properties';const propertyHeading=document.createElement('div');propertyHeading.className='sidebar-section-heading';const propertyTitle=document.createElement('strong');propertyTitle.id='tool-properties-title';propertyHeading.append(propertyTitle);const propertyEmpty=document.createElement('div');propertyEmpty.id='tool-properties-empty';propertyEmpty.textContent='当前工具没有可调整属性';properties.append(propertyHeading,$('#tool-options'),propertyEmpty);sidebar.prepend(properties);
+const pageSettings=$('.toolbar-actions .settings-panel')?.closest('details');if(pageSettings){pageSettings.id='sidebar-page-settings';sidebar.append(pageSettings)}
+const optionsBeforeSidebar=refreshToolOptions;refreshToolOptions=function(){optionsBeforeSidebar();const name={pen:'画笔',erase:'橡皮',select:'选择',pan:'移动',text:'文本',diagram:'绘图',shape:'笔绘图形',pdftext:'PDF 文字'}[tool]||'工具';propertyTitle.textContent=name+'属性';propertyEmpty.hidden=[$('#pen-options'),$('#shape-options'),$('#pdf-options')].some(el=>!el.hidden)};refreshToolOptions();
+sidebarToggle.title='展开或收起属性与资源侧栏';sidebarToggle.setAttribute('aria-label',sidebarToggle.title);
 const utilities=document.createElement('div');utilities.id='sidebar-utilities';const svgExport=$('#svg');svgExport.textContent='导出 SVG';utilities.append(svgExport);sidebar.append(utilities);
 for(const id of ['new','load','save','save-as'])$('#'+id).hidden=true;
 $('.document-controls').hidden=true;
@@ -154,7 +157,14 @@ async function runCodiumDiagnostic(action){
     }finally{window.inkspaceInlineText.finish();finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;clearSelection();render();await window.inkspaceCairoIdle();persist();await flushed()}
   }
   if(action==='tool-state')return{tool,keyboardFocused:document.hasFocus()};
-  if(action==='layout-state')return{fileMenuHidden:$('.document-controls').hidden,sidebarSwitchAtEdge:$('#diagram-sidebar-toggle').parentElement.id==='sidebar-rail',resourceImportInSidebar:sidebar.contains($('#pdf-import'))&&sidebar.contains($('#diagram-import')),calibrationInSidebar:!!$('#sidebar-utilities button'),background:backgroundSettings().type,visiblePaperCells:$('#a4-pages')?.querySelectorAll('rect[data-cell]').length||0};
+  if(action==='tool-sidebar'){
+    const saved={tool,collapsed:document.body.classList.contains('diagram-sidebar-hidden'),width:$('#width').value};try{
+      setDiagramSidebarCollapsed(false,false);for(const next of ['pen','shape','erase','pdftext','text','select','pan','diagram']){activateTool(next,false);if(!sidebar.contains($('#tool-options'))||document.querySelector('header').querySelector('input,select,#tool-options'))throw Error('Properties remain in toolbar');const visible=['pen','shape','erase','pdftext'].includes(next);if(propertyEmpty.hidden!==visible||!propertyTitle.textContent.endsWith('属性'))throw Error('Tool properties did not switch');if(visible){const r=$('#tool-options').getBoundingClientRect(),box=sidebar.getBoundingClientRect();if(r.width<=0||r.left<box.left||r.right>box.right+.5)throw Error('Properties overflow sidebar')}}
+      activateTool('pen',false);$('#width').value='8';$('#width').dispatchEvent(new Event('change',{bubbles:true}));if($('#width').value!=='8')throw Error('Moved property cannot change');const before=viewport.clientWidth;setDiagramSidebarCollapsed(true,false);activateTool('shape',false);if(getComputedStyle(sidebar).display!=='none'||viewport.clientWidth<=before)throw Error('Tool switch reopened collapsed sidebar');
+      return{toolPropertiesInSidebar:true,pageSettingsInSidebar:sidebar.contains($('#page-layout')),tools:8,controlsUsable:true,sidebarStaysCollapsed:true,compactToolbar:true};
+    }finally{$('#width').value=saved.width;$('#width').dispatchEvent(new Event('change',{bubbles:true}));activateTool(saved.tool,false);setDiagramSidebarCollapsed(saved.collapsed,false)}
+  }
+  if(action==='layout-state')return{fileMenuHidden:$('.document-controls').hidden,sidebarSwitchAtEdge:$('#diagram-sidebar-toggle').parentElement.id==='sidebar-rail',resourceImportInSidebar:sidebar.contains($('#pdf-import'))&&sidebar.contains($('#diagram-import')),calibrationInSidebar:!!$('#sidebar-utilities button'),toolPropertiesInSidebar:sidebar.contains($('#tool-options'))&&!document.querySelector('header').contains($('#tool-options')),pageSettingsInSidebar:sidebar.contains($('#page-layout')),propertyTitle:propertyTitle.textContent,background:backgroundSettings().type,visiblePaperCells:$('#a4-pages')?.querySelectorAll('rect[data-cell]').length||0};
   if(action==='erase-performance'){
     await window.inkspaceCairoIdle();const oldDoc=doc,oldView=view,oldTool=tool,oldHistory=history,oldFuture=future;
     try{
