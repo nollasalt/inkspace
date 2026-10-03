@@ -2,12 +2,12 @@
 (()=>{
   let session=null,hovered=null;
   function mouseHover(el){if(hovered===el)return;hovered?.classList.remove('mouse-hover');hovered=el;hovered?.classList.add('mouse-hover')}
-  function hoverPointer(event){if(event.pointerType==='pen'||event.pointerType==='touch'){mouseHover(null);return}if(event.pointerType==='mouse'&&!event.sourceCapabilities?.firesTouchEvents&&!viewport.classList.contains('pen-input'))mouseHover(event.target.closest('.note:not(.image-note)'))}
+  function hoverPointer(event){if(event.pointerType==='pen'||event.pointerType==='touch'){mouseHover(null);return}if(event.pointerType==='mouse'&&!event.sourceCapabilities?.firesTouchEvents&&!viewport.classList.contains('pen-input'))mouseHover(event.target.closest('.note'))}
   for(const type of ['pointerover','pointermove','pointerdown'])viewport.addEventListener(type,hoverPointer,{capture:true});
   viewport.addEventListener('pointerleave',()=>mouseHover(null));window.addEventListener('blur',()=>mouseHover(null));
   const cursorBeforeTextHover=updatePenCursor;
   updatePenCursor=function(event,rect){cursorBeforeTextHover(event,rect);if(event.pointerType==='pen')mouseHover(null)};
-  function bounds(note){if(!note||note.kind==='image')return null;const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
+  function bounds(note){if(!note)return null;const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
   function finish(redraw=true){
     const current=session;if(!current)return;session=null;
     current.el.classList.remove('editing-text');current.cache.markdown=null;
@@ -43,8 +43,7 @@
     return rects;
   }
   function layoutNote(note,cache){
-    if(note.kind==='image')return;
-    const input=session?.note===note?session.input:null,signature=JSON.stringify([note.width,textSize(),note.markdown,!!input]);if(cache.guideSignature===signature)return;
+    const input=session?.note===note?session.input:null,signature=JSON.stringify([note.width,textSize(),note.markdown,note.src,note.aspect,!!input]);if(cache.guideSignature===signature)return;
     let root=cache.body,mirror;
     if(input){
       // Match the rendered first glyph without moving saved text or overlaid ink.
