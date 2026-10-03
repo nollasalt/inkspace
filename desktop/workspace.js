@@ -103,7 +103,7 @@ $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventList
 function refreshToolOptions(){refreshPenCursor();$('#diagram-sidebar').hidden=false;$('#diagram-options').hidden=false;$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'}
 function setDiagramSidebarCollapsed(collapsed,remember=true){
   finishInteraction();document.body.classList.toggle('diagram-sidebar-hidden',collapsed);
-  const button=$('#diagram-sidebar-toggle'),label=(collapsed?'展开':'收起')+'图形与 PDF 侧栏';
+  const button=$('#diagram-sidebar-toggle'),label=(collapsed?'展开':'收起')+'画布侧栏';
   button.setAttribute('aria-expanded',String(!collapsed));button.setAttribute('aria-label',label);button.title=label;
   if(remember){try{localStorage.setItem('inkspace.diagramSidebarCollapsed',String(collapsed))}catch{}window.dispatchEvent(new CustomEvent('inkspace-sidebar-change',{detail:{collapsed}}))}
   resize();
