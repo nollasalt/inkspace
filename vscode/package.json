@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.5.21",
+  "version": "0.5.22",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -279,6 +279,25 @@
         "key": "d",
         "when": "inkspace.hasNotebook && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Inkspace",
+      "properties": {
+        "inkspace.autoSaveDelay": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 500,
+          "maximum": 60000,
+          "description": "停止修改后合并保存的延迟（毫秒）。Ctrl+S、切换笔记时立即保存；VS Code 自身自动保存也可以提前保存。重新打开笔记后生效。"
+        },
+        "inkspace.autoSaveMaxDelay": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "maximum": 120000,
+          "description": "连续编辑时两次合并保存之间的最大等待（毫秒），不小于停止修改后的保存延迟。重新打开笔记后生效。"
+        }
+      }
+    }
   }
 }

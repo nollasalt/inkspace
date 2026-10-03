@@ -1,6 +1,7 @@
 const vscode=require('vscode'),path=require('node:path');
 const {editorHtml}=require('./html.cjs');
 const VIEW='inkspace.notebook',BINARY='inkspace.binary';
+const {AutoSave}=require('./autosave.cjs');
 const binary=require('./binary-store.cjs'),delta=require('./notebook-delta.js'),fs=require('node:fs/promises');
 const normalizedText=text=>text.replace(/\r\n/g,'\n');
 function emptyNotebook(title='未命名笔记'){return{format:'inkspace',version:2,title,activePage:'page-1',pages:[{id:'page-1',title:'第 1 页',view:{x:100,y:80,scale:1},document:{format:'inkspace',version:1,strokes:[],notes:[],shapes:[],pdfs:[],background:{type:'ruled',color:'#ffffff',spacing:'auto',fontSize:16}}}]}}
@@ -22,12 +23,12 @@ function activate(context){
     if(!document.inkStore)assertNotebook(document.getText());const media=vscode.Uri.joinPath(context.extensionUri,'media');
     const state={document,panel,ready:false,applying:false,queue:Promise.resolve(),pages:[],activePage:null};states.set(document.uri.toString(),state);
     const disposables=[];
-    if(document.inkStore){const watcher=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(path.dirname(document.uri.fsPath),path.basename(document.uri.fsPath)));disposables.push(watcher,watcher.onDidChange(()=>{state.queue.catch(()=>{}).then(async()=>{try{const stat=await fs.stat(document.uri.fsPath);if(stat.size!==document.inkStore.validBytes||stat.mtimeMs!==document.inkStore.lastMtime)panel.webview.postMessage({type:'binary-external-change'})}catch{}})}))}
+    if(document.inkStore){const watcher=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(path.dirname(document.uri.fsPath),path.basename(document.uri.fsPath)));disposables.push(watcher,watcher.onDidChange(()=>{state.queue.catch(()=>{}).then(async()=>{try{await document.inkStore.queue;const stat=await fs.stat(document.uri.fsPath);if(stat.size!==document.inkStore.validBytes||stat.mtimeMs!==document.inkStore.lastMtime)panel.webview.postMessage({type:'binary-external-change'})}catch{}})}))}
     disposables.push(vscode.window.onDidChangeWindowState(inputFocus));panel.webview.options={enableScripts:true,localResourceRoots:[media]};
     function inputFocus(){if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',!!state.clipboardFocused);panel.webview.postMessage({type:'engine-focus',windowFocused:vscode.window.state.focused,editorActive:panel.active})}
     function update(history=false){panel.webview.postMessage(document.inkStore?{type:'binary-document',model:document.inkStore.model,version:document.version,history}:{type:'document',text:normalizedText(document.getText()),version:document.version,history})}
     disposables.push(vscode.workspace.onDidChangeTextDocument(event=>{if(event.document===document&&event.contentChanges.length&&state.ready){const history=event.reason===vscode.TextDocumentChangeReason.Undo||event.reason===vscode.TextDocumentChangeReason.Redo;if(history){state.historyVersion=document.version;update(true)}else if(!state.applying&&normalizedText(document.getText())!==state.lastOwn)update()}}));
-    disposables.push(panel.onDidChangeViewState(()=>{inputFocus();if(panel.active){active=state;refresh()}else if(active===state){active=null;refresh()}}));
+    disposables.push(panel.onDidChangeViewState(()=>{inputFocus();if(panel.active){active=state;refresh()}else{if(active===state){active=null;refresh()}if(state.ready&&document.autoSave)document.autoSave.flush().catch(error=>vscode.window.showErrorMessage(error.message))}}));
     disposables.push(panel.webview.onDidReceiveMessage(message=>{
       if(message.type==='clipboard-focus'){state.clipboardFocused=!!message.focused;if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',state.clipboardFocused);return}
       if(message.type==='history-shortcut'&&['undo','redo'].includes(message.command)){request(state,message.command).catch(error=>vscode.window.showErrorMessage(error.message));return}
@@ -40,9 +41,7 @@ function activate(context){
           try{
             if(message.version!==document.version)throw Error('笔记版本不一致，请重新打开；已保存的内容不会覆盖');
             const next=delta.capture(document.inkStore.model);delta.apply(next,message.patch);
-            binaryEmitter.fire({document});await document.inkStore.append(message.patch);document.inkStore.model=next;document.version=document.inkStore.version;clearTimeout(document.compactTimer);if(document.inkStore.records>2048||document.inkStore.validBytes>document.inkStore.baseBytes*4+8*1024*1024)document.compactTimer=setTimeout(()=>document.inkStore.compact().catch(error=>vscode.window.showErrorMessage(error.message)),5000);
-            document.savedMtime=(await fs.stat(document.uri.fsPath)).mtimeMs;
-            await vscode.commands.executeCommand('workbench.action.files.save',document.uri);
+            document.inkStore.stage(next);document.version=document.inkStore.version;binaryEmitter.fire({document});document.autoSave.changed();
             panel.webview.postMessage({type:'ack',id:message.id,version:document.version});
           }catch(error){panel.webview.postMessage({type:'ack',id:message.id,version:document.version,error:error.message});vscode.window.showErrorMessage(error.message)}return;
         }
@@ -70,12 +69,13 @@ function activate(context){
     onDidChangeCustomDocument:binaryEmitter.event,
     async openCustomDocument(uri,options){
       if(uri.scheme!=='file')throw Error('二进制笔记暂需本地文件');let store=await binary.Store.open(options.backupId||uri.fsPath);if(store.truncated)vscode.window.showWarningMessage('检测到未完成的笔记写入，已恢复全部完整记录。');if(options.backupId){await binary.write(uri.fsPath,store.model,store.version);store=await binary.Store.open(uri.fsPath)}
-      const document={uri,inkStore:store,version:store.version,savedMtime:(await fs.stat(uri.fsPath)).mtimeMs,dispose(){clearTimeout(document.compactTimer)},async save(){await document.inkStore.flush();await vscode.commands.executeCommand('workbench.action.files.save',uri);return true}};return document;
+      const document={uri,inkStore:store,version:store.version,savedMtime:store.lastMtime,dispose(){clearTimeout(document.compactTimer);document.autoSave.dispose().catch(error=>vscode.window.showErrorMessage(error.message))},async save(){document.autoSave.clear();await document.inkStore.flush();await vscode.commands.executeCommand('workbench.action.files.save',uri);return true}};
+      const settings=vscode.workspace.getConfiguration('inkspace',uri);document.autoSave=new AutoSave(async()=>{await states.get(uri.toString())?.queue;await document.save()},{delay:settings.get('autoSaveDelay',2000),maxDelay:settings.get('autoSaveMaxDelay',10000),onError:error=>vscode.window.showErrorMessage('自动保存失败：'+error.message)});return document;
     },
     resolveCustomEditor:(document,panel)=>provider.resolveCustomTextEditor(document,panel),
-    saveCustomDocument:document=>document.inkStore.flush(),
-    async saveCustomDocumentAs(document,target){await document.inkStore.flush();await binary.write(target.fsPath,document.inkStore.model)},
-    async revertCustomDocument(document){await document.inkStore.flush().catch(()=>{});document.inkStore=await binary.Store.open(document.uri.fsPath);document.version=document.inkStore.version;const state=states.get(document.uri.toString());state?.panel.webview.postMessage({type:'binary-document',model:document.inkStore.model,version:document.version,history:true})},
+    async saveCustomDocument(document){document.autoSave.clear();await document.inkStore.flush();if(document.inkStore.records>2048||document.inkStore.validBytes>document.inkStore.baseBytes*4+8*1024*1024)await document.inkStore.compact();document.savedMtime=document.inkStore.lastMtime},
+    async saveCustomDocumentAs(document,target){document.autoSave.clear();await document.inkStore.flush();await binary.write(target.fsPath,document.inkStore.model)},
+    async revertCustomDocument(document){document.autoSave.clear();document.inkStore.pendingBase=null;await document.inkStore.queue.catch(()=>{});document.inkStore=await binary.Store.open(document.uri.fsPath);document.version=document.inkStore.version;const state=states.get(document.uri.toString());state?.panel.webview.postMessage({type:'binary-document',model:document.inkStore.model,version:document.version,history:true})},
     async backupCustomDocument(document,context){await document.inkStore.flush();await binary.write(context.destination.fsPath,document.inkStore.model,document.inkStore.version);return{id:context.destination.fsPath,delete:()=>fs.rm(context.destination.fsPath,{force:true})}}
   };
   context.subscriptions.push(binaryEmitter,vscode.window.registerCustomEditorProvider(BINARY,binaryProvider,{webviewOptions:{retainContextWhenHidden:true},supportsMultipleEditorsPerDocument:false}),emitter,vscode.window.registerTreeDataProvider('inkspace.pages',pages),vscode.window.registerCustomEditorProvider(VIEW,provider,{webviewOptions:{retainContextWhenHidden:true},supportsMultipleEditorsPerDocument:false}),
@@ -91,6 +91,6 @@ function activate(context){
     vscode.commands.registerCommand('inkspace.undo',()=>active&&request(active,'undo')),
     vscode.commands.registerCommand('inkspace.redo',()=>active&&request(active,'redo')),
     vscode.commands.registerCommand('inkspace.save',async()=>{if(active){await request(active,'flush');await active.queue;await active.document.save()}}));
-  return{async diagnostic(uri,action){if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Diagnostics disabled');const state=states.get(uri.toString());if(!state?.ready)throw Error('Canvas not ready');return request(state,'diagnostic',{action})},ready:uri=>!!states.get(uri.toString())?.ready,pages:()=>pages.getChildren()};
+  return{async diagnostic(uri,action){if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Diagnostics disabled');const state=states.get(uri.toString());if(!state?.ready)throw Error('Canvas not ready');return request(state,'diagnostic',{action})},storage:uri=>{if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Diagnostics disabled');const store=states.get(uri.toString())?.document.inkStore;return store?{pending:!!store.pendingBase,flushes:store.diskFlushes,bytes:store.diskBytes,version:store.version}:null},ready:uri=>!!states.get(uri.toString())?.ready,pages:()=>pages.getChildren()};
 }
 module.exports={activate,emptyNotebook,assertNotebook};
