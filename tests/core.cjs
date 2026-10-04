@@ -24,10 +24,10 @@ run('view={x:0,y:0,scale:1};zoom(2,100,100)');assert.deepEqual(read('world(100,1
 assert.equal(run('valid(JSON.parse(JSON.stringify(doc)))'),true);
 assert.equal(run('valid({format:"inkspace",version:1,strokes:[],notes:[],shapes:[{kind:"script"}]})'),false);
 assert.equal(run('valid({format:"inkspace",version:1,strokes:[],notes:[]})'),true);
-assert.match(run('markdown("# 标题\\n\\n**粗体**\\n\\n<script>alert(1)</script>")'),/<h1>标题<\/h1>/);
+assert.match(run('markdown("# 标题\\n\\n**粗体**\\n\\n<script>alert(1)</script>")'),/<h1\b[^>]*>标题<\/h1>/);
 assert.ok(!run('markdown("<script>alert(1)</script>")').includes('<script>'));
 assert.ok(!run('markdown("[坏链接](javascript:alert)")').includes('href='));
-assert.equal(run('markdown("`**raw**`")'),'<p><code>**raw**</code></p>');
+assert.match(run('markdown("`**raw**`")'),/^<p\b[^>]*><code>\*\*raw\*\*<\/code><\/p>$/);
 run('flushPersist()');assert.ok(storage.has('inkspace.document'));
 console.log('通过：笔迹、图形、混合框选移动、删除、Ctrl+Z / Ctrl+Y、缩放锚点、JSON 校验与 Markdown 安全渲染。');
 

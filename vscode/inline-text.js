@@ -45,9 +45,47 @@
   }
   function history(command){if(!session||document.activeElement!==session.input)return false;document.execCommand(command);return true}
   function sync(){if(session&&(session.page!==notebook.activePage||!doc.notes.includes(session.note)))finish(false);const note=selectedNote();if(viewSignature!==JSON.stringify([note?.id,note?.viewMode,!!session,tool]))viewChanged()}
-  edit=function(note){
+  function sourceCaret(note,cache,position){
+    const root=cache?.body;if(!root)return note.markdown.length;
+    // Hit through the transparent interaction layer before replacing the preview.
+    const hit=cache.el.querySelector('.note-hit'),beforeHit=hit?.style.pointerEvents,beforeBody=root.style.pointerEvents;let range;
+    try{if(hit)hit.style.pointerEvents='none';root.style.pointerEvents='auto';range=document.caretRangeFromPoint(position.x,position.y)}finally{if(hit)hit.style.pointerEvents=beforeHit;root.style.pointerEvents=beforeBody}
+    let node=range?.startContainer,offset=range?.startOffset||0;
+    if(!node||!root.contains(node)||node.nodeType!==Node.TEXT_NODE){
+      const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let current,distance=Infinity;
+      while(current=walker.nextNode()){if(!current.textContent.trim()||current.parentElement.closest('.katex-mathml'))continue;const r=document.createRange();r.selectNodeContents(current);for(const box of r.getClientRects()){const d=Math.hypot(Math.max(box.left-position.x,0,position.x-box.right),Math.max(box.top-position.y,0,position.y-box.bottom));if(d<distance){distance=d;node=current;offset=position.x<box.left?0:current.textContent.length}}}
+    }
+    if(!node||!root.contains(node))return 0;
+    const normalized=note.markdown.replace(/\r\n|\r/g,'\n'),block=node.parentElement.closest('[data-ink-source-start]')||root,start=Number(block.dataset.inkSourceStart)||0,end=Number(block.dataset.inkSourceEnd)||normalized.length,raw=normalized.slice(start,end),map=[];let decoded='';
+    const special=/\\[!"#$%&'()*+,\-.\/:;<=>?@[\]\\^_`{|}~]|&(?:#[xX][\da-fA-F]+|#\d+|[a-zA-Z][\da-zA-Z]+);/y;
+    for(let i=0;i<raw.length;){special.lastIndex=i;const match=special.exec(raw),length=match?match[0].length:1,text=match?InkContent.unescapeMarkdown(match[0]):raw[i];for(let j=0;j<text.length;j++)map.push(i);decoded+=text;i+=length}map.push(raw.length);
+    let cursor=0,result=start;const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);let current;
+    while(current=walker.nextNode()){
+      if(current.nodeType===Node.ELEMENT_NODE){if(!current.hasAttribute('data-ink-math'))continue;const text=current.getAttribute('data-ink-math'),index=decoded.indexOf(text,cursor);if(index>=0){if(current.contains(node)){result=start+map[index];break}cursor=index+text.length}continue}
+      if(current.parentElement.closest('[data-ink-math],.katex-mathml'))continue;
+      const text=current.textContent;if(!text)continue;let index=decoded.indexOf(text,cursor);
+      if(index<0){const first=text.search(/\S/);index=decoded.indexOf(text.trim(),cursor);if(index>=0)index-=Math.max(0,first)}
+      if(index<0){if(current===node){result=start+(map[cursor]??raw.length);break}continue}
+      if(current===node){result=start+(map[Math.max(0,Math.min(decoded.length,index+offset))]??raw.length);break}
+      cursor=index+text.length;
+      // A link's destination is source syntax, not the next visible text node.
+      if(current.parentElement.closest('a')&&decoded.slice(cursor,cursor+2)===']('){let depth=1,i=cursor+2;for(;i<decoded.length&&depth;i++){if(decoded[i]==='(')depth++;if(decoded[i]===')')depth--}cursor=i}
+    }
+    let actual=0;for(let i=0;i<result&&actual<note.markdown.length;i++,actual++)if(note.markdown[actual]==='\r'&&note.markdown[actual+1]==='\n')actual++;
+    return actual;
+  }
+  function revealCaret(note,cache,input,offset){
+    const frame=cache.scrollViewport;if(!frame)return;
+    const r=input.getBoundingClientRect(),style=getComputedStyle(input),scale=view.scale*(note.scale||1),mirror=document.createElement('div');
+    Object.assign(mirror.style,{position:'fixed',visibility:'hidden',pointerEvents:'none',left:r.left+'px',top:r.top+'px',width:input.clientWidth+'px',font:style.font,lineHeight:style.lineHeight,whiteSpace:'pre-wrap',overflowWrap:'anywhere',transform:'scale('+scale+')',transformOrigin:'0 0'});mirror.textContent=input.value||' ';document.body.append(mirror);
+    const range=document.createRange();range.setStart(mirror.firstChild,Math.min(offset,mirror.firstChild.length));range.collapse(true);const caret=range.getBoundingClientRect(),viewport=frame.getBoundingClientRect();mirror.remove();
+    if(caret.height){if(caret.top<viewport.top)frame.scrollTop-=(viewport.top-caret.top)/scale;else if(caret.bottom>viewport.bottom)frame.scrollTop+=(caret.bottom-viewport.bottom)/scale}cache.viewScrollTop=frame.scrollTop;
+  }
+  edit=function(note,position){
     if(note.kind==='image')return;
     if(session?.note===note){session.input.focus({preventScroll:true});return}
+    const previousCache=noteCache.get(note.id),caret=position?sourceCaret(note,previousCache,position):note.markdown.length;
+    if(previousCache?.scrollViewport)previousCache.viewScrollTop=previousCache.scrollViewport.scrollTop;
     finish();finishInteraction();clearSelection();
     const created=!doc.notes.includes(note);
     if(created){checkpoint();note.markdown='';doc.notes.push(note)}
@@ -59,7 +97,7 @@
     input.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0&&!space)event.stopPropagation()});
     input.addEventListener('keydown',event=>{if(event.isComposing)return;if((event.ctrlKey||event.metaKey)&&!event.altKey){const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;if(command){event.preventDefault();event.stopImmediatePropagation();history(command);return}}if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
     input.addEventListener('blur',()=>{if(session?.input===input)finish()});
-    input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length);resizeInput();renderBackground();overlaySelection();if(created)persist();
+    input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);if(position)revealCaret(note,cache,input,caret);renderBackground();overlaySelection();if(created)persist();
   };
   document.addEventListener('pointerdown',event=>{if(session&&event.pointerType==='mouse'&&!session.input.contains(event.target))finish()},{capture:true});
   const switchBeforeInlineText=switchPage;

@@ -39,5 +39,18 @@ parser.renderer.rules.image=(tokens,index,options,env,self)=>{const token=tokens
 parser.renderer.rules.link_open=(tokens,index,options,env,self)=>{tokens[index].attrSet('target','_blank');tokens[index].attrSet('rel','noopener noreferrer');return self.renderToken(tokens,index,options)};
 const clean=html=>typeof DOMPurify.sanitize==='function'?DOMPurify.sanitize(html,{ADD_ATTR:['target','loading'],FORBID_TAGS:['style','iframe','object','embed']}):html;
 export function inline(source){return clean(parser.renderInline(source))}
-export function markdown(source){return clean(parser.render(source.replace(/\r\n|\r/g,'\n'))).trimEnd()}
+// Keep source line boundaries on rendered blocks for in-place caret placement.
+parser.core.ruler.after('inline','inkspace_source_lines',state=>{
+  if(!state.env.inkSourceLines)return;
+  for(const token of state.tokens)if(token.map&&token.nesting===1){token.attrSet('data-ink-source-start',String(state.env.inkSourceLines[token.map[0]]));token.attrSet('data-ink-source-end',String(state.env.inkSourceLines[token.map[1]]??state.src.length))}
+});
+for(const name of ['fence','code_block','math_block','math_block_eqno']){
+  const rule=parser.renderer.rules[name];if(!rule)continue;
+  parser.renderer.rules[name]=(tokens,index,options,env,self)=>{const html=rule(tokens,index,options,env,self),token=tokens[index];if(!env.inkSourceLines||!token.map)return html;const start=env.inkSourceLines[token.map[0]+(name==='fence'?1:0)]??0,end=env.inkSourceLines[token.map[1]]??env.inkSourceLength;return html.replace(/^(\s*<[\w-]+)/,`$1 data-ink-source-start="${start}" data-ink-source-end="${end}"`)};
+}
+export function markdown(source){const normalized=source.replace(/\r\n|\r/g,'\n'),lines=[0];for(let i=0;i<normalized.length;i++)if(normalized[i]==='\n')lines.push(i+1);return clean(parser.render(normalized,{inkSourceLines:lines,inkSourceLength:normalized.length})).trimEnd()}
+export const unescapeMarkdown=source=>parser.utils.unescapeAll(source);
+for(const name of ['math_inline','math_inline_double','math_block','math_block_eqno']){
+  const rule=parser.renderer.rules[name];if(rule)parser.renderer.rules[name]=(tokens,index,options,env,self)=>rule(tokens,index,options,env,self).replace(/^(\s*<[\w-]+)/,tag=>`${tag} data-ink-math="${escape(tokens[index].content)}"`);
+}
 export {createStrokeState,appendStrokePoint,strokeTailPath,strokeTailPoints,strokePath,strokeOutline} from './ink-detail.js';
