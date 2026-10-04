@@ -129,7 +129,7 @@ const paperPosition=w.document.querySelector('#paper').style.backgroundPosition;
 pointer('pointerdown',20,20,{pointerType:'mouse'});
 for(let i=1;i<=200;i++){pointer('pointermove',20+i*.3,20+i*.15,{pointerType:'mouse'});if(i%4===0)run('presentInteraction()')}
 const panDuring=read('renderStats');
-assert.equal(w.document.querySelector('#paper').parentElement,w.document.querySelector('#scene'));
+assert.equal(w.document.querySelector('#paper').parentElement,w.document.querySelector('#viewport'));
 assert.equal(w.document.querySelector('#paper').style.backgroundPosition,paperPosition);
 assert.equal(panDuring.scenePaints,panBefore.scenePaints);assert.equal(panDuring.outlineBuilds,panBefore.outlineBuilds);assert.equal(panDuring.noteBuilds,panBefore.noteBuilds);
 assert.equal(a.reads()-panReads,2);assert.ok(w.document.querySelector('#scene').style.transform.includes('60px'));

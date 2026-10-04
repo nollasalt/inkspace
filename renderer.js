@@ -10,7 +10,7 @@ function previewZoom(){
   if(typeof refreshPenCursor==='function')refreshPenCursor();
   $('#scene').style.willChange='transform';
   if(!zoomBase)zoomBase={...paintedView,scale:renderedScale};
-  if(zoomFrame===null)zoomFrame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{zoomFrame=null;if(!zoomBase)return;const ratio=view.scale/zoomBase.scale;if(ratio>1.5||ratio<2/3){render();return}$('#scene').style.transform=`translate(${view.x-zoomBase.x*ratio}px,${view.y-zoomBase.y*ratio}px) scale(${ratio})`;$('#reset').textContent=zoomLabel(view.scale)});
+  if(zoomFrame===null)zoomFrame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{zoomFrame=null;if(!zoomBase)return;const ratio=view.scale/zoomBase.scale;if(ratio>1.5||ratio<2/3){render();return}$('#scene').style.transform=`translate(${view.x-zoomBase.x*ratio}px,${view.y-zoomBase.y*ratio}px) scale(${ratio})`;presentBackground();$('#reset').textContent=zoomLabel(view.scale)});
   clearTimeout(zoomTimer);zoomTimer=setTimeout(settleZoom,120);
 }
 function interactiveZoom(s,x,y){const p=world(x,y);view.scale=usableZoom(s);view.x=x-p.x*view.scale;view.y=y-p.y*view.scale;previewZoom()}
@@ -42,7 +42,7 @@ function textSize(){return backgroundSettings().fontSize||16}
 function backgroundSpacing(){const bg=backgroundSettings();return bg.spacing==='auto'?textSize()*1.75:bg.spacing}
 // Paper occupancy is derived from content; completed stroke coverage is cached,
 // and live strokes only add their new segments. No ink raster is rebuilt here.
-const a4StrokeCache=new WeakMap();let a4Frame=null;
+const a4StrokeCache=new WeakMap();let a4Frame=null,a4PaperCells=new Set();
 function scheduleA4Pages(){
   if(!backgroundSettings().layout?.startsWith('a4-')||a4Frame!==null)return;
   a4Frame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{a4Frame=null;renderA4Pages()});
@@ -89,16 +89,22 @@ function renderA4Pages(){
   for(const asset of doc.pdfs||[])for(const p of asset.pages)box({x:p.x,y:p.y,w:p.width,h:p.height});
   // An empty note starts with one sheet; additional sheets require content.
   if(!cells.size)add(0,0);layer.hidden=false;
-  const paths=[];
-  for(const key of cells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
+  a4PaperCells=cells;presentBackground();
+}
+// Update paper independently of cached ink, reusing occupancy during navigation.
+function presentBackground(){
+  const layer=$('#a4-pages');if(!layer)return;
+  const [w,h]=a4Dimensions(),paths=[];
+  for(const key of a4PaperCells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
   const bg={...backgroundSettings(),color:'#ffffff'},dark=bg.color.match(/[a-f0-9]{2}/gi).reduce((sum,c)=>sum+parseInt(c,16),0)<384;
   const line=dark?'rgba(255,255,255,.18)':'rgba(38,63,67,.16)';
   let spacing=backgroundSpacing();while(spacing*view.scale<6)spacing*=10;
   const pixel=1/view.scale;
   const pattern=bg.type==='dots'?`<circle cx="${spacing/2}" cy="${spacing/2}" r="${pixel}" fill="${line}" stroke="none"/>`:bg.type==='ruled'||bg.type==='grid'?`<path d="M 0 0 H ${spacing}${bg.type==='grid'?` M 0 0 V ${spacing}`:''}" fill="none" stroke="${line}" stroke-width="${pixel}"/>`:'';
   const defs=pattern?`<defs><pattern id="a4-pattern" width="${spacing}" height="${spacing}" patternUnits="userSpaceOnUse"><path d="M 0 0 H ${spacing} V ${spacing} H 0 Z" fill="${bg.color}" stroke="none"/>${pattern}</pattern></defs>`:'';
-  const markup=`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">${defs}<g transform="translate(${view.x+surface.padding} ${view.y+surface.padding}) scale(${view.scale})" fill="${pattern?'url(#a4-pattern)':bg.color}" stroke="${Math.min(w,h)*view.scale>=8?'rgba(100,110,120,.25)':'none'}" stroke-width="1" stroke-dasharray="4 5">${paths.map(p=>p.replace('/>',' vector-effect="non-scaling-stroke"/>')).join('')}</g></svg>`;
-  if(layer.innerHTML!==markup)layer.innerHTML=markup;
+  const markup=`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">${defs}<g fill="${pattern?'url(#a4-pattern)':bg.color}" stroke="${Math.min(w,h)*view.scale>=8?'rgba(100,110,120,.25)':'none'}" stroke-width="1" stroke-dasharray="4 5">${paths.map(p=>p.replace('/>',' vector-effect="non-scaling-stroke"/>')).join('')}</g></svg>`;
+  if(layer.paperMarkup!==markup){layer.innerHTML=markup;layer.paperMarkup=markup}
+  layer.querySelector('g')?.setAttribute('transform',`translate(${view.x+surface.padding} ${view.y+surface.padding}) scale(${view.scale})`);
 }
 function renderBackground(){
   const bg=backgroundSettings(),rgb=bg.color.match(/[a-f0-9]{2}/gi).map(c=>parseInt(c,16)),dark=rgb.reduce((a,b)=>a+b,0)<384,line=dark?'rgba(255,255,255,.18)':'rgba(38,63,67,.16)';
@@ -269,7 +275,7 @@ function presentInteraction(){
     const dx=view.x-paintedView.x,dy=view.y-paintedView.y;
     if(Math.max(Math.abs(dx),Math.abs(dy))>surface.padding*.7)rebasePan();
     else{const d=surface.dpr;$('#scene').style.transform=`translate(${Math.round(dx*d)/d}px,${Math.round(dy*d)/d}px)`}
-    renderStats.panFrames++;
+    presentBackground();renderStats.panFrames++;
   }else if(active?.type==='select'){
     overlaySelection();
   }else if(active?.type==='resize-window'){window.inkspaceInlineText?.previewHeight();

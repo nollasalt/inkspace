@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.5.40",
+  "version": "0.5.41",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -88,30 +88,30 @@
       },
       {
         "command": "inkspace.showPages",
-        "title": "显示笔记页面",
+        "title": "显示笔记画布",
         "category": "墨境"
       },
       {
         "command": "inkspace.addPage",
-        "title": "添加页面",
+        "title": "添加画布",
         "category": "墨境",
         "icon": "$(add)"
       },
       {
         "command": "inkspace.renamePage",
-        "title": "重命名页面",
+        "title": "重命名画布",
         "category": "墨境",
         "icon": "$(edit)"
       },
       {
         "command": "inkspace.deletePage",
-        "title": "删除页面",
+        "title": "删除画布",
         "category": "墨境",
         "icon": "$(trash)"
       },
       {
         "command": "inkspace.switchPage",
-        "title": "切换页面",
+        "title": "切换画布",
         "category": "墨境"
       },
       {
@@ -174,15 +174,20 @@
       },
       {
         "command": "inkspace.movePageUp",
-        "title": "上移页面",
+        "title": "上移画布",
         "category": "墨境",
         "icon": "$(arrow-up)"
       },
       {
         "command": "inkspace.movePageDown",
-        "title": "下移页面",
+        "title": "下移画布",
         "category": "墨境",
         "icon": "$(arrow-down)"
+      },
+      {
+        "command": "inkspace.tool.pan",
+        "title": "触控笔移动画布",
+        "category": "墨境"
       }
     ],
     "viewsContainers": {
@@ -198,8 +203,8 @@
       "inkspace": [
         {
           "id": "inkspace.pages",
-          "name": "旧版画布（兼容）",
-          "when": "inkspace.hasLegacyCanvases"
+          "name": "画布",
+          "when": "inkspace.hasNotebook"
         }
       ]
     },
@@ -217,16 +222,43 @@
           "group": "navigation"
         }
       ],
-      "view/title": [],
-      "view/item/context": [],
+      "view/title": [
+        {
+          "command": "inkspace.addPage",
+          "when": "view == inkspace.pages && inkspace.hasNotebook",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "inkspace.renamePage",
+          "when": "view == inkspace.pages",
+          "group": "1_canvas"
+        },
+        {
+          "command": "inkspace.deletePage",
+          "when": "view == inkspace.pages && viewItem != inkspace.pageOnly",
+          "group": "1_canvas"
+        },
+        {
+          "command": "inkspace.movePageUp",
+          "when": "view == inkspace.pages && viewItem != inkspace.pageFirst && viewItem != inkspace.pageOnly",
+          "group": "2_order"
+        },
+        {
+          "command": "inkspace.movePageDown",
+          "when": "view == inkspace.pages && viewItem != inkspace.pageLast && viewItem != inkspace.pageOnly",
+          "group": "2_order"
+        }
+      ],
       "commandPalette": [
         {
           "command": "inkspace.showPages",
-          "when": "inkspace.hasLegacyCanvases"
+          "when": "inkspace.hasNotebook"
         },
         {
           "command": "inkspace.addPage",
-          "when": "false"
+          "when": "inkspace.hasNotebook"
         },
         {
           "command": "inkspace.renamePage",
@@ -349,6 +381,11 @@
         "key": "alt+right",
         "mac": "ctrl+shift+-",
         "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.tool.pan",
+        "key": "h",
+        "when": "inkspace.hasNotebook && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
       }
     ],
     "configuration": {
