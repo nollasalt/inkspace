@@ -142,13 +142,14 @@ function renderNotes(){
   for(const [id,c] of noteCache)if(!ids.has(id)){c.el.remove();noteCache.delete(id)}
   for(const [index,n] of doc.notes.entries()){
     let c=noteCache.get(n.id);
-    if(!c){let controlClick=false;const el=document.createElement('article');el.className='note';el.dataset.id=n.id;el.innerHTML='<div class="note-bar">⋮⋮ 移动文本框</div><div class="note-body"></div><div class="note-hit" aria-hidden="true"></div><div class="note-resize" title="拖动调整宽度"></div><div class="note-scale" title="拖动等比例缩放文本" aria-label="缩放文本"></div>';el.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse')controlClick=!!event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize')},{capture:true});el.addEventListener('dblclick',event=>{if(controlClick||event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize')||event.pointerType==='pen'||event.sourceCapabilities?.firesTouchEvents)return;const current=doc.notes.find(item=>item.id===n.id);if(current&&current.kind!=='image'){event.stopPropagation();edit(current)}});c={el,body:el.querySelector('.note-body'),markdown:null};noteCache.set(n.id,c);notes.append(el)}
+    if(!c){let controlClick=false;const el=document.createElement('article');el.className='note';el.dataset.id=n.id;el.innerHTML='<div class="note-bar">⋮⋮ 移动文本框</div><div class="note-body"></div><div class="note-hit" aria-hidden="true"></div><div class="note-resize" title="拖动调整宽度"></div><div class="note-scale" title="拖动等比例缩放文本" aria-label="缩放文本"></div>';el.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse')controlClick=!!event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow')},{capture:true});el.addEventListener('dblclick',event=>{if(controlClick||event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow')||event.pointerType==='pen'||event.sourceCapabilities?.firesTouchEvents)return;const current=doc.notes.find(item=>item.id===n.id);if(current&&current.kind!=='image'){event.stopPropagation();edit(current)}});c={el,body:el.querySelector('.note-body'),markdown:null};noteCache.set(n.id,c);notes.append(el)}
     if(window.inkspaceInlineText?.renderNote(n)){placeNote(n,c.el);window.inkspaceInlineText.layoutNote(n,c);continue}
     if(c.markdown!==n.markdown||c.src!==n.src){c.body.replaceChildren();if(n.kind==='image'){const image=document.createElement('img');image.src=n.src;image.alt='粘贴的图片';image.draggable=false;image.style.aspectRatio=String(n.aspect);image.addEventListener('load',()=>{c.guideSignature=null;renderNotes()},{once:true});c.body.append(image)}else c.body.innerHTML=markdown(n.markdown);c.markdown=n.markdown;c.src=n.src;c.el.classList.toggle('image-note',n.kind==='image');const bar=c.el.querySelector('.note-bar');if(bar)bar.textContent=n.kind==='image'?'⋮⋮ 移动图片':'⋮⋮ 移动文本框';const scaleControl=c.el.querySelector('.note-scale');if(scaleControl){const label=n.kind==='image'?'缩放图片':'缩放文本';scaleControl.title='拖动等比例'+label;scaleControl.setAttribute('aria-label',label)}renderStats.noteBuilds++}
     placeNote(n,c.el);
     window.inkspaceInlineText?.layoutNote(n,c);
     c.el.classList.toggle('selected',selected.notes.includes(index));
   }
+  window.inkspaceDiagram?.syncNotes();
 }
 function paintScene(context,regions=null){
   const intersects=b=>!regions||regions.some(r=>b.x+b.w>=r.x&&b.y+b.h>=r.y&&b.x<=r.x+r.w&&b.y<=r.y+r.h);
@@ -288,6 +289,7 @@ function presentInteraction(){
   }else if(active?.type==='note'){
     const n=active.n;placeNote(n,noteCache.get(n.id).el,active.offset.x*view.scale,active.offset.y*view.scale);renderStats.moveFrames++;
   }
+  if(['note','resize-text','resize-selection','move-selection','resize-note','resize-window'].includes(active?.type))window.inkspaceDiagram?.syncNotes(true);
 }
 function rebasePan(){
   const d=surface.dpr,dx=Math.round((view.x-paintedView.x)*d),dy=Math.round((view.y-paintedView.y)*d),w=canvas.width,h=canvas.height;

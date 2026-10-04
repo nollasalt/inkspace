@@ -42,3 +42,12 @@ header .tools button.active,#diagram-sidebar .sidebar-choices button.active,#sid
 .note.note .note-height-resize:hover,.note.note .note-height-resize:focus-visible{border-color:var(--vscode-focusBorder,#007acc);outline:none}.note.note [hidden]{display:none!important}
 
 .note.note:not(.image-note).selected .note-scale{opacity:1;pointer-events:auto}
+
+/* Four explicit mouse-only connection starters outside the visible content. */
+.note.note .note-connect-arrow{position:absolute;width:20px;height:20px;padding:0;border:0;border-radius:3px;background:transparent;color:#007acc;font:18px/20px sans-serif;z-index:6;opacity:0;pointer-events:none;cursor:crosshair}
+.note.note.mouse-hover .note-connect-arrow{opacity:1;pointer-events:auto}.note.note .note-connect-arrow:hover{background:#007acc22}.note.note .note-connect-top{left:calc(var(--text-left) + var(--text-width)/2 - 10px);top:calc(var(--text-top) - 34px)}.note.note .note-connect-bottom{left:calc(var(--text-left) + var(--text-width)/2 - 10px);top:calc(var(--text-top) + var(--text-height) + 14px)}.note.note .note-connect-left{left:calc(var(--text-left) - 28px);top:calc(var(--text-top) + var(--text-height)/2 - 10px)}.note.note .note-connect-right{left:calc(var(--text-left) + var(--text-width) + 8px);top:calc(var(--text-top) + var(--text-height)/2 - 10px)}
+.pen-input .note.note .note-connect-arrow{opacity:0;pointer-events:none}.note-connecting{cursor:crosshair}
+
+.note-connect-arrow::before{content:'';position:absolute;pointer-events:inherit}.note-connect-left::before{left:20px;top:0;width:8px;height:20px}.note-connect-right::before{right:20px;top:0;width:8px;height:20px}.note-connect-bottom::before{left:0;bottom:20px;width:20px;height:14px}
+
+.note.note .note-height-resize{z-index:7}

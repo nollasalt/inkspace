@@ -2,6 +2,7 @@
 // Native ink remains in its own Cairo layer; this layer handles mouse diagrams.
 import factory from 'mxgraph';
 import {installDiagramDrag} from './diagram-drag.js';
+import {installNoteConnectors} from './note-connectors.js';
 const resource=new URL('mxgraph/',document.currentScript.src).href;
 const mx=factory({mxLoadResources:false,mxLoadStylesheets:false,mxBasePath:resource,mxImageBasePath:resource+'images'});
 const {mxGraph,mxGraphModel,mxCodec,mxUtils,mxEvent,mxPoint,mxConnectionConstraint,mxConstants,mxCell,mxGeometry,mxRectangle}=mx;
@@ -9,7 +10,8 @@ const {mxGraph,mxGraphModel,mxCodec,mxUtils,mxEvent,mxPoint,mxConnectionConstrai
 Object.assign(window,{mxGraphModel,mxCell,mxGeometry,mxPoint});
 mx.mxObjectCodec.allowEval=false;
 Object.assign(mxConstants,{HANDLE_FILLCOLOR:'#ffffff',HANDLE_STROKECOLOR:'#007acc',VERTEX_SELECTION_COLOR:'#007acc',EDGE_SELECTION_COLOR:'#007acc'});
-let graph=null,loaded=null,loading=false,diagramContact=false;const labelCache=new WeakMap(),edits=[];let replayCount=0;
+let noteConnectors=null;
+let graph=null,loaded=null,loading=false,diagramContact=false;const derivedChanges=new WeakSet(),labelCache=new WeakMap(),edits=[];let replayCount=0;
 const node=$('#diagram-layer');
 function xml(){return mxUtils.getXml(new mxCodec().encode(graph.getModel()))}
 function read(source){
@@ -21,7 +23,8 @@ function read(source){
 }
 function label(cell){return typeof cell.value==='string'?cell.value:''}
 function sync(sender,event){
-  if(loading)return;
+  // Derived endpoints can finish inside mxGraph's outer model transaction.
+  if(loading||event?.getProperty('edit')?.changes?.every(change=>derivedChanges.has(change)))return;
   const before=loaded;checkpoint();doc.diagram=xml();loaded=doc.diagram;
   const edit=event?.getProperty("edit");if(edit){edits.push({before,after:loaded,edit});if(edits.length>80)edits.shift()}persist();renderBackground();
   $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
@@ -84,6 +87,7 @@ function init(){
   const cancelMouseDrag=()=>{cancelMove();diagramContact=false;graph.graphHandler.reset();graph.selectionCellsHandler.reset();graph.connectionHandler.reset();graph.isMouseDown=false};
   window.addEventListener('blur',cancelMouseDrag);window.addEventListener('pointercancel',event=>{if(event.pointerType==='mouse')cancelMouseDrag()});
   const doubleClick=graph.dblClick;graph.dblClick=function(event,cell){if(event.sourceCapabilities?.firesTouchEvents||typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen')return;return doubleClick.call(this,event,cell)};
+  noteConnectors=installNoteConnectors(graph,mx,{release:()=>{diagramContact=false},derived:(change,previewOnly)=>{if(loading||doc.diagram!==loaded&&!(loaded===''&&!doc.diagram))return;loading=true;const model=graph.getModel(),first=model.currentEdit.changes.length;model.beginUpdate();try{change();for(const item of model.currentEdit.changes.slice(first))derivedChanges.add(item)}finally{model.endUpdate();loading=false}}});
   graph.getModel().addListener(mxEvent.CHANGE,sync);
   graph.getSelectionModel().addListener(mxEvent.CHANGE,()=>{if(!loading&&graph.getSelectionCount())clearSelection();refreshProperties();overlaySelection()});
 }
@@ -96,6 +100,7 @@ function render(){
     else{edits.length=0;graph.getModel().setRoot((source?read(source):new mxGraphModel()).getRoot())}
     loaded=source;
   }finally{loading=false}}
+  noteConnectors.sync();
   if(graph.view.scale!==view.scale||graph.view.translate.x!==view.x/view.scale||graph.view.translate.y!==view.y/view.scale)graph.view.scaleAndTranslate(view.scale,view.x/view.scale,view.y/view.scale);
 }
 function ownsPointer(event){
@@ -141,7 +146,7 @@ function paste(source,dx,dy){
 }
 function remove(){if(!graph?.getSelectionCount()||graph.isEditing())return false;graph.removeCells();return true}
 function svg(){if(!graph||!doc.diagram)return '';const canvas=graph.view.getCanvas(),copy=canvas.cloneNode(true),original=canvas.querySelectorAll('foreignObject *'),cloned=copy.querySelectorAll('foreignObject *');original.forEach((element,index)=>{const style=getComputedStyle(element);cloned[index].setAttribute('style',Array.from(style,key=>key+':'+style.getPropertyValue(key)).join(';'))});return `<g transform="translate(${-view.x/view.scale} ${-view.y/view.scale}) scale(${1/view.scale})">${copy.outerHTML}</g>`}
-window.inkspaceDiagram={render,add,connect,ownsPointer,bounds,coverage,copy,paste,remove,svg,selectBox:r=>graph?.selectRegion(new mxRectangle(r.x*view.scale+view.x,r.y*view.scale+view.y,r.w*view.scale,r.h*view.scale)),editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
+window.inkspaceDiagram={render,add,connect,syncNotes:preview=>noteConnectors?.sync(preview),noteConnectors:()=>noteConnectors,ownsPointer,bounds,coverage,copy,paste,remove,svg,selectBox:r=>graph?.selectRegion(new mxRectangle(r.x*view.scale+view.x,r.y*view.scale+view.y,r.w*view.scale,r.h*view.scale)),editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
 document.querySelectorAll('[data-diagram]').forEach(button=>{button.onclick=()=>add(button.dataset.diagram);button.draggable=true;button.addEventListener('dragstart',event=>event.dataTransfer.setData('application/x-inkspace-shape',button.dataset.diagram))});
 viewport.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('application/x-inkspace-shape'))event.preventDefault()});viewport.addEventListener('drop',event=>{const kind=event.dataTransfer.getData('application/x-inkspace-shape');if(!['rect','roundrect','ellipse','diamond','arrow','line'].includes(kind))return;event.preventDefault();const p=local(event);add(kind,world(p.x,p.y))});$('#diagram-connect').onclick=connect;$('#diagram-delete').onclick=remove;$('#diagram-front').onclick=()=>graph?.orderCells(false);$('#diagram-back').onclick=()=>graph?.orderCells(true);
 $('#diagram-stroke').onchange=()=>graph?.setCellStyles('strokeColor',$('#diagram-stroke').value);
