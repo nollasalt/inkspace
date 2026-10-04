@@ -1,12 +1,12 @@
-# 在其他电脑安装 Inkspace 0.5.37
+# 在其他电脑安装 Inkspace 0.5.38
 
 适用于 Windows x64 桌面版 Microsoft VS Code。建议使用当前稳定版；本机测试版本为 1.140.0。暂不提供 macOS、Linux、Windows ARM64 或浏览器版运行时。
 
 ## 推荐：安装 VSIX
 
-1. 将 `Inkspace-VSCode-0.5.37-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
+1. 将 `Inkspace-VSCode-0.5.38-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
 2. 安装或打开 Microsoft VS Code。
-3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.5.37-win32-x64.vsix`。
+3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.5.38-win32-x64.vsix`。
 4. 若提示，重新加载 VS Code 窗口。
 5. 打开存放笔记的文件夹，在文件栏右键选择“墨境：新建笔记”；已有新格式笔记直接打开 `.ink`；旧 `.inkspace.json` 仍兼容。
 6. 首次点击“校准触控笔”，依次点击三个圆圈。以后同一设备与显示配置自动恢复。换电脑需要在新电脑校准一次。
@@ -14,7 +14,7 @@
 也可以在已提供 `code` 命令的终端中安装：
 
 ```powershell
-code --install-extension .\Inkspace-VSCode-0.5.37-win32-x64.vsix --force
+code --install-extension .\Inkspace-VSCode-0.5.38-win32-x64.vsix --force
 ```
 
 安装包内含 Raw Input 程序、Cairo 原生模块和引擎依赖。使用时不需要安装 Node.js、编译工具或本项目源码目录；引擎由 VS Code 自带的运行时启动。
@@ -30,8 +30,8 @@ code --install-extension .\Inkspace-VSCode-0.5.37-win32-x64.vsix --force
 
 ## 分发包内容
 
-- `Inkspace-VSCode-0.5.37-win32-x64.vsix`：直接安装的插件。
-- `Inkspace-VSCode-0.5.37-Source.zip`：对应源码、原生依赖源码和构建脚本。
+- `Inkspace-VSCode-0.5.38-win32-x64.vsix`：直接安装的插件。
+- `Inkspace-VSCode-0.5.38-Source.zip`：对应源码、原生依赖源码和构建脚本。
 - `INSTALL.md`：本说明。
 - `SHA256SUMS.txt`：文件校验和。
 
@@ -39,11 +39,14 @@ code --install-extension .\Inkspace-VSCode-0.5.37-win32-x64.vsix --force
 
 A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张，笔迹、图形、文本和图片越界时自动拓展，删除后收回空纸张。
 
-## 搜索与页面操作
+## 操作与搜索
 
-- Ctrl+F 搜索当前笔记的文本框 Markdown 原文与页名，Enter / Shift+Enter 跳转，点击结果后可直接继续书写，Esc 关闭搜索。暂不提供手写笔迹、图片与 PDF 正文识别。
-- 状态栏提供后退、前进与搜索；Alt+← / Alt+→ 恢复页面、缩放、画布位置和小窗滚动。
-- 页面侧栏右键上移／下移，排序可在当前页撤销重做；新页面插在当前页后，排序自动保存。
+- Ctrl+F 搜索当前笔记的文本框 Markdown 原文，Enter / Shift+Enter 跳转，点击结果后可直接继续书写，Esc 关闭搜索。暂不提供手写笔迹、图片与 PDF 正文识别。
+- 状态栏提供后退、前进与搜索；Alt+← / Alt+→ 恢复缩放、画布位置和小窗滚动。
+- 一个 `.ink` 对应一个无限画布，A4 纸张随内容自动拼接。普通笔记不显示独立页面入口；旧多画布文件保留只读导航入口，可切换编辑其中的内容。
+- 鼠标默认选取、拖动对象；画笔／橡皮属性中的“鼠标也使用画笔 / 橡皮”可开启鼠标绘制。触控笔保持所选工具。
+- 普通滚轮移动画布，Shift+滚轮横向移动，Ctrl+滚轮缩放；小窗文本优先滚动正文，移动工具下滚轮移动画布。
+- 侧栏边缘可直接打开工具属性、图形库、PDF 管理或纸张设置；查看图形库、PDF 不会改变触控笔工具。
 
 ## 恢复与诊断
 

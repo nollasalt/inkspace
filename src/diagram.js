@@ -73,20 +73,21 @@ function init(){
   const cancelMove=()=>{if(moveFrame!==null)cancelAnimationFrame(moveFrame);moveFrame=null;pendingMove=null};
   graph.fireMouseEvent=function(name,event,...args){
     const e=event.getEvent();if(e.pointerType&&e.pointerType!=='mouse'||e.nativeInk||e.sourceCapabilities?.firesTouchEvents)return;
-    if(space||tool==='pan'){if(graph.isMouseDown)cancelMouseDrag();return}
+    if(canvasUi(e)||!objectControls(e)||tool==='pan'){if(graph.isMouseDown)cancelMouseDrag();return}
     if(e.button===1||e.button===2||e.buttons&6)return;
+    if(name===mxEvent.MOUSE_DOWN&&!event.getCell()&&!isResizeHandle(e)&&!graph.connectionHandler.constraintHandler.currentConstraint)return;
     // Process the latest input once per display frame, including hit tests and
     // connected-cell handlers. Commit must consume the final queued position.
     if(name===mxEvent.MOUSE_MOVE&&graph.isMouseDown){pendingMove={event,args};if(moveFrame===null)moveFrame=requestAnimationFrame(flushMove);e.preventDefault();return}
     if(name===mxEvent.MOUSE_UP)flushMove();
-    if(name===mxEvent.MOUSE_DOWN){if(tool!=='diagram')activateTool('diagram',false,false);diagramContact=true;}
+    if(name===mxEvent.MOUSE_DOWN){diagramContact=true;}
     if(name===mxEvent.MOUSE_DOWN&&isResizeHandle(e))graph.connectionHandler.reset();
     const result=fire.call(this,name,event,...args);if(name===mxEvent.MOUSE_UP)diagramContact=false;return result;
   };
   graph.cancelPendingDiagramMove=cancelMove;
   const cancelMouseDrag=()=>{cancelMove();diagramContact=false;graph.graphHandler.reset();graph.selectionCellsHandler.reset();graph.connectionHandler.reset();graph.isMouseDown=false};
   window.addEventListener('blur',cancelMouseDrag);window.addEventListener('pointercancel',event=>{if(event.pointerType==='mouse')cancelMouseDrag()});
-  const doubleClick=graph.dblClick;graph.dblClick=function(event,cell){if(event.sourceCapabilities?.firesTouchEvents||typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen')return;return doubleClick.call(this,event,cell)};
+  const doubleClick=graph.dblClick;graph.dblClick=function(event,cell){if(!objectControls(event)||tool==='pan'||event.sourceCapabilities?.firesTouchEvents||typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen')return;return doubleClick.call(this,event,cell)};
   noteConnectors=installNoteConnectors(graph,mx,{release:()=>{diagramContact=false},derived:(change,previewOnly)=>{if(loading||doc.diagram!==loaded&&!(loaded===''&&!doc.diagram))return;loading=true;const model=graph.getModel(),first=model.currentEdit.changes.length;model.beginUpdate();try{change();for(const item of model.currentEdit.changes.slice(first))derivedChanges.add(item)}finally{model.endUpdate();loading=false}}});
   graph.getModel().addListener(mxEvent.CHANGE,sync);
   graph.getSelectionModel().addListener(mxEvent.CHANGE,()=>{if(!loading&&graph.getSelectionCount())clearSelection();refreshProperties();overlaySelection()});
@@ -105,8 +106,8 @@ function render(){
 }
 function ownsPointer(event){
   if(!graph||event.pointerType&&event.pointerType!=='mouse')return false;
-  if(space||tool==='pan'||event.button===1||event.button===2||event.buttons&6)return false;
-  return diagramContact||!!event.target.closest?.('#diagram-layer');
+  if(!objectControls(event)||tool==='pan'||event.button===1||event.button===2||event.buttons&6)return false;
+  if(diagramContact)return true;if(!event.target.closest?.('#diagram-layer'))return false;const p=local(event);return !!graph.getCellAt(p.x,p.y)||isResizeHandle(event)||!!graph.connectionHandler.constraintHandler.currentConstraint;
 }
 function refreshProperties(){
   const cell=graph?.getSelectionCell(),style=cell?graph.getCellStyle(cell):null;for(const id of ['#diagram-stroke','#diagram-fill','#diagram-width','#diagram-delete','#diagram-front','#diagram-back'])$(id).disabled=!cell;

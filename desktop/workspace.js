@@ -100,7 +100,7 @@ function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#wid
 for(const type of ['pointerover','pointermove','pointerrawupdate','pointerdown','pointerup'])viewport.addEventListener(type,updatePenCursor,{capture:true});
 viewport.addEventListener('pointerleave',e=>{if(penPosition&&e.pointerType!=='pen')return;const p=local(e);if(p.x>=0&&p.y>=0&&p.x<viewport.clientWidth&&p.y<viewport.clientHeight)return;clearPenCursor()});window.addEventListener('blur',clearPenCursor);
 $('#width').addEventListener('change',refreshPenCursor);$('#color').addEventListener('input',refreshPenCursor);
-function refreshToolOptions(){refreshPenCursor();$('#diagram-sidebar').hidden=false;$('#diagram-options').hidden=false;$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'}
+function refreshToolOptions(){syncInputMode();refreshPenCursor();$('#diagram-sidebar').hidden=false;$('#diagram-options').hidden=false;$('#shape-options').hidden=tool!=='shape';$('#pen-options').hidden=!['pen','shape','erase'].includes(tool);$('#pdf-options').hidden=tool!=='pdftext';viewport.style.cursor='default'}
 function setDiagramSidebarCollapsed(collapsed,remember=true){
   finishInteraction();document.body.classList.toggle('diagram-sidebar-hidden',collapsed);
   const button=$('#diagram-sidebar-toggle'),label=(collapsed?'展开':'收起')+'画布侧栏';
@@ -118,7 +118,7 @@ $('#sidebar-toggle').onclick=()=>{document.body.classList.toggle('sidebar-hidden
 window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const key=e.key.toLowerCase();if(['s','o','n'].includes(key)&&!document.querySelector('dialog[open]')){e.preventDefault();if(key==='s')saveNotebook(e.shiftKey);if(key==='o')openNotebook();if(key==='n')$('#new').click()}});
 let lastCanvasPointer='mouse';
 viewport.addEventListener('pointerdown',e=>{lastCanvasPointer=e.pointerType},{capture:true});
-viewport.addEventListener('dblclick',e=>{if(e.button!==0||lastCanvasPointer!=='mouse'||e.pointerType==='pen'||e.sourceCapabilities?.firesTouchEvents||e.target.closest('.note,.zoom,.pdf-page,#diagram-layer')||document.querySelector('dialog[open]'))return;finishInteraction();clearSelection();const p=local(e),position=world(p.x,p.y);edit({id:crypto.randomUUID(),...position,width:560,markdown:''})});
+viewport.addEventListener('dblclick',e=>{if(!objectControls(e)||e.button!==0||lastCanvasPointer!=='mouse'||e.pointerType==='pen'||e.sourceCapabilities?.firesTouchEvents||e.target.closest('.note,.zoom,.pdf-page,#diagram-layer')||document.querySelector('dialog[open]'))return;finishInteraction();clearSelection();const p=local(e),position=world(p.x,p.y);edit({id:crypto.randomUUID(),...position,width:560,markdown:''})});
 // app.js already recovered legacy browser files; now accept the notebook envelope.
 let initial=doc;try{const stored=JSON.parse(localStorage.getItem('inkspace.document'));if(valid(stored))initial=stored}catch{}
 adoptDocument(initial);savedDocument=contentSignature();

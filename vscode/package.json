@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.5.37",
+  "version": "0.5.38",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -194,7 +194,7 @@
       "activitybar": [
         {
           "id": "inkspace",
-          "title": "墨境页面",
+          "title": "墨境",
           "icon": "page.svg"
         }
       ]
@@ -203,17 +203,12 @@
       "inkspace": [
         {
           "id": "inkspace.pages",
-          "name": "笔记页面",
-          "when": "inkspace.hasNotebook"
+          "name": "旧版画布（兼容）",
+          "when": "inkspace.hasLegacyCanvases"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "inkspace.pages",
-        "contents": "打开 .ink 笔记即可切换页面。\n[新建笔记](command:inkspace.new)"
-      }
-    ],
+    "viewsWelcome": [],
     "menus": {
       "explorer/context": [
         {
@@ -227,38 +222,36 @@
           "group": "navigation"
         }
       ],
-      "view/title": [
+      "view/title": [],
+      "view/item/context": [],
+      "commandPalette": [
         {
-          "command": "inkspace.addPage",
-          "when": "view == inkspace.pages && inkspace.hasNotebook",
-          "group": "navigation"
+          "command": "inkspace.showPages",
+          "when": "inkspace.hasLegacyCanvases"
         },
         {
-          "command": "inkspace.find",
-          "when": "view == inkspace.pages && inkspace.hasNotebook",
-          "group": "navigation@0"
-        }
-      ],
-      "view/item/context": [
+          "command": "inkspace.addPage",
+          "when": "false"
+        },
         {
           "command": "inkspace.renamePage",
-          "when": "view == inkspace.pages && viewItem =~ /^inkspace\\.page/",
-          "group": "inline"
+          "when": "false"
         },
         {
           "command": "inkspace.deletePage",
-          "when": "view == inkspace.pages && viewItem =~ /^inkspace\\.page/",
-          "group": "navigation"
+          "when": "false"
+        },
+        {
+          "command": "inkspace.switchPage",
+          "when": "false"
         },
         {
           "command": "inkspace.movePageUp",
-          "when": "view == inkspace.pages && (viewItem == inkspace.page || viewItem == inkspace.pageLast)",
-          "group": "2_order@1"
+          "when": "false"
         },
         {
           "command": "inkspace.movePageDown",
-          "when": "view == inkspace.pages && (viewItem == inkspace.page || viewItem == inkspace.pageFirst)",
-          "group": "2_order@2"
+          "when": "false"
         }
       ]
     },

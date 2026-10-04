@@ -33,3 +33,16 @@ console.log('通过：笔迹、图形、混合框选移动、删除、Ctrl+Z / C
 
 run("doc={format:'inkspace',version:1,strokes:[{brush:'xournal',color:'#000000',width:2,points:[{x:10,y:20,p:.2},{x:30,y:40,p:.9}]}],shapes:[{kind:'rect',x:40,y:50,x2:80,y2:90,width:3,color:'#000000'}],notes:[{id:'scale-test',x:100,y:110,width:320,markdown:'text'}]};selected={strokes:[0],shapes:[0],notes:[0]};history=[];future=[];checkpoint();scaleSelection(2,{x:0,y:0},selectionScaleSnapshot())");
 assert.equal(run('doc.strokes[0].points[1].x'),60);assert.equal(run('doc.strokes[0].points[1].p'),.9);assert.equal(run('doc.strokes[0].width'),4);assert.equal(run('doc.shapes[0].x2'),160);assert.equal(run('doc.notes[0].scale'),2);assert.equal(run('doc.notes[0].width'),320);assert.equal(run('itemBounds("notes",doc.notes[0]).w'),640);assert(run('valid(doc)'));run('undo()');assert.equal(run('doc.strokes[0].width'),2);assert.equal(run('doc.notes[0].scale'),undefined);run('redo()');assert.equal(run('doc.notes[0].scale'),2);assert.equal(run('JSON.parse(JSON.stringify(doc)).notes[0].scale'),2);console.log('Passed mixed selection scaling, pressure preservation, text layout, JSON round-trip and undo/redo.');
+
+// Mouse intent and embedded UI ownership are independent of the selected pen tool.
+for(const name of ['pen','erase','pan','select','text','shape','diagram','pdftext']){
+ run('tool='+JSON.stringify(name)+';mouseDrawing=false');
+ assert.equal(run('pointerTool({pointerType:"mouse"})'),['pen','erase'].includes(name)?'select':name);
+ assert.equal(run('pointerTool({pointerType:"pen"})'),name);
+ assert.equal(run('objectControls({pointerType:"mouse",target:{closest:()=>null}})'),['pen','erase','pan','select','text','diagram'].includes(name));
+}
+run('doc={format:"inkspace",version:1,strokes:[],notes:[],shapes:[]};view={x:0,y:0,scale:1};tool="pen";mouseDrawing=true;history=[];future=[];clearSelection()');
+pointer('pointerdown',10,10);pointer('pointermove',40,40);pointer('pointerup',40,40);assert.equal(run('doc.strokes.length'),1);assert.equal(run('doc.strokes[0].hasPressure'),false);
+run('mouseDrawing=false;clearSelection();history=[]');pointer('pointerdown',25,25);pointer('pointerup',25,25);assert.equal(run('selected.strokes[0]'),0);assert.equal(run('history.length'),0,'Selecting creates no drawing undo entry');
+const ui={closest:()=>({})};handlers.get('#viewport:pointerdown')({pointerId:2,pointerType:'mouse',button:0,target:ui,clientX:10,clientY:10});assert.equal(run('active'),null);assert.equal(run('pointers.size'),0);
+console.log('Passed 8-tool mouse/pen policy, explicit mouse drawing, click-hit selection, selection without undo entries and embedded UI ownership.');
