@@ -68,7 +68,7 @@ function activate(context){
   const binaryProvider={
     onDidChangeCustomDocument:binaryEmitter.event,
     async openCustomDocument(uri,options){
-      if(uri.scheme!=='file')throw Error('二进制笔记暂需本地文件');let store=await binary.Store.open(options.backupId||uri.fsPath);if(store.truncated)vscode.window.showWarningMessage('检测到未完成的笔记写入，已恢复全部完整记录。');if(options.backupId){await binary.write(uri.fsPath,store.model,store.version);store=await binary.Store.open(uri.fsPath)}
+      if(uri.scheme!=='file')throw Error('二进制笔记暂需本地文件');let store=await binary.Store.open(options.backupId||uri.fsPath,options.backupId?undefined:emptyNotebook(path.basename(uri.fsPath,path.extname(uri.fsPath))));if(store.truncated)vscode.window.showWarningMessage('检测到未完成的笔记写入，已恢复全部完整记录。');if(options.backupId){await binary.write(uri.fsPath,store.model,store.version);store=await binary.Store.open(uri.fsPath)}
       const document={uri,inkStore:store,version:store.version,savedMtime:store.lastMtime,dispose(){clearTimeout(document.compactTimer);document.autoSave.dispose().catch(error=>vscode.window.showErrorMessage(error.message))},async save(){document.autoSave.clear();await document.inkStore.flush();await vscode.commands.executeCommand('workbench.action.files.save',uri);return true}};
       const settings=vscode.workspace.getConfiguration('inkspace',uri);document.autoSave=new AutoSave(async()=>{await states.get(uri.toString())?.queue;await document.save()},{delay:settings.get('autoSaveDelay',2000),maxDelay:settings.get('autoSaveMaxDelay',10000),onError:error=>vscode.window.showErrorMessage('自动保存失败：'+error.message)});return document;
     },
