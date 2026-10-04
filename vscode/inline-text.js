@@ -5,14 +5,14 @@
   function selectedNote(){const note=session?.note||doc.notes.find(n=>n.id===viewTarget?.id);return note&&doc.notes.includes(note)&&note.kind!=='image'?note:null}
   viewport.addEventListener('pointerdown',event=>{if(event.pointerType!=='mouse'||event.button!==0)return;const el=event.target.closest('.note'),note=el&&doc.notes.find(n=>n.id===el.dataset.id);if(note&&note.kind!=='image'){viewTarget=note;viewChanged()}else if(!el&&!event.target.closest('.zoom')){viewTarget=null;viewChanged()}},{capture:true});
   function applyView(note,cache){
-    const small=note.kind!=='image'&&note.viewMode==='window';cache.el.classList.toggle('window-text',small);
+    const temporary=session?.note===note?session.temporaryView:null,storedWindow=note.viewMode==='window',small=note.kind!=='image'&&(storedWindow||!!temporary);cache.el.classList.toggle('window-text',small);cache.el.classList.toggle('editing-window',!!temporary);
     if(note.kind!=='image'&&!cache.viewToggle){
       const toggle=document.createElement('button');toggle.className='note-view-toggle';toggle.type='button';toggle.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0){event.preventDefault();event.stopPropagation()}});toggle.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation()});toggle.onclick=event=>{if(!objectControls(event)||event.pointerType&&event.pointerType!=='mouse'||event.sourceCapabilities?.firesTouchEvents)return;event.stopPropagation();const current=doc.notes.find(n=>n.id===note.id);if(current){setView(current.viewMode==='window'?'full':'window',current);toggle.focus({preventScroll:true})}};cache.el.append(toggle);cache.viewToggle=toggle;
       const height=document.createElement('div');height.className='note-height-resize';height.tabIndex=0;height.setAttribute('role','slider');height.setAttribute('aria-label','小窗高度');height.setAttribute('aria-valuemin','80');height.setAttribute('aria-valuemax','1200');height.title='拖动调整小窗高度 · 方向键微调';height.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();event.stopPropagation();const current=doc.notes.find(n=>n.id===note.id);if(current?.viewMode==='window'){finish();finishInteraction();const value=Math.max(80,Math.min(1200,(Number(current.viewHeight)||240)+(event.key==='ArrowUp'?-1:1)*(event.shiftKey?48:16)));if(value!==current.viewHeight){checkpoint();current.viewHeight=value;renderNotes();renderBackground();persist()}}});height.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation()});cache.el.append(height);cache.heightControl=height;
     }
-    if(cache.viewToggle){cache.viewToggle.hidden=note.kind==='image';cache.viewToggle.textContent=small?'↕':'▤';cache.viewToggle.title=small?'全部显示：展开完整文本':'小窗显示：固定高度、滚轮查看';cache.viewToggle.setAttribute('aria-label',cache.viewToggle.title);cache.viewToggle.setAttribute('aria-pressed',String(small));cache.heightControl.hidden=!small;cache.heightControl.setAttribute('aria-valuenow',String(note.viewHeight||240))}
+    if(cache.viewToggle){cache.viewToggle.hidden=note.kind==='image'||!!temporary;cache.viewToggle.textContent=small?'↕':'▤';cache.viewToggle.title=small?'全部显示：展开完整文本':'小窗显示：固定高度、滚轮查看';cache.viewToggle.setAttribute('aria-label',cache.viewToggle.title);cache.viewToggle.setAttribute('aria-pressed',String(small));cache.heightControl.hidden=!storedWindow||!!temporary;cache.heightControl.setAttribute('aria-valuenow',String(note.viewHeight||240))}
     let frame=cache.body.querySelector(':scope > .note-scroll-viewport');
-    if(small){if(!frame){frame=document.createElement('div');frame.className='note-scroll-viewport';frame.setAttribute('aria-label','文本框滚动内容');frame.tabIndex=0;frame.append(...cache.body.childNodes);cache.body.append(frame);frame.scrollTop=cache.viewScrollTop||0;frame.addEventListener('scroll',()=>{cache.viewScrollTop=frame.scrollTop},{passive:true})}frame.style.height=Math.max(80,Math.min(1200,active?.type==='resize-window'&&active.n.id===note.id?active.height:Number(note.viewHeight)||240))+'px';}
+    if(small){if(!frame){frame=document.createElement('div');frame.className='note-scroll-viewport';frame.setAttribute('aria-label','文本框滚动内容');frame.tabIndex=0;frame.append(...cache.body.childNodes);cache.body.append(frame);frame.scrollTop=cache.viewScrollTop||0;frame.addEventListener('scroll',()=>{cache.viewScrollTop=frame.scrollTop},{passive:true})}frame.style.marginTop=(temporary?.offset||0)+'px';frame.style.height=Math.max(80,Math.min(1200,temporary?.height||(active?.type==='resize-window'&&active.n.id===note.id?active.height:Number(note.viewHeight)||240)))+'px';if(session?.note===note){let tail=frame.querySelector('.editor-scroll-tail');if(!tail){tail=document.createElement('div');tail.className='editor-scroll-tail';tail.setAttribute('aria-hidden','true');tail.style.pointerEvents='none';frame.append(tail)}tail.style.height=frame.style.height}else frame.querySelector('.editor-scroll-tail')?.remove();}
     else if(frame){cache.body.replaceChildren(...frame.childNodes);cache.viewScrollTop=0;}
     cache.scrollViewport=small?frame:null;
   }
@@ -36,17 +36,17 @@
   viewport.addEventListener('pointerleave',()=>mouseHover(null));window.addEventListener('blur',()=>mouseHover(null));
   const cursorBeforeTextHover=updatePenCursor;
   updatePenCursor=function(event,rect){cursorBeforeTextHover(event,rect);if(event.pointerType==='pen')mouseHover(null)};
-  function bounds(note){if(!note)return null;const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
+  function bounds(note){if(!note)return null;if(session?.note===note&&session.temporaryView&&session.previewBounds)return{...session.previewBounds};const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
   function finish(redraw=true){
     const current=session;if(!current)return;session=null;
     current.el.classList.remove('editing-text');current.cache.markdown=null;
     if(current.created&&!current.note.markdown.trim()&&notebook.activePage===current.page&&doc.notes.includes(current.note)){doc.notes=doc.notes.filter(n=>n!==current.note);persist()}
-    if(redraw){renderNotes();renderBackground()}viewChanged();
+    if(redraw){renderNotes();if(current.cache.scrollViewport&&current.previewScroll!==undefined){current.cache.scrollViewport.scrollTop=current.previewScroll;current.cache.viewScrollTop=current.previewScroll}renderBackground()}viewChanged();
   }
   function history(command){if(!session||document.activeElement!==session.input)return false;document.execCommand(command);return true}
   function sync(){if(session&&(session.page!==notebook.activePage||!doc.notes.includes(session.note)))finish(false);const note=selectedNote();if(viewSignature!==JSON.stringify([note?.id,note?.viewMode,!!session,tool]))viewChanged()}
   function sourceCaret(note,cache,position){
-    const root=cache?.body;if(!root)return note.markdown.length;
+    const root=cache?.body;if(!root)return note.markdown.replace(/\r\n|\r/g,'\n').length;
     // Hit through the transparent interaction layer before replacing the preview.
     const hit=cache.el.querySelector('.note-hit'),beforeHit=hit?.style.pointerEvents,beforeBody=root.style.pointerEvents;let range;
     try{if(hit)hit.style.pointerEvents='none';root.style.pointerEvents='auto';range=document.caretRangeFromPoint(position.x,position.y)}finally{if(hit)hit.style.pointerEvents=beforeHit;root.style.pointerEvents=beforeBody}
@@ -71,33 +71,43 @@
       // A link's destination is source syntax, not the next visible text node.
       if(current.parentElement.closest('a')&&decoded.slice(cursor,cursor+2)===']('){let depth=1,i=cursor+2;for(;i<decoded.length&&depth;i++){if(decoded[i]==='(')depth++;if(decoded[i]===')')depth--}cursor=i}
     }
-    let actual=0;for(let i=0;i<result&&actual<note.markdown.length;i++,actual++)if(note.markdown[actual]==='\r'&&note.markdown[actual+1]==='\n')actual++;
-    return actual;
+    // Textarea values normalize Windows newlines; offsets must use that same text.
+    return result;
   }
-  function revealCaret(note,cache,input,offset){
+  function revealCaret(note,cache,input,offset,position){
     const frame=cache.scrollViewport;if(!frame)return;
-    const r=input.getBoundingClientRect(),style=getComputedStyle(input),scale=view.scale*(note.scale||1),mirror=document.createElement('div');
-    Object.assign(mirror.style,{position:'fixed',visibility:'hidden',pointerEvents:'none',left:r.left+'px',top:r.top+'px',width:input.clientWidth+'px',font:style.font,lineHeight:style.lineHeight,whiteSpace:'pre-wrap',overflowWrap:'anywhere',transform:'scale('+scale+')',transformOrigin:'0 0'});mirror.textContent=input.value||' ';document.body.append(mirror);
-    const range=document.createRange();range.setStart(mirror.firstChild,Math.min(offset,mirror.firstChild.length));range.collapse(true);const caret=range.getBoundingClientRect(),viewport=frame.getBoundingClientRect();mirror.remove();
-    if(caret.height){if(caret.top<viewport.top)frame.scrollTop-=(viewport.top-caret.top)/scale;else if(caret.bottom>viewport.bottom)frame.scrollTop+=(caret.bottom-viewport.bottom)/scale}cache.viewScrollTop=frame.scrollTop;
+    const r=input.getBoundingClientRect(),style=getComputedStyle(input),scale=view.scale*(note.scale||1),mirror=document.createElement('div'),marker=document.createElement('span');
+    Object.assign(mirror.style,{position:'fixed',visibility:'hidden',pointerEvents:'none',left:r.left+'px',top:r.top+'px',width:input.clientWidth+'px',font:style.font,lineHeight:style.lineHeight,whiteSpace:'pre-wrap',overflowWrap:'anywhere',transform:'scale('+scale+')',transformOrigin:'0 0'});
+    mirror.append(document.createTextNode(input.value.slice(0,offset)));marker.textContent='\u200b';mirror.append(marker,document.createTextNode(input.value.slice(offset)));document.body.append(mirror);
+    const caret=marker.getBoundingClientRect(),rect=frame.getBoundingClientRect();mirror.remove();
+    if(caret.height){const half=caret.height/2,target=position?Math.max(rect.top+half,Math.min(rect.bottom-half,position.y)):Math.max(rect.top+half,Math.min(rect.bottom-half,caret.top+half));frame.scrollTop+=(caret.top+half-target)/scale}cache.viewScrollTop=frame.scrollTop;
+  }
+  function editingViewport(note,cache,position){
+    if(!cache||note.viewMode==='window')return null;
+    const b=bounds(note),scale=view.scale*(note.scale||1),vp=viewport.getBoundingClientRect(),top=vp.top+view.y+b.y*view.scale,bottom=top+b.h*view.scale;
+    let visibleTop=Math.max(top,vp.top+8);const visibleBottom=Math.min(bottom,vp.bottom-8),height=Math.max(80,Math.min(240,(visibleBottom-visibleTop)/scale));
+    // Keep the editing window around the clicked passage of a long preview.
+    if(position)visibleTop=Math.max(visibleTop,Math.min(position.y-height*scale/2,visibleBottom-height*scale));
+    return{height,offset:Math.max(0,(visibleTop-top)/scale)};
   }
   edit=function(note,position){
     if(note.kind==='image')return;
     if(session?.note===note){session.input.focus({preventScroll:true});return}
-    const previousCache=noteCache.get(note.id),caret=position?sourceCaret(note,previousCache,position):note.markdown.length;
+    const previousCache=noteCache.get(note.id),caret=position?sourceCaret(note,previousCache,position):note.markdown.replace(/\r\n|\r/g,'\n').length,previewBounds=previousCache?bounds(note):null,temporaryView=doc.notes.includes(note)?editingViewport(note,previousCache,position):null,previewScroll=previousCache?.scrollViewport?.scrollTop;
     if(previousCache?.scrollViewport)previousCache.viewScrollTop=previousCache.scrollViewport.scrollTop;
     finish();finishInteraction();clearSelection();
     const created=!doc.notes.includes(note);
     if(created){checkpoint();note.markdown='';doc.notes.push(note)}
     renderNotes();const cache=noteCache.get(note.id),input=document.createElement('textarea');
     input.className='inline-note-editor';input.spellcheck=false;input.placeholder='输入文本或 Markdown…';input.setAttribute('aria-label','文本框内容');input.value=note.markdown;
-    viewTarget=note;session={note,created,creationAnchor:created?{x:note.x,y:note.y}:null,checkpointed:created,page:notebook.activePage,input,el:cache.el,cache};cache.el.classList.add('editing-text');cache.body.replaceChildren(input);applyView(note,cache);viewChanged();
+    viewTarget=note;session={note,created,creationAnchor:created?{x:note.x,y:note.y}:null,checkpointed:created,page:notebook.activePage,input,el:cache.el,cache,temporaryView,previewBounds,previewScroll};cache.el.classList.add('editing-text');cache.body.replaceChildren(input);applyView(note,cache);viewChanged();
     const resizeInput=()=>{input.style.height='0px';input.style.height=Math.max(textSize()*1.75,input.scrollHeight)+'px';layoutNote(note,cache);if(session?.creationAnchor){const size=note.scale||1,style=getComputedStyle(cache.el),anchor=session.creationAnchor;note.x=anchor.x-(parseFloat(cache.el.style.getPropertyValue('--text-startX'))+parseFloat(style.borderLeftWidth))*size;note.y=anchor.y-(parseFloat(cache.el.style.getPropertyValue('--text-startY'))+parseFloat(style.borderTopWidth))*size;placeNote(note,cache.el);if(input.value.length)session.creationAnchor=null}scheduleA4Pages()};
-    input.addEventListener('input',()=>{if(session?.input!==input)return;if(!session.checkpointed){checkpoint();session.checkpointed=true}note.markdown=input.value;resizeInput();persist()});
+    input.addEventListener('input',()=>{if(session?.input!==input)return;if(!session.checkpointed){checkpoint();session.checkpointed=true}note.markdown=input.value;resizeInput();revealCaret(note,cache,input,input.selectionEnd);persist()});
     input.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0&&!space)event.stopPropagation()});
     input.addEventListener('keydown',event=>{if(event.isComposing)return;if((event.ctrlKey||event.metaKey)&&!event.altKey){const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;if(command){event.preventDefault();event.stopImmediatePropagation();history(command);return}}if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
     input.addEventListener('blur',()=>{if(session?.input===input)finish()});
-    input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);if(position)revealCaret(note,cache,input,caret);renderBackground();overlaySelection();if(created)persist();
+    input.addEventListener('keyup',event=>{if(session?.input===input&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(event.key))revealCaret(note,cache,input,input.selectionEnd)});
+    input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);revealCaret(note,cache,input,caret,position);renderBackground();overlaySelection();if(created)persist();
   };
   document.addEventListener('pointerdown',event=>{if(session&&event.pointerType==='mouse'&&!session.input.contains(event.target))finish()},{capture:true});
   const switchBeforeInlineText=switchPage;
@@ -118,7 +128,7 @@
     let root=cache.body,mirror;
     if(input){
       // Match the rendered first glyph without moving saved text or overlaid ink.
-      const preview=cache.body.cloneNode(false);preview.style.cssText='position:absolute;visibility:hidden;pointer-events:none;left:0;top:0;width:100%';preview.innerHTML=markdown(note.markdown||input.placeholder);if(cache.scrollViewport){const frame=document.createElement('div');frame.className='note-scroll-viewport';frame.style.height=cache.scrollViewport.style.height;frame.append(...preview.childNodes);preview.append(frame)}cache.el.append(preview);const renderedStart=contentRects(preview)[0];preview.remove();
+      const preview=cache.body.cloneNode(false);preview.style.cssText='position:absolute;visibility:hidden;pointer-events:none;left:0;top:0;width:100%';preview.innerHTML=markdown(note.markdown||input.placeholder);if(cache.scrollViewport){const frame=document.createElement('div');frame.className='note-scroll-viewport';frame.style.height=cache.scrollViewport.style.height;frame.style.marginTop=cache.scrollViewport.style.marginTop;frame.append(...preview.childNodes);preview.append(frame)}cache.el.append(preview);const renderedStart=contentRects(preview)[0];preview.remove();
       const scale=view.scale*(note.scale||1),outer=cache.el.getBoundingClientRect(),style=getComputedStyle(cache.el),origin={left:outer.left+parseFloat(style.borderLeftWidth)*scale,top:outer.top+parseFloat(style.borderTopWidth)*scale};
       mirror=document.createElement('div');const positionMirror=()=>{const rect=input.getBoundingClientRect();mirror.style.left=(rect.left-origin.left)/scale+'px';mirror.style.top=(rect.top-origin.top)/scale+'px'};
       mirror.style.cssText=`position:absolute;visibility:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:anywhere;width:${input.clientWidth}px;line-height:1.75`;mirror.textContent=input.value||input.placeholder;cache.el.append(mirror);positionMirror();const editorStart=contentRects(mirror)[0];

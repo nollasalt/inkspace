@@ -31,7 +31,8 @@
     "dist:vscode:bundle": "node scripts/package-vscode-bundle.cjs",
     "test:engine:binary": "node -e \"process.env.INKSPACE_ENGINE_BINARY_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
     "test:navigation": "node tests/navigation.cjs && electron tests/navigation-electron.cjs",
-    "test:interaction": "electron tests/interaction-electron.cjs"
+    "test:interaction": "electron tests/interaction-electron.cjs",
+    "test:text:caret": "electron tests/caret-electron.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
