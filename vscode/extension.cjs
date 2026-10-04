@@ -10,7 +10,7 @@ function activate(context){
   const states=new Map(),pending=new Map();let active=null,sequence=0;
   const emitter=new vscode.EventEmitter(),binaryEmitter=new vscode.EventEmitter();
   const pages={onDidChangeTreeData:emitter.event,getTreeItem:item=>item,getChildren:()=>{
-    if(!active?.pages)return[];return active.pages.map((page,index)=>{const item=new vscode.TreeItem(`${String(index+1).padStart(2,'0')}  ${page.title}`);item.id=page.id;item.contextValue='inkspace.page';item.iconPath=new vscode.ThemeIcon(page.id===active.activePage?'circle-filled':'circle-outline');item.command={command:'inkspace.switchPage',title:'切换页面',arguments:[page.id]};return item})
+    if(!active?.pages)return[];return active.pages.map((page,index)=>{const item=new vscode.TreeItem(`${String(index+1).padStart(2,'0')}  ${page.title}`);item.id=page.id;item.contextValue=active.pages.length===1?'inkspace.pageOnly':index===0?'inkspace.pageFirst':index===active.pages.length-1?'inkspace.pageLast':'inkspace.page';item.description=page.id===active.activePage?'当前页':undefined;item.iconPath=new vscode.ThemeIcon(page.id===active.activePage?'circle-filled':'circle-outline');item.command={command:'inkspace.switchPage',title:'切换页面',arguments:[page.id]};return item})
   }};
   function refresh(){vscode.commands.executeCommand('setContext','inkspace.inlineTextFocused',!!active?.textEditing&&!!active?.clipboardFocused);vscode.commands.executeCommand('setContext','inkspace.hasNotebook',!!active);emitter.fire()}
   function request(state,command,args={}){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('画布响应超时'))},15000);pending.set(id,{state,resolve,reject,timer});state.panel.webview.postMessage({type:'request',id,command,...args})})}
@@ -84,6 +84,9 @@ function activate(context){
   context.subscriptions.push(binaryEmitter,vscode.window.registerCustomEditorProvider(BINARY,binaryProvider,{webviewOptions:{retainContextWhenHidden:true},supportsMultipleEditorsPerDocument:false}),emitter,vscode.window.registerTreeDataProvider('inkspace.pages',pages),vscode.window.registerCustomEditorProvider(VIEW,provider,{webviewOptions:{retainContextWhenHidden:true},supportsMultipleEditorsPerDocument:false}),
     vscode.commands.registerCommand('inkspace.new',newNote),vscode.commands.registerCommand('inkspace.open',openNote),
     vscode.commands.registerCommand('inkspace.showDiagnostics',showDiagnostics),vscode.commands.registerCommand('inkspace.saveRecoveryCopy',saveRecoveryCopy),
+    vscode.commands.registerCommand('inkspace.find',()=>{const state=active;if(state){state.panel.reveal(undefined,false);return request(state,'find')}}),
+    vscode.commands.registerCommand('inkspace.navigateBack',()=>active&&request(active,'navigate',{direction:'back'})),vscode.commands.registerCommand('inkspace.navigateForward',()=>active&&request(active,'navigate',{direction:'forward'})),
+    ...[-1,1].map(direction=>vscode.commands.registerCommand(direction===-1?'inkspace.movePageUp':'inkspace.movePageDown',item=>{const state=active;return state&&request(state,'movePage',{page:item?.id||state.activePage,direction})})),
     ...toolNames.map(tool=>vscode.commands.registerCommand('inkspace.tool.'+tool,()=>active&&request(active,'tool',{tool}))),
     vscode.commands.registerCommand('inkspace.showPages',()=>vscode.commands.executeCommand('inkspace.pages.focus')),
     vscode.commands.registerCommand('inkspace.addPage',()=>active&&request(active,'addPage')),

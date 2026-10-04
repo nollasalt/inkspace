@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.5.36",
+  "version": "0.5.37",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -158,6 +158,36 @@
         "command": "inkspace.saveRecoveryCopy",
         "title": "保存当前画布的恢复副本",
         "category": "墨境"
+      },
+      {
+        "command": "inkspace.find",
+        "title": "搜索当前笔记",
+        "category": "墨境",
+        "icon": "$(search)"
+      },
+      {
+        "command": "inkspace.navigateBack",
+        "title": "返回上一位置",
+        "category": "墨境",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "inkspace.navigateForward",
+        "title": "前进到下一位置",
+        "category": "墨境",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "inkspace.movePageUp",
+        "title": "上移页面",
+        "category": "墨境",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "inkspace.movePageDown",
+        "title": "下移页面",
+        "category": "墨境",
+        "icon": "$(arrow-down)"
       }
     ],
     "viewsContainers": {
@@ -202,18 +232,33 @@
           "command": "inkspace.addPage",
           "when": "view == inkspace.pages && inkspace.hasNotebook",
           "group": "navigation"
+        },
+        {
+          "command": "inkspace.find",
+          "when": "view == inkspace.pages && inkspace.hasNotebook",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [
         {
           "command": "inkspace.renamePage",
-          "when": "view == inkspace.pages && viewItem == inkspace.page",
+          "when": "view == inkspace.pages && viewItem =~ /^inkspace\\.page/",
           "group": "inline"
         },
         {
           "command": "inkspace.deletePage",
-          "when": "view == inkspace.pages && viewItem == inkspace.page",
+          "when": "view == inkspace.pages && viewItem =~ /^inkspace\\.page/",
           "group": "navigation"
+        },
+        {
+          "command": "inkspace.movePageUp",
+          "when": "view == inkspace.pages && (viewItem == inkspace.page || viewItem == inkspace.pageLast)",
+          "group": "2_order@1"
+        },
+        {
+          "command": "inkspace.movePageDown",
+          "when": "view == inkspace.pages && (viewItem == inkspace.page || viewItem == inkspace.pageFirst)",
+          "group": "2_order@2"
         }
       ]
     },
@@ -303,6 +348,24 @@
         "command": "inkspace.redo",
         "key": "ctrl+y",
         "when": "inkspace.hasNotebook && inkspace.inlineTextFocused && !terminalFocus"
+      },
+      {
+        "command": "inkspace.find",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.navigateBack",
+        "key": "alt+left",
+        "mac": "ctrl+-",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.navigateForward",
+        "key": "alt+right",
+        "mac": "ctrl+shift+-",
+        "when": "(activeCustomEditorId == inkspace.notebook || activeCustomEditorId == inkspace.binary) && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
       }
     ],
     "configuration": {

@@ -12,7 +12,7 @@
     "test:installer:vscodium": "node scripts/verify-vscodium-installer.cjs",
     "test:vscode": "node scripts/test-vscode.cjs",
     "build": "node scripts/build.cjs",
-    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs && node tests/binary-notebook.cjs && node tests/autosave.cjs && node tests/recovery.cjs",
+    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs && node tests/binary-notebook.cjs && node tests/autosave.cjs && node tests/recovery.cjs && node tests/navigation.cjs",
     "start": "electron .",
     "test:desktop": "electron . --smoke-test",
     "dist": "npm run build:native && npm run build:terminal && npm run build && electron-builder --win nsis --x64 && node scripts/package-source.cjs",
@@ -29,7 +29,8 @@
     "test:engine": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && node scripts/test-ink-engine.cjs",
     "dist:vscode": "node scripts/build-vscode.cjs && node scripts/package-vscode-engine.cjs",
     "dist:vscode:bundle": "node scripts/package-vscode-bundle.cjs",
-    "test:engine:binary": "node -e \"process.env.INKSPACE_ENGINE_BINARY_TEST='1';require('./scripts/test-ink-engine.cjs')\""
+    "test:engine:binary": "node -e \"process.env.INKSPACE_ENGINE_BINARY_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
+    "test:navigation": "node tests/navigation.cjs && electron tests/navigation-electron.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
