@@ -51,3 +51,6 @@ header .tools button.active,#diagram-sidebar .sidebar-choices button.active,#sid
 .note-connect-arrow::before{content:'';position:absolute;pointer-events:inherit}.note-connect-left::before{left:20px;top:0;width:8px;height:20px}.note-connect-right::before{right:20px;top:0;width:8px;height:20px}.note-connect-bottom::before{left:0;bottom:20px;width:20px;height:14px}
 
 .note.note .note-height-resize{z-index:7}
+
+/* Rendered text must not start browser selection during a shape gesture. */
+.shape-input .note-body,.shape-input .note-hit{user-select:none;-webkit-user-select:none}.shape-input .inline-note-editor{user-select:text;-webkit-user-select:text}

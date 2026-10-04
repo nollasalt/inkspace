@@ -426,6 +426,20 @@ async function runCodiumDiagnostic(action){
       }finally{g.cellRenderer.redraw=originalRedraw}
     }finally{doc=saved.doc;history=saved.history;future=saved.future;tool=saved.tool;view=saved.view;clearSelection();render();await window.inkspaceCairoIdle();await flushed()}
   }
+  if(action==='shape-over-text'){
+    const saved={doc,view:{...view},history,future,tool};await window.inkspaceCairoIdle();
+    try{
+      window.inkspaceInlineText.finish();doc={...doc,notes:[{id:'shape-full-text',x:40,y:40,width:240,markdown:'Full text\n\n[Link](https://example.com)'},{id:'shape-window-text',x:400,y:40,width:240,viewMode:'window',viewHeight:120,markdown:'Window text\n\nSecond line'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:1};history=[];future=[];activateTool('shape',false);render();
+      const kind=$('#shape-kind').value;$('#shape-kind').value='rect';
+      try{for(const id of ['shape-full-text','shape-window-text']){
+        const c=noteCache.get(id),target=c.scrollViewport||c.el.querySelector('.note-hit'),r=target.getBoundingClientRect(),sample={x:r.left+20,y:r.top+20,p:.6,id:292,precise:true,eraser:false},before=doc.shapes.length,undoCount=history.length;
+        await window.inkspaceNative.test('fixture',{packets:[{type:'pointerdown',samples:[sample]}]});if(active?.type!=='shape')throw Error('Text intercepted native shape pointerdown');
+        await window.inkspaceNative.test('fixture',{packets:[{type:'pointermove',samples:[{...sample,x:sample.x+80,y:sample.y+40}]},{type:'pointerup',samples:[{...sample,x:sample.x+80,y:sample.y+40,p:0}]}]});
+        const shape=doc.shapes.at(-1);if(active||doc.shapes.length!==before+1||history.length!==undoCount+1||Math.abs(shape.x2-shape.x-80)>.01||Math.abs(shape.y2-shape.y-40)>.01||window.getSelection().toString())throw Error('Text selection interrupted native shape drawing');
+      }}finally{$('#shape-kind').value=kind}
+      return{nativePen:true,fullAndWindowText:true,oneShapePerGesture:true,noTextSelection:true};
+    }finally{finishInteraction();doc=saved.doc;view=saved.view;history=saved.history;future=saved.future;tool=saved.tool;viewport.classList.toggle('shape-input',tool==='shape');clearSelection();render();persist();await flushed()}
+  }
   if(action==='note-connectors'){
     const saved={doc,view:{...view},history,future,tool};await window.inkspaceCairoIdle();
     try{
