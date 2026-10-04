@@ -184,8 +184,8 @@ const toolKey=(key,options={})=>w.document.body.dispatchEvent(new w.KeyboardEven
 toolKey('e');assert.equal(run('tool'),'erase');toolKey('e',{repeat:true});assert.equal(run('tool'),'erase');
 toolKey('e');assert.equal(run('tool'),'pen');toolKey('e');assert.equal(run('tool'),'erase');
 toolKey('v');assert.equal(run('tool'),'select');toolKey('v');assert.equal(run('tool'),'erase');
-w.document.querySelector('[data-tool="pan"]').click();toolKey('v');toolKey('v');assert.equal(run('tool'),'pan');
-const source=w.document.querySelector('#source');source.dispatchEvent(new w.KeyboardEvent('keydown',{bubbles:true,key:'e'}));assert.equal(run('tool'),'pan');
+w.document.querySelector('[data-tool="text"]').click();toolKey('v');toolKey('v');assert.equal(run('tool'),'text');toolKey('h');assert.equal(run('tool'),'text');assert.equal(w.document.querySelector('[data-tool="pan"]'),null);
+const source=w.document.querySelector('#source');source.dispatchEvent(new w.KeyboardEvent('keydown',{bubbles:true,key:'e'}));assert.equal(run('tool'),'text');
 run("tool='select'");
 
 // Background styles follow world coordinates and survive save, validation and undo.
