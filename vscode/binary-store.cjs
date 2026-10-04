@@ -9,21 +9,38 @@ function unpack(value){if(Array.isArray(value))return value.map(unpack);if(value
 async function record(value){const bytes=await deflate(v8.serialize(pack(value)),{level:1}),header=Buffer.alloc(8);header.writeUInt32LE(bytes.length);header.writeUInt32LE(crc(bytes),4);return Buffer.concat([header,bytes])}
 function decode(bytes){if(bytes.length>512*1024*1024||!bytes.subarray(0,MAGIC.length).equals(MAGIC))throw Error('Invalid Inkspace binary file');let model,offset=MAGIC.length,records=0,version=0;while(offset+8<=bytes.length){const size=bytes.readUInt32LE(offset),checksum=bytes.readUInt32LE(offset+4);if(!size||size>128*1024*1024)throw Error('Invalid binary record size');if(offset+8+size>bytes.length)break;const body=bytes.subarray(offset+8,offset+8+size);if(crc(body)!==checksum){if(model&&offset+8+size===bytes.length)break;throw Error('Inkspace record checksum failed')}const entry=unpack(v8.deserialize(zlib.inflateRawSync(body,{maxOutputLength:256*1024*1024})));if(entry.type==='base'){if(model)throw Error('Duplicate baseline');model=entry.model}else if(entry.type==='delta'&&model)delta.apply(model,entry.patch);else throw Error('Invalid binary record');version=Number.isSafeInteger(entry.version)?entry.version:records;offset+=8+size;records++}if(!model)throw Error('Missing binary baseline');return {model,version,validBytes:offset,records,truncated:offset!==bytes.length}}
 async function write(file,model,version=0){const temp=file+'.tmp-'+crypto.randomUUID(),bytes=Buffer.concat([MAGIC,await record({type:'base',model,version})]);try{const handle=await fs.open(temp,'wx');try{await handle.writeFile(bytes);await handle.sync()}finally{await handle.close()}await fs.rename(temp,file)}catch(e){await fs.rm(temp,{force:true});throw e}return bytes.length}
-class Store{constructor(file,result){this.file=file;this.model=result.model;this.validBytes=result.validBytes;this.records=result.records;this.truncated=result.truncated;this.queue=Promise.resolve();this.version=result.version;this.baseBytes=result.validBytes;this.pendingBase=null;this.diskFlushes=0;this.diskBytes=0}
- static async open(file,initialModel){let bytes=await fs.readFile(file);if(bytes.length===0&&initialModel){await write(file,initialModel);bytes=await fs.readFile(file)}const store=new Store(file,decode(bytes));store.lastMtime=(await fs.stat(file)).mtimeMs;return store}
+class Store{constructor(file,result){this.file=file;this.model=result.model;this.validBytes=result.validBytes;this.records=result.records;this.truncated=result.truncated;this.recoveredTailBytes=0;this.queue=Promise.resolve();this.version=result.version;this.baseBytes=result.validBytes;this.pendingBase=null;this.diskFlushes=0;this.diskBytes=0;this.metrics={attempts:0,failures:0,retriesRecovered:0,lastMs:0,maxMs:0,totalMs:0}}
+ static async open(file,initialModel){let bytes=await fs.readFile(file);if(bytes.length===0&&initialModel){await write(file,initialModel);bytes=await fs.readFile(file)}const store=new Store(file,decode(bytes));store.recoveredTailBytes=bytes.length-store.validBytes;store.lastMtime=(await fs.stat(file)).mtimeMs;return store}
 
  stage(next){if(!this.pendingBase)this.pendingBase=delta.capture(this.model);this.model=next;this.version++;return this.version}
  flush(){
+  if(this.writeFailure){this.queue=Promise.resolve();this.writeFailure=false;this.failedBase=null}
   if(this.pendingBase){
-   if(this.writeFailure){this.queue=Promise.resolve();this.writeFailure=false;this.failedBase=null}
    const base=this.pendingBase,patch=delta.diff(base,delta.capture(this.model)),version=this.version;this.pendingBase=null;
    if(patch)this.queue=this.queue.then(()=>this.writePatch(patch,version)).catch(error=>{this.failedBase??=base;this.pendingBase=this.failedBase;this.writeFailure=true;throw error});
   }
-  return this.queue;
+ return this.queue;
  }
+ async backup(file){await this.queue.catch(()=>{});const snapshot=delta.capture(this.model),version=this.version;return write(file,snapshot,version)}
+ status(){return {pending:!!this.pendingBase,version:this.version,records:this.records,fileBytes:this.validBytes,diskCommits:this.diskFlushes,diskBytes:this.diskBytes,recoveredTailBytes:this.recoveredTailBytes,...this.metrics}}
 }
 // Explicit positioned writes preserve the last valid prefix after interruption.
-Store.prototype.writePatch=async function(patch,version){const bytes=await record({type:'delta',patch,version}),h=await fs.open(this.file,'r+');try{const stat=await h.stat();if(stat.mtimeMs!==this.lastMtime)throw Error('笔记文件在外部发生变化');if(stat.size!==this.validBytes){if(!this.truncated)throw Error('笔记文件在外部发生变化');await h.truncate(this.validBytes)}let offset=0;while(offset<bytes.length){const result=await h.write(bytes,offset,bytes.length-offset,this.validBytes+offset);if(!result.bytesWritten)throw Error('Binary write made no progress');offset+=result.bytesWritten}await h.sync();this.validBytes+=bytes.length;this.records++;this.diskFlushes++;this.diskBytes+=bytes.length;this.truncated=false;this.lastMtime=(await h.stat()).mtimeMs}finally{await h.close()}};
+Store.prototype.writePatch=async function(patch,version){
+ const started=performance.now();this.metrics.attempts++;let h,bytes,writing=false;
+ try{
+  bytes=await record({type:'delta',patch,version});h=await fs.open(this.file,'r+');const stat=await h.stat();
+  if(stat.mtimeMs!==this.lastMtime)throw Error('笔记文件在外部发生变化');
+  if(this.failedTail){const tail=Buffer.alloc(this.failedTail.length);const read=await h.read(tail,0,tail.length,this.validBytes);if(stat.size!==this.validBytes+tail.length||read.bytesRead!==tail.length||!tail.equals(this.failedTail))throw Error('笔记文件在外部发生变化');await h.truncate(this.validBytes);this.failedTail=null;this.metrics.retriesRecovered++}
+  else if(stat.size!==this.validBytes){if(!this.truncated)throw Error('笔记文件在外部发生变化');await h.truncate(this.validBytes)}
+  writing=true;let offset=0;while(offset<bytes.length){const result=await h.write(bytes,offset,bytes.length-offset,this.validBytes+offset);if(!result.bytesWritten)throw Error('Binary write made no progress');offset+=result.bytesWritten}
+  await h.sync();const savedStat=await h.stat();this.validBytes+=bytes.length;this.records++;this.diskFlushes++;this.diskBytes+=bytes.length;this.truncated=false;this.lastMtime=savedStat.mtimeMs;
+ }catch(error){
+  this.metrics.failures++;
+  // Only accept a tail that exactly matches this attempt, never an external edit.
+  if(writing&&h)try{const stat=await h.stat(),length=stat.size-this.validBytes;if(length>=0&&length<=bytes.length){const tail=Buffer.alloc(length),read=await h.read(tail,0,length,this.validBytes);if(read.bytesRead===length&&tail.equals(bytes.subarray(0,length))){this.failedTail=tail;this.lastMtime=stat.mtimeMs}}}catch{}
+  throw error;
+ }finally{const elapsed=performance.now()-started;this.metrics.lastMs=elapsed;this.metrics.totalMs+=elapsed;this.metrics.maxMs=Math.max(this.metrics.maxMs,elapsed);if(h)await h.close()}
+};
 Store.prototype.append=function(patch){this.queue=this.queue.then(async()=>{await this.writePatch(patch,this.version+1);this.version++});return this.queue};
-Store.prototype.compact=function(){this.flush();this.queue=this.queue.then(async()=>{const stat=await fs.stat(this.file);if(stat.mtimeMs!==this.lastMtime||stat.size!==this.validBytes)throw Error('笔记文件在外部发生变化');this.validBytes=await write(this.file,this.model,this.version);this.baseBytes=this.validBytes;this.records=1;this.lastMtime=(await fs.stat(this.file)).mtimeMs});return this.queue};
+Store.prototype.compact=function(){this.flush();const snapshot=delta.capture(this.model),version=this.version;this.queue=this.queue.then(async()=>{const stat=await fs.stat(this.file);if(stat.mtimeMs!==this.lastMtime||stat.size!==this.validBytes)throw Error('笔记文件在外部发生变化');this.validBytes=await write(this.file,snapshot,version);this.baseBytes=this.validBytes;this.records=1;this.lastMtime=(await fs.stat(this.file)).mtimeMs}).catch(error=>{this.writeFailure=true;throw error});return this.queue};
 module.exports={Store,write,decode,record,MAGIC,pack,unpack};

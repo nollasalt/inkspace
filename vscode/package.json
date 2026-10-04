@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.5.35",
+  "version": "0.5.36",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -147,6 +147,16 @@
       {
         "command": "inkspace.tool.diagram",
         "title": "切换图形编辑",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.showDiagnostics",
+        "title": "查看性能与保存诊断",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.saveRecoveryCopy",
+        "title": "保存当前画布的恢复副本",
         "category": "墨境"
       }
     ],

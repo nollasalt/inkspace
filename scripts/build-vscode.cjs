@@ -14,7 +14,7 @@ for(const file of ['index.html','style.css','app.js','renderer.js','pdf.js','des
 fs.cpSync(path.join(root,'vendor','mxgraph'),path.join(media,'vendor','mxgraph'),{recursive:true});
 // Copy the PDF worker, formula fonts and dependency licenses along with bundles.
 for(const name of fs.readdirSync(path.join(root,'vendor'))){if(name==='fonts'||/worker|license|licenses|^pdf-/i.test(name))fs.cpSync(path.join(root,'vendor',name),path.join(media,'vendor',name),{recursive:true})}
-for(const file of ['adapter.js','codium.css','native-client.js','native-render-async.js','engine-client.js','notebook-delta.js','inline-text.js'])fs.copyFileSync(path.join(root,'vscode',file),path.join(media,file));
+for(const file of ['adapter.js','codium.css','native-client.js','native-render-async.js','engine-client.js','notebook-delta.js','inline-text.js','performance.js'])fs.copyFileSync(path.join(root,'vscode',file),path.join(media,file));
 fs.copyFileSync(path.join(root,'LICENSE'),path.join(root,'vscode','LICENSE'));
 fs.copyFileSync(path.join(root,'ink-engine','calibration.js'),path.join(media,'engine-calibration.js'));
 console.log('Built VSCodium webview assets');

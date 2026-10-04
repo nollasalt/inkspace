@@ -12,7 +12,7 @@
     "test:installer:vscodium": "node scripts/verify-vscodium-installer.cjs",
     "test:vscode": "node scripts/test-vscode.cjs",
     "build": "node scripts/build.cjs",
-    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs && node tests/binary-notebook.cjs && node tests/autosave.cjs",
+    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs && node tests/binary-notebook.cjs && node tests/autosave.cjs && node tests/recovery.cjs",
     "start": "electron .",
     "test:desktop": "electron . --smoke-test",
     "dist": "npm run build:native && npm run build:terminal && npm run build && electron-builder --win nsis --x64 && node scripts/package-source.cjs",
