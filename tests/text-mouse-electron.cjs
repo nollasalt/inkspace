@@ -88,6 +88,13 @@ app.whenReady().then(async()=>{
       return {checked,longLinesWrapped:true,wholeBlockVisible:true,backgroundInsideControls:true,sourcePreserved:true};
     }.toString()+')()');
     console.log(JSON.stringify({codeLayout}));
+    const windowPoint=await run(
+      '('+function(){window.inkspaceInlineText.finish();finishInteraction();tool='pen';doc={...doc,notes:[{id:'mouse-window',x:40,y:40,width:320,viewMode:'window',viewHeight:240,markdown:Array.from({length:60},(_,i)=>'Line '+i).join('\n\n')}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:1};clearSelection();render();clearPenCursor();const r=noteCache.get('mouse-window').scrollViewport.getBoundingClientRect();return{x:Math.round(r.left+40),y:Math.round(r.top+60)}}.toString()+')()');
+    w.webContents.sendInputEvent({type:'mouseMove',...windowPoint});w.webContents.sendInputEvent({type:'mouseWheel',...windowPoint,deltaY:-160,deltaX:0});await pause(100);
+    assert(await run('noteCache.get("mouse-window").scrollViewport.scrollTop>0&&view.scale===1&&view.x===80&&view.y===60'),'Real mouse wheel did not scroll text independently');
+    w.webContents.sendInputEvent({type:'mouseWheel',...windowPoint,deltaY:-100,deltaX:0,modifiers:['control']});await pause(250);assert(await run('view.scale!==1'),'Ctrl wheel did not zoom canvas over window text');
+    const windowEditPoint=await run('(()=>{const r=noteCache.get("mouse-window").scrollViewport.getBoundingClientRect();return{x:Math.round(r.left+40),y:Math.round(r.top+60)}})()');w.webContents.sendInputEvent({type:'mouseMove',...windowEditPoint});for(const clickCount of [1,2]){w.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount,...windowEditPoint});await pause(20);w.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount,...windowEditPoint});await pause(30)}
+    const windowEditing=await run('({editing:window.inkspaceInlineText.isEditing(),focused:document.activeElement.className,value:document.activeElement.value,source:doc.notes[0].markdown,hit:document.elementFromPoint('+windowEditPoint.x+','+windowEditPoint.y+')?.outerHTML.slice(0,200),trace:mouseTrace.splice(0)})');assert(windowEditing.editing&&windowEditing.focused==="inline-note-editor"&&windowEditing.value===windowEditing.source,JSON.stringify(windowEditing));console.log(JSON.stringify({textWindow:{realMouseWheel:true,ctrlWheelZoom:true,doubleClickEditsFullSource:true}}));
     const alignment=await run(
       '('+async function(){
         await document.fonts.ready;

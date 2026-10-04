@@ -23,3 +23,6 @@
 
 /* Override the shared forced green fill with a matched theme color pair. */
 header .tools button.active,#diagram-sidebar .sidebar-choices button.active,#sidebar-settings-toggle.active{background:var(--vscode-button-background,#007acc)!important;color:var(--vscode-button-foreground,#fff);border-color:var(--vscode-focusBorder,#007acc)}header .tools button.active:hover,#diagram-sidebar .sidebar-choices button.active:hover,#sidebar-settings-toggle.active:hover{background:var(--vscode-button-hoverBackground,var(--vscode-button-background,#007acc))!important;color:var(--vscode-button-foreground,#fff)}
+
+/* A scroll viewport clips text without rebuilding the canvas or its ink. */
+.note.note.window-text .note-scroll-viewport{position:relative;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;pointer-events:auto;z-index:2;outline:none;overflow-wrap:anywhere}.note.note.window-text .note-scroll-viewport:focus-visible{outline:1px solid var(--vscode-focusBorder,#007acc);outline-offset:1px}#text-view-properties{display:flex;flex-direction:column;gap:4px;margin:4px 0 8px}#text-view-target{font-size:11px;color:var(--vscode-descriptionForeground,#888);overflow-wrap:anywhere}
