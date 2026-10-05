@@ -48,6 +48,23 @@ app.whenReady().then(async()=>{
       await run('renderNotes();persist();');await key('Z',['control']);await check(original+' 中文追加');
     }
     console.log(JSON.stringify({nativeTextUndoRedo:true,chineseInput:true,selectionReplacement:true,ctrlZ:true,ctrlY:true,ctrlShiftZ:true,editorRemainsFocused:true,newAndExistingText:true,historySurvivesSave:true}));
+
+    const tabCases=[
+      {source:'ab',start:1,end:1,result:'a    b',selection:[5,5]},
+      {source:'one\ntwo\nthree',start:1,end:6,result:'    one\n    two\nthree',selection:[5,14]},
+      {source:'one\ntwo\nthree',start:0,end:4,result:'    one\ntwo\nthree',selection:[4,8]},
+      {source:'    one\n\ttwo\n  three',start:1,end:19,shift:true,result:'one\ntwo\nthree',selection:[0,12]},
+      {source:'  word',start:1,end:1,shift:true,result:'word',selection:[0,0]},
+      {source:'\n    next',start:0,end:0,shift:true,result:'\n    next',selection:[0,0]},
+      {source:'no indent',start:2,end:2,shift:true,result:'no indent',selection:[2,2]}
+    ];
+    for(const fixture of tabCases){
+      await run('window.inkspaceInlineText.finish();finishInteraction();doc={...doc,notes:[{id:"tab-indent",x:40,y:40,width:320,markdown:'+JSON.stringify(fixture.source)+'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};render();edit(doc.notes[0]);document.querySelector(".inline-note-editor").setSelectionRange('+fixture.start+','+fixture.end+',"backward")');
+      const key=async(keyCode,modifiers=[])=>{w.webContents.sendInputEvent({type:'keyDown',keyCode,modifiers});w.webContents.sendInputEvent({type:'keyUp',keyCode,modifiers});await pause(25)};
+      await key('Tab',fixture.shift?['shift']:[]);const state=await run('(()=>{const i=document.querySelector(".inline-note-editor");return{value:i.value,source:doc.notes[0].markdown,start:i.selectionStart,end:i.selectionEnd,focused:document.activeElement===i,editing:window.inkspaceInlineText.isEditing()}})()');assert.equal(state.value,fixture.result);assert.equal(state.source,fixture.result);assert.deepEqual([state.start,state.end],fixture.selection);assert(state.focused&&state.editing);
+      if(fixture.result!==fixture.source){await key('Z',['control']);assert.equal(await run('doc.notes[0].markdown'),fixture.source);await key('Y',['control']);assert.equal(await run('doc.notes[0].markdown'),fixture.result);assert(await run('document.activeElement.className==="inline-note-editor"'))}
+    }
+    console.log(JSON.stringify({tabIndentation:tabCases.length,shiftTab:true,multilineSelection:true,nextLineExcluded:true,nativeUndoRedo:true,editorKeepsFocus:true}));
     for(const zoom of [.75,1,2]){
       w.webContents.sendInputEvent({type:'mouseMove',x:5,y:5});await pause(20);
       const imagePoint=await run('('+async function(zoom){window.inkspaceInlineText.finish();finishInteraction();clearPenCursor();const canvas=document.createElement('canvas');canvas.width=200;canvas.height=100;canvas.getContext('2d').fillRect(0,0,200,100);doc={...doc,notes:[{id:'image-style',kind:'image',src:canvas.toDataURL(),aspect:2,markdown:'',x:40,y:40,width:200}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:zoom};tool='pan';clearSelection();render();const el=noteCache.get('image-style').el,img=el.querySelector('img');await img.decode();renderNotes();const image=img.getBoundingClientRect(),outer=el.getBoundingClientRect();if(Math.abs(image.top-outer.top-29*zoom)>.2)throw Error(JSON.stringify({reason:'Existing image position changed',image:image.toJSON(),outer:outer.toJSON(),padding:getComputedStyle(el.querySelector('.note-body')).paddingTop,border:getComputedStyle(el).borderTopWidth,zoom}));if(getComputedStyle(el,'::after').opacity!=='0'||getComputedStyle(el).boxShadow!=='none')throw Error(JSON.stringify({reason:'Image frame is permanently visible',opacity:getComputedStyle(el,'::after').opacity,shadow:getComputedStyle(el).boxShadow,className:el.className}));return{x:Math.round(image.left+20*zoom),y:Math.round(image.top+20*zoom)}}.toString()+')('+zoom+')');

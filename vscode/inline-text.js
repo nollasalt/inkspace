@@ -44,6 +44,17 @@
     if(redraw){renderNotes();if(current.cache.scrollViewport&&current.previewScroll!==undefined){current.cache.scrollViewport.scrollTop=current.previewScroll;current.cache.viewScrollTop=current.previewScroll}renderBackground()}viewChanged();
   }
   function history(command){if(!session||document.activeElement!==session.input)return false;document.execCommand(command);return true}
+  function indentText(input,outdent){
+    const text=input.value,start=input.selectionStart,end=input.selectionEnd,direction=input.selectionDirection;
+    if(!outdent&&start===end){document.execCommand('insertText',false,'    ');return}
+    const first=start===0?0:text.lastIndexOf('\n',start-1)+1,last=end>start&&text[end-1]==='\n'?end-1:end,lineEnd=text.indexOf('\n',last),limit=lineEnd<0?text.length:lineEnd,edits=[];
+    let offset=first;
+    const replacement=text.slice(first,limit).split('\n').map(line=>{const removed=outdent?(line.match(/^(?:\t| {1,4})/)?.[0].length||0):0,added=outdent?'':'    ';if(removed||added)edits.push({offset,removed,added:added.length});offset+=line.length+1;return added+line.slice(removed)}).join('\n');
+    if(!edits.length)return;
+    const mapped=position=>position+edits.reduce((delta,edit)=>position>=edit.offset?delta+edit.added-Math.min(edit.removed,position-edit.offset):delta,0);
+    input.setSelectionRange(first,limit);document.execCommand('insertText',false,replacement);input.setSelectionRange(mapped(start),mapped(end),direction);
+    if(session?.input===input)revealCaret(session.note,session.cache,input,input.selectionEnd);
+  }
   function sync(){if(session&&(session.page!==notebook.activePage||!doc.notes.includes(session.note)))finish(false);const note=selectedNote();if(viewSignature!==JSON.stringify([note?.id,note?.viewMode,!!session,tool]))viewChanged()}
   function sourceCaret(note,cache,position){
     const root=cache?.body;if(!root)return note.markdown.replace(/\r\n|\r/g,'\n').length;
@@ -104,7 +115,7 @@
     const resizeInput=()=>{input.style.height='0px';input.style.height=Math.max(textSize()*1.75,input.scrollHeight)+'px';layoutNote(note,cache);if(session?.creationAnchor){const size=note.scale||1,style=getComputedStyle(cache.el),anchor=session.creationAnchor;note.x=anchor.x-(parseFloat(cache.el.style.getPropertyValue('--text-startX'))+parseFloat(style.borderLeftWidth))*size;note.y=anchor.y-(parseFloat(cache.el.style.getPropertyValue('--text-startY'))+parseFloat(style.borderTopWidth))*size;placeNote(note,cache.el);if(input.value.length)session.creationAnchor=null}scheduleA4Pages()};
     input.addEventListener('input',()=>{if(session?.input!==input)return;if(!session.checkpointed){checkpoint();session.checkpointed=true}note.markdown=input.value;resizeInput();revealCaret(note,cache,input,input.selectionEnd);persist()});
     input.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0&&!space)event.stopPropagation()});
-    input.addEventListener('keydown',event=>{if(event.isComposing)return;if((event.ctrlKey||event.metaKey)&&!event.altKey){const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;if(command){event.preventDefault();event.stopImmediatePropagation();history(command);return}}if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
+    input.addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();event.stopImmediatePropagation();indentText(input,event.shiftKey);return}if((event.ctrlKey||event.metaKey)&&!event.altKey){const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;if(command){event.preventDefault();event.stopImmediatePropagation();history(command);return}}if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
     input.addEventListener('blur',()=>{if(session?.input===input)finish()});
     input.addEventListener('keyup',event=>{if(session?.input===input&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(event.key))revealCaret(note,cache,input,input.selectionEnd)});
     input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);revealCaret(note,cache,input,caret,position);renderBackground();overlaySelection();if(created)persist();
