@@ -50,6 +50,18 @@ for(const name of ['fence','code_block','math_block','math_block_eqno']){
 }
 export function markdown(source){const normalized=source.replace(/\r\n|\r/g,'\n'),lines=[0];for(let i=0;i<normalized.length;i++)if(normalized[i]==='\n')lines.push(i+1);return clean(parser.render(normalized,{inkSourceLines:lines,inkSourceLength:normalized.length})).trimEnd()}
 export const unescapeMarkdown=source=>parser.utils.unescapeAll(source);
+// Use the renderer's Markdown grammar so code and horizontal rules stay literal.
+export function listEnterEdit(source,start,end=start){
+  if(start!==end)return null;
+  const first=start===0?0:source.lastIndexOf('\n',start-1)+1,next=source.indexOf('\n',start),limit=next<0?source.length:next,line=source.slice(first,limit);
+  const match=line.match(/^([ \t]*)([-+*]|(\d{1,9})([.)]))([ \t]+)(?:\[([ xX])\]([ \t]+))?/);
+  if(!match||start-first<match[0].length)return null;
+  const lineNumber=source.slice(0,first).split('\n').length-1,tokens=parser.parse(source,{});
+  if(!tokens.some(token=>token.type==='list_item_open'&&token.map?.[0]===lineNumber)||tokens.some(token=>['fence','code_block'].includes(token.type)&&token.map&&lineNumber>=token.map[0]&&lineNumber<token.map[1]))return null;
+  if(!line.slice(match[0].length).trim())return{start:first,end:limit,text:match[1]};
+  const marker=match[3]?String(Number(match[3])+1)+match[4]:match[2],task=match[6]!==undefined?'[ ]'+match[7]:'';
+  return{start,end,text:'\n'+match[1]+marker+match[5]+task};
+}
 for(const name of ['math_inline','math_inline_double','math_block','math_block_eqno']){
   const rule=parser.renderer.rules[name];if(rule)parser.renderer.rules[name]=(tokens,index,options,env,self)=>rule(tokens,index,options,env,self).replace(/^(\s*<[\w-]+)/,tag=>`${tag} data-ink-math="${escape(tokens[index].content)}"`);
 }

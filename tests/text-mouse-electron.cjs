@@ -65,6 +65,23 @@ app.whenReady().then(async()=>{
       if(fixture.result!==fixture.source){await key('Z',['control']);assert.equal(await run('doc.notes[0].markdown'),fixture.source);await key('Y',['control']);assert.equal(await run('doc.notes[0].markdown'),fixture.result);assert(await run('document.activeElement.className==="inline-note-editor"'))}
     }
     console.log(JSON.stringify({tabIndentation:tabCases.length,shiftTab:true,multilineSelection:true,nextLineExcluded:true,nativeUndoRedo:true,editorKeepsFocus:true}));
+
+    const listCases=[
+      {source:'- item',result:'- item\n- '},{source:'* item',result:'* item\n* '},{source:'+ item',result:'+ item\n+ '},
+      {source:'1. first',result:'1. first\n2. '},{source:'9) ninth',result:'9) ninth\n10) '},
+      {source:'- [x] done',result:'- [x] done\n- [ ] '},{source:'1. [ ] todo',result:'1. [ ] todo\n2. [ ] '},
+      {source:'- parent\n    - child',result:'- parent\n    - child\n    - '},
+      {source:'- ',result:''},{source:'2. ',result:''},{source:'- [ ] ',result:''},
+      {plain:true,source:'~~~text\n- example\n~~~',position:17,result:'~~~text\n- example\n\n~~~'},
+      {plain:true,source:'    - literal',result:'    - literal\n'},{plain:true,source:'---',result:'---\n'},
+      {source:'- abcd',position:4,result:'- ab\n- cd'},{plain:true,source:'- item',shift:true,result:'- item\n'}
+    ];
+    for(const fixture of listCases){
+      await run('window.inkspaceInlineText.finish();finishInteraction();doc={...doc,notes:[{id:"list-enter",x:40,y:40,width:320,markdown:'+JSON.stringify(fixture.source)+'}],strokes:[],shapes:[],pdfs:[],diagram:undefined};render();edit(doc.notes[0]);document.querySelector(".inline-note-editor").setSelectionRange('+(fixture.position??fixture.source.length)+','+(fixture.position??fixture.source.length)+')');
+      const key=async(keyCode,modifiers=[])=>{w.webContents.sendInputEvent({type:'keyDown',keyCode,modifiers});if(keyCode==='Enter'&&fixture.plain)w.webContents.sendInputEvent({type:'char',keyCode:'\r',modifiers});w.webContents.sendInputEvent({type:'keyUp',keyCode,modifiers});await pause(25)};
+      await key('Enter',fixture.shift?['shift']:[]);assert.equal(await run('doc.notes[0].markdown'),fixture.result,JSON.stringify(fixture));assert(await run('document.activeElement.className==="inline-note-editor"&&window.inkspaceInlineText.isEditing()'));await key('Z',['control']);assert.equal(await run('doc.notes[0].markdown'),fixture.source);await key('Y',['control']);assert.equal(await run('doc.notes[0].markdown'),fixture.result);
+    }
+    console.log(JSON.stringify({listContinuation:listCases.length,orderedAndBulletLists:true,tasksAndNestedLists:true,emptyItemExits:true,codePreserved:true,nativeUndoRedo:true}));
     for(const zoom of [.75,1,2]){
       w.webContents.sendInputEvent({type:'mouseMove',x:5,y:5});await pause(20);
       const imagePoint=await run('('+async function(zoom){window.inkspaceInlineText.finish();finishInteraction();clearPenCursor();const canvas=document.createElement('canvas');canvas.width=200;canvas.height=100;canvas.getContext('2d').fillRect(0,0,200,100);doc={...doc,notes:[{id:'image-style',kind:'image',src:canvas.toDataURL(),aspect:2,markdown:'',x:40,y:40,width:200}],strokes:[],shapes:[],pdfs:[],diagram:undefined};view={x:80,y:60,scale:zoom};tool='pan';clearSelection();render();const el=noteCache.get('image-style').el,img=el.querySelector('img');await img.decode();renderNotes();const image=img.getBoundingClientRect(),outer=el.getBoundingClientRect();if(Math.abs(image.top-outer.top-29*zoom)>.2)throw Error(JSON.stringify({reason:'Existing image position changed',image:image.toJSON(),outer:outer.toJSON(),padding:getComputedStyle(el.querySelector('.note-body')).paddingTop,border:getComputedStyle(el).borderTopWidth,zoom}));if(getComputedStyle(el,'::after').opacity!=='0'||getComputedStyle(el).boxShadow!=='none')throw Error(JSON.stringify({reason:'Image frame is permanently visible',opacity:getComputedStyle(el,'::after').opacity,shadow:getComputedStyle(el).boxShadow,className:el.className}));return{x:Math.round(image.left+20*zoom),y:Math.round(image.top+20*zoom)}}.toString()+')('+zoom+')');
