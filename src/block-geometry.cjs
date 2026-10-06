@@ -1,3 +1,4 @@
+const {avoidObstacles}=require('./obstacle-router.cjs');
 // World-coordinate geometry shared by block ports, mxGraph edges and previews.
 // No DOM or mutable document state belongs here.
 const sides = Object.freeze({
@@ -23,11 +24,11 @@ function nearestSide(bounds, point) {
   }, 'top');
 }
 
-function routePorts(source, target, clearance = 24) {
+function routePorts(source, target, clearance = 24, obstacles = []) {
   const a = sides[source.side], b = sides[target.side];
   if (!a || !b) throw Error('Invalid connection side');
-  const start = {x: source.x+a.nx*clearance, y: source.y+a.ny*clearance};
-  const end = {x: target.x+b.nx*clearance, y: target.y+b.ny*clearance};
+  function stub(p,normal){let length=clearance;for(const r of obstacles){let distance=Infinity;if(normal.nx&&p.y>r.y&&p.y<r.y+r.h)distance=normal.nx>0?r.x-p.x:p.x-r.x-r.w;else if(normal.ny&&p.x>r.x&&p.x<r.x+r.w)distance=normal.ny>0?r.y-p.y:p.y-r.y-r.h;if(distance>0)length=Math.min(length,distance/2)}return{x:p.x+normal.nx*length,y:p.y+normal.ny*length}}
+  const start=stub(source,a),end=stub(target,b);
   const points = [source, start];
   if (!!a.nx === !!b.nx) {
     if (a.nx) {
@@ -43,8 +44,8 @@ function routePorts(source, target, clearance = 24) {
     points.push(a.nx ? {x:end.x,y:start.y} : {x:start.x,y:end.y});
   }
   points.push(end, target);
-  return points.filter((p,i) => !i || p.x !== points[i-1].x || p.y !== points[i-1].y)
-    .map(({x,y})=>({x,y}));
+  return avoidObstacles(points.filter((p,i) => !i || p.x !== points[i-1].x || p.y !== points[i-1].y)
+    .map(({x,y})=>({x,y})),obstacles);
 }
 
 function translated(bounds, dx, dy) {

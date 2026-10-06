@@ -51,6 +51,11 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
     const p=g.getTerminalPoint(source);
     return p && {...p,side:Math.abs(p.x-towards.x)>Math.abs(p.y-towards.y)?(towards.x>p.x?'right':'left'):(towards.y>p.y?'bottom':'top')};
   }
+  function obstacles(states,edge){
+    const result=doc.notes.map(n=>box(n)).filter(Boolean).concat(InkBlockModel.pages(doc).map(p=>({x:p.x,y:p.y,w:p.width,h:p.height})),doc.shapes.filter(s=>['rect','ellipse'].includes(s.kind)).map(s=>itemBounds('shapes',s)));
+    for(const cell of graph.getChildVertices(graph.getDefaultParent())){const state=states?.moving?.get(cell)||cell===edge?.source&&states?.source||cell===edge?.target&&states?.target||graph.view.getState(cell);if(state)result.push(vertexBox(state))}
+    return result;
+  }
   function route(edge,g,states) {
     if (!managed(edge)) return g;
     const targetBlock=attached(edge,false), sourceBlock=attached(edge,true);
@@ -59,13 +64,14 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
     const a=endpoint(edge,g,true,hint,states);
     const b=a&&endpoint(edge,g,false,a,states);
     if (!a||!b) return g;
-    const points=geometry.routePorts(a,b);
+    const points=geometry.routePorts(a,b,24,states?.obstacles||obstacles(states,edge));
     if(sourceBlock)g.setTerminalPoint(new mxPoint(a.x,a.y),true);
     if(targetBlock)g.setTerminalPoint(new mxPoint(b.x,b.y),false);
     g.points=points.slice(1,-1).map(p=>new mxPoint(p.x,p.y));
     return g;
   }
   // The compositor uses cloned terminal states, never temporarily mutates the model.
+  graph.blockObstacles=states=>obstacles(states);
   graph.routeBlockEdge=(edge,g,states)=>route(edge,g,states);
 
   function cancel() {
@@ -76,7 +82,7 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
     if(!a){cancel();return}
     const towards=eventTarget(pending.hoverEvent||{target:viewport,clientX:0,clientY:0});
     const b=towards&&towards.id!==block.id?geometry.port(box(towards),nearest(towards,p)):{...p,side:geometry.sides[a.side].nx?(p.x>a.x?'left':'right'):(p.y>a.y?'top':'bottom')};
-    const points=geometry.routePorts(a,b);
+    const points=geometry.routePorts(a,b,24,obstacles());
     preview.setAttribute('d',points.map((point,i)=>(i?'L ':'M ')+(point.x*graph.view.scale+view.x)+' '+(point.y*graph.view.scale+view.y)).join(' '));
   }
   function start(block,side) {

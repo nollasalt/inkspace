@@ -9,6 +9,7 @@ function disposePdfEntry(entry){
   entry.loadingTask.destroy().catch(()=>{});
 }
 async function openPdf(asset){
+  if(window.inkspacePdfWorkerReady)await window.inkspacePdfWorkerReady;
   let entry=pdfSessions.get(asset.id);if(entry?.data===asset.data)return entry;
   if(entry)disposePdfEntry(entry);
   const loadingTask=PdfApi.getDocument({data:pdfBytes(asset.data),cMapUrl:new URL('vendor/pdf-cmaps/',location.href).href,cMapPacked:true,standardFontDataUrl:new URL('vendor/pdf-standard_fonts/',location.href).href,wasmUrl:new URL('vendor/pdf-wasm/',location.href).href,isEvalSupported:false});
@@ -16,8 +17,8 @@ async function openPdf(asset){
   entry.task=Promise.resolve(loadingTask);pdfSessions.set(asset.id,entry);return entry;
 }
 async function renderPdfPage(asset,index,entry){
-  const spec=asset.pages[index];let cache=entry.pages.get(index);
-  if(!cache){const el=document.createElement('section');el.className='pdf-page';el.dataset.pdf=asset.id;el.innerHTML='<canvas></canvas><div class="textLayer"></div>';cache={el,canvas:el.querySelector('canvas'),text:el.querySelector('.textLayer'),scale:0,job:null,token:0};entry.pages.set(index,cache);pdfRoot.append(el)}
+  const spec=asset.pages[index],id=InkBlockModel.pageId(asset,spec,index);let cache=entry.pages.get(id);
+  if(!cache){const el=document.createElement('section');el.className='pdf-page';el.dataset.pdf=asset.id;el.dataset.page=id;el.innerHTML='<canvas></canvas><div class="textLayer"></div>';cache={el,canvas:el.querySelector('canvas'),text:el.querySelector('.textLayer'),scale:0,job:null,token:0};entry.pages.set(id,cache);pdfRoot.append(el)}
   cache.el.style.left=(view.x+spec.x*view.scale)+'px';cache.el.style.top=(view.y+spec.y*view.scale)+'px';cache.el.style.width=(spec.width*view.scale)+'px';cache.el.style.height=(spec.height*view.scale)+'px';
   if(!visible({x:spec.x,y:spec.y,w:spec.width,h:spec.height})){
     if(entry.pages.size>8&&cache.scale){cache.token++;cache.pending=null;cache.scale=0;cache.rasterKey=null;cache.canvas.width=cache.canvas.height=0;cache.layer?.cancel();cache.text.replaceChildren()}
@@ -25,7 +26,7 @@ async function renderPdfPage(asset,index,entry){
   }
   const scale=view.scale,key=scale+':'+spec.width+':'+spec.height;if(cache.rasterKey===key||cache.pending===key)return;cache.pending=key;const token=++cache.token;
   try{
-    const pdf=await entry.promise,page=await pdf.getPage(index+1);if(token!==cache.token)return;
+    const pdf=await entry.promise,page=await pdf.getPage((spec.pageIndex??index)+1);if(token!==cache.token)return;
     const pdfScale=scale*spec.width/page.getViewport({scale:1}).width,viewport=page.getViewport({scale:pdfScale}),density=Math.max(1.5,devicePixelRatio),max=4096/Math.max(viewport.width,viewport.height),rasterDensity=Math.min(density,max);
     const buffer=document.createElement('canvas');buffer.width=Math.max(1,Math.round(viewport.width*rasterDensity));buffer.height=Math.max(1,Math.round(viewport.height*rasterDensity));
     cache.job=page.render({canvasContext:buffer.getContext('2d'),viewport,transform:[rasterDensity,0,0,rasterDensity,0,0]});await cache.job.promise;
@@ -38,14 +39,14 @@ async function renderPdfPage(asset,index,entry){
 function renderPdfs(){
   renderPdfList();const assets=document.body.classList.contains('empty-workspace')?[]:doc.pdfs||[],ids=new Set(assets.map(a=>a.id));pdfRoot.classList.toggle('select-text',tool==='pdftext');
   for(const [id,entry] of pdfSessions)if(!ids.has(id)){disposePdfEntry(entry);pdfSessions.delete(id)}
-  for(const asset of assets){openPdf(asset).then(entry=>{if(entry.disposed||pdfSessions.get(asset.id)!==entry||!(doc.pdfs||[]).some(a=>a.id===asset.id&&a.data===asset.data))return;for(let i=0;i<asset.pages.length;i++)renderPdfPage(asset,i,entry)}).catch(error=>{if((doc.pdfs||[]).includes(asset)&&!document.body.classList.contains('empty-workspace'))toast('PDF 加载失败：'+error.message)})}
+  for(const asset of assets){openPdf(asset).then(entry=>{if(entry.disposed||pdfSessions.get(asset.id)!==entry||!(doc.pdfs||[]).includes(asset))return;const live=new Set(asset.pages.map((p,i)=>InkBlockModel.pageId(asset,p,i)));for(const [id,cache]of entry.pages)if(!live.has(id)){cache.token++;cache.job?.cancel();cache.layer?.cancel();cache.el.remove();entry.pages.delete(id)}for(let i=0;i<asset.pages.length;i++)renderPdfPage(asset,i,entry)}).catch(error=>{if((doc.pdfs||[]).includes(asset)&&!document.body.classList.contains('empty-workspace'))toast('PDF 加载失败：'+error.message)})}
 }
 $('#pdf-import').onclick=()=>$('#pdf-file').click();
 $('#pdf-file').onchange=async e=>{
   const file=e.target.files[0];e.target.value='';if(!file)return;
   try{if(file.size>60*1024*1024)throw Error('PDF 超过 60 MB');toast('正在导入 PDF…');const data=pdfBase64(new Uint8Array(await file.arrayBuffer())),id=crypto.randomUUID(),asset={id,name:file.name,data,pages:[]},entry=await openPdf(asset),pdf=await entry.promise;const origin=world(viewport.clientWidth/2,viewport.clientHeight/2),sizes=[];
     for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i),v=p.getViewport({scale:1});sizes.push({width:v.width,height:v.height})}
-    asset.pages=pdfPagePlacement(sizes,origin);finishInteraction();checkpoint();doc.pdfs=[...(doc.pdfs||[]),asset];render();persist();toast(`已导入 ${pdf.numPages} 页；“PDF 文字”可选取复制，画笔可直接批注`);
+    asset.pages=pdfPagePlacement(sizes,origin).map((p,i)=>({...p,id:crypto.randomUUID(),pageIndex:i}));finishInteraction();checkpoint();doc.pdfs=[...(doc.pdfs||[]),asset];render();persist();toast(`已导入 ${pdf.numPages} 页；“PDF 文字”可选取复制，画笔可直接批注`);
   }catch(error){toast('PDF 导入失败：'+error.message)}
 };
 $('#pdf-highlight').onclick=()=>{
@@ -56,7 +57,7 @@ $('#pdf-highlight').onclick=()=>{
 };
 async function exportAnnotatedPdf(){
   try{finishInteraction();const assets=doc.pdfs||[];if(!assets.length){toast('先导入需要批注的 PDF');return}toast('正在导出 PDF…');
-    const result=await PdfApi.PDFDocument.create();for(const asset of assets){const source=await PdfApi.PDFDocument.load(pdfBytes(asset.data)),pages=source.getPages();for(let i=0;i<pages.length;i++){const original=pages[i];if(!original.node.Contents())original.drawRectangle({x:0,y:0,width:0,height:0,opacity:0});const spec=asset.pages[i],page=result.addPage([spec.width,spec.height]),crop=original.getCropBox(),embedded=await result.embedPage(original,{left:crop.x,bottom:crop.y,right:crop.x+crop.width,top:crop.y+crop.height}),angle=((original.getRotation().angle%360)+360)%360;page.drawPage(embedded,{x:angle===180||angle===270?spec.width:0,y:angle===90||angle===180?spec.height:0,rotate:PdfApi.degrees(-angle),width:crop.width*spec.width/(angle===90||angle===270?crop.height:crop.width),height:crop.height*spec.width/(angle===90||angle===270?crop.height:crop.width)});const color=hex=>PdfApi.rgb(...hex.match(/[a-f0-9]{2}/gi).map(c=>parseInt(c,16)/255));
+    const result=await PdfApi.PDFDocument.create();for(const asset of assets){const source=await PdfApi.PDFDocument.load(pdfBytes(asset.data)),pages=source.getPages();for(let i=0;i<asset.pages.length;i++){const spec=asset.pages[i],original=pages[spec.pageIndex??i];if(!original.node.Contents())original.drawRectangle({x:0,y:0,width:0,height:0,opacity:0});const page=result.addPage([spec.width,spec.height]),crop=original.getCropBox(),embedded=await result.embedPage(original,{left:crop.x,bottom:crop.y,right:crop.x+crop.width,top:crop.y+crop.height}),angle=((original.getRotation().angle%360)+360)%360;page.drawPage(embedded,{x:angle===180||angle===270?spec.width:0,y:angle===90||angle===180?spec.height:0,rotate:PdfApi.degrees(-angle),width:crop.width*spec.width/(angle===90||angle===270?crop.height:crop.width),height:crop.height*spec.width/(angle===90||angle===270?crop.height:crop.width)});const color=hex=>PdfApi.rgb(...hex.match(/[a-f0-9]{2}/gi).map(c=>parseInt(c,16)/255));
       // Normalize rotated source pages so world/page coordinates agree.
       const touches=b=>b.x+b.w>=spec.x&&b.y+b.h>=spec.y&&b.x<=spec.x+spec.width&&b.y<=spec.y+spec.height;
       for(const note of doc.notes)if(touches(itemBounds('notes',note))){const raster=await rasterNote(note),image=await result.embedPng(raster.data);page.drawImage(image,{x:note.x-spec.x,y:page.getHeight()-(note.y-spec.y)-raster.height,width:raster.width,height:raster.height})}
@@ -68,7 +69,7 @@ async function exportAnnotatedPdf(){
 $('#pdf-export').onclick=async()=>{try{const bytes=await exportAnnotatedPdf();if(!bytes)return;download(bytes,'application/pdf','批注.pdf');toast('已导出 PDF：保留原文文字与矢量笔迹');
   }catch{}
 };
-async function rasterNote(n){const el=document.createElement('article');el.className='note';el.style.cssText=`position:fixed;left:-10000px;top:0;width:${n.width||320}px;font-size:${textSize()}px;--note-scale:1;transform:none`;el.innerHTML='<div class="note-body">'+(n.kind==='image'?`<img src="${n.src}" style="width:100%;aspect-ratio:${n.aspect}">`:markdown(n.markdown))+'</div>';if(n.kind==='image')el.classList.add('image-note');document.body.append(el);try{await document.fonts.ready;const width=n.width||320,height=el.offsetHeight,data=await PdfApi.toPng(el,{width,height,pixelRatio:2,cacheBust:false,preferredFontFormat:'woff2'});return{data,width:width*(n.scale||1),height:height*(n.scale||1)}}finally{el.remove()}}
+async function rasterNote(n){const el=document.createElement('article');el.className='note';el.style.cssText=`position:fixed;left:-10000px;top:0;width:${n.width||320}px;font-size:${textSize()}px;--note-scale:1;transform:none`;el.innerHTML='<div class="note-body">'+(n.kind==='image'?`<img src="${n.src}" style="width:100%;aspect-ratio:${n.aspect}">`:InkBlockModel.textFormat(n)==='html'?'':markdown(n.markdown))+'</div>';if(n.kind==='image')el.classList.add('image-note');else if(InkBlockModel.textFormat(n)==='html')window.inkspaceBlocks.renderBody(n,{body:el.querySelector('.note-body')});document.body.append(el);try{await document.fonts.ready;const width=n.width||320,height=el.offsetHeight,data=await PdfApi.toPng(el,{width,height,pixelRatio:2,cacheBust:false,preferredFontFormat:'woff2'});return{data,width:width*(n.scale||1),height:height*(n.scale||1)}}finally{el.remove()}}
 renderPdfs();
 
 // Fit each source page into a gapless A4 tile containing the viewport centre.
@@ -79,11 +80,11 @@ function pdfPagePlacement(sizes,anchor){
 
 function removePdf(id){
   if(!(doc.pdfs||[]).some(asset=>asset.id===id))return false;
-  finishInteraction();checkpoint();doc.pdfs=doc.pdfs.filter(asset=>asset.id!==id);render();persist();return true;
+  finishInteraction();checkpoint();InkBlockModel.removePages(doc,InkBlockModel.pages(doc).filter(page=>page.assetId===id).map(page=>page.id));render();persist();return true;
 }
 function renderPdfList(){
   const assets=doc.pdfs||[],root=$('#pdf-assets');$('#pdf-library').hidden=!assets.length;
   const signature=assets.map(asset=>asset.id+':'+asset.name+':'+asset.pages.length).join('|');if(root.dataset.signature===signature)return;root.dataset.signature=signature;root.replaceChildren();
-  for(const asset of assets){const row=document.createElement('div');row.className='pdf-asset';const label=document.createElement('span');label.textContent=asset.name;label.title=asset.name+' · '+asset.pages.length+' 页';const remove=document.createElement('button');remove.textContent='×';remove.title='删除 PDF，保留笔迹批注（Ctrl+Z 恢复）';remove.setAttribute('aria-label','删除 PDF '+asset.name);remove.onclick=()=>removePdf(asset.id);row.append(label,remove);root.append(row)}
+  for(const asset of assets){const row=document.createElement('div');row.className='pdf-asset';const label=document.createElement('span');label.textContent=asset.name;label.title=asset.name+' · '+asset.pages.length+' 页';const remove=document.createElement('button');remove.textContent='×';remove.title='删除 PDF，保留笔迹批注（Ctrl+Z 恢复）';remove.setAttribute('aria-label','删除 PDF '+asset.name);remove.onclick=()=>removePdf(asset.id);row.append(label,remove);root.append(row);for(const [i,page]of asset.pages.entries()){const pageRow=document.createElement('div');pageRow.className='pdf-asset pdf-page-entry';const locate=document.createElement('button'),id=InkBlockModel.pageId(asset,page,i);locate.textContent='第 '+((page.pageIndex??i)+1)+' 页';locate.title='定位并选中此页';locate.onclick=()=>{finishInteraction();activateTool('select',false);clearSelection();selected.pdfPages=[id];view.x=viewport.clientWidth/2-(page.x+page.width/2)*view.scale;view.y=viewport.clientHeight/2-(page.y+page.height/2)*view.scale;render();overlaySelection()};const erase=document.createElement('button');erase.textContent='×';erase.title='删除这一页，保留笔迹批注';erase.onclick=()=>{finishInteraction();checkpoint();InkBlockModel.removePages(doc,[id]);clearSelection();render();persist()};pageRow.append(locate,erase);root.append(pageRow)}}
 }
 $('#pdf-manage').onclick=()=>{renderPdfList();if(!doc.pdfs?.length){toast('当前页没有 PDF');return}$('#pdf-library').scrollIntoView({block:'nearest'});$('#pdf-assets button')?.focus()};

@@ -37,6 +37,8 @@ export function installDiagramDrag(graph,{dimensions,view,stats}){
   function paint(){
     if(!preview||!pending)return;const {dx,dy}=pending;
     for(const item of preview.nodes)item.node.style.translate=`${dx}px ${dy}px`;
+    const moving=new Map();for(const cell of preview.moving)if(cell.vertex){const state=graph.view.getState(cell)?.clone();if(state){state.x+=dx;state.y+=dy;moving.set(cell,state)}}
+    const obstacles=graph.blockObstacles?.({moving});
     for(const edge of preview.edges){
       const {state,routed,text}=edge;
       for(const [source,key]of [[true,'visibleSourceState'],[false,'visibleTargetState']]){
@@ -44,7 +46,7 @@ export function installDiagramDrag(graph,{dimensions,view,stats}){
         if(copy&&preview.moving.has(terminal.cell)){copy.x+=dx;copy.y+=dy;copy.origin.x+=dx/graph.view.scale;copy.origin.y+=dy/graph.view.scale}
         routed[key]=copy;
       }
-      const route=graph.routeBlockEdge?.(state.cell,state.cell.geometry.clone(),{source:routed.visibleSourceState,target:routed.visibleTargetState})||state.cell.geometry;graph.view.updateEdgeState(routed,route);
+      const route=graph.routeBlockEdge?.(state.cell,state.cell.geometry.clone(),{source:routed.visibleSourceState,target:routed.visibleTargetState,obstacles})||state.cell.geometry;graph.view.updateEdgeState(routed,route);
       routed.shape.points=routed.absolutePoints;routed.shape.scale=graph.view.scale;routed.shape.redraw();
       if(text)text.style.translate=`${routed.absoluteOffset.x-state.absoluteOffset.x}px ${routed.absoluteOffset.y-state.absoluteOffset.y}px`;
     }

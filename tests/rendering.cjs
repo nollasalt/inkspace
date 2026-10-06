@@ -26,7 +26,7 @@ function app(raw=false,dpr=1){
     canvases.set(el.id,{native,proxy});return proxy;
   };
   w.Path2D=Path2D;
-  for(const file of ['vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js'])vm.runInContext(fs.readFileSync(file,'utf8'),dom.getInternalVMContext());
+  for(const file of ['block-model.js','vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js'])vm.runInContext(fs.readFileSync(file,'utf8'),dom.getInternalVMContext());
   const run=s=>w.eval(s),read=s=>JSON.parse(JSON.stringify(run(s)));
   const pointer=(type,x,y,options={})=>{
     const {timeStamp,...properties}=options;

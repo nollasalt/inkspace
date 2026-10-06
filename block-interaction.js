@@ -1,7 +1,7 @@
 // Own mouse gestures and transient controls; do not serialize UI state.
 (() => {
   const graph = () => window.inkspaceDiagram;
-  const keys = ['strokes', 'notes', 'shapes', 'pdfs'];
+  const keys = ['strokes', 'notes', 'shapes', 'pdfs', 'pdfPages'];
   const frame = document.createElement('div');
   frame.className = 'media-block';
   frame.hidden = true;
@@ -38,9 +38,9 @@
     if (id?.startsWith('diagram:')) return cellTarget(graph()?.graph?.getModel().getCell(id.slice(8)));
     const note = doc.notes.find(n => n.id === id);
     if (note) return note;
-    const match = /^(strokes|shapes|pdfs):(.+)$/.exec(id || '');
+    const match = /^(strokes|shapes|pdfs|pdfPages):(.+)$/.exec(id || '');
     if (!match) return null;
-    const item = (doc[match[1]] || []).find(n => n.id === match[2]);
+    const item = blockItems(match[1]).find(n => n.id === match[2]);
     return item ? {
       id, connectionKind: match[1], connectionItem: item,
       connectionBounds: () => itemBounds(match[1], item)
@@ -49,7 +49,7 @@
 
   function targetAt(hit) {
     if (!hit || hit.kind === 'notes') return null;
-    const item = doc[hit.kind]?.[hit.index];
+    const item = blockValue(hit.kind,hit.index);
     return item ? {
       id: item.id ? hit.kind + ':' + item.id : null,
       connectionKind: hit.kind, connectionItem: item,
@@ -59,6 +59,7 @@
 
   function ensureConnectionTarget(target) {
     if (!target?.connectionKind || target.diagramCell) return target;
+    if(target.connectionKind==='pdfPages')return target;
     target.connectionItem.id ??= crypto.randomUUID();
     target.id = target.connectionKind + ':' + target.connectionItem.id;
     frame.dataset.id = target.id;
@@ -117,7 +118,7 @@
       if (cell) return {kind: 'diagram', index: cell.id, id: cell.id};
     }
     const hit = hitCanvasItem(pos, note);
-    return hit ? {kind: hit.kind, index: hit.index, id: doc[hit.kind][hit.index].id} : null;
+    return hit ? {kind: hit.kind, index: hit.index, id: blockValue(hit.kind,hit.index).id} : null;
   }
 
   function selectHit(hit) {
@@ -167,7 +168,7 @@
     if (event.button !== 0 || !objectControls(event) || tool === 'pan' || space ||
         event.target.closest('.note-connect-arrow,.note-view-toggle,.note-height-resize,.selection-scale,.note-resize')) return;
     const hit = pick(event);
-    const group = hit?.id && (doc.groups || []).some(g => g.members.some(r => r.kind === hit.kind && r.id === hit.id));
+    const group = hit?.id && (doc.groups || []).some(g => InkBlockModel.groupMembers(doc,g).some(r => r.kind === hit.kind && r.id === hit.id));
     const mixed = keys.some(k => selected[k]?.length) && graph()?.selectionSnapshot().length && keepsSelection(event);
     if (group) {selectHit(hit); beginSelectionDrag(event, !!event.target.closest('.note-scale')); return;}
     if (mixed && !event.target.closest('.note-resize,.note-scale,.selection-scale')) beginSelectionDrag(event);

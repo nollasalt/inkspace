@@ -1,6 +1,6 @@
 # 独立 Ink Engine + 普通 VS Code
 
-0.6.1 已提供普通 VS Code 安装包 `dist/Inkspace-VSCode-0.6.1-win32-x64.vsix`，包含引擎运行时、Raw Input 探针、Cairo 模块及所需依赖；无需项目源码目录。构建：`node scripts/build-vscode.cjs` 后运行 `node scripts/package-vscode-engine.cjs`。安装后直接打开 `.ink` 或旧 `.inkspace.json` 文件即可自动启动引擎。
+0.7.0 已提供普通 VS Code 安装包 `dist/Inkspace-VSCode-0.7.0-win32-x64.vsix`，包含引擎运行时、Raw Input 探针、Cairo 模块及所需依赖；无需项目源码目录。构建：`node scripts/build-vscode.cjs` 后运行 `node scripts/package-vscode-engine.cjs`。安装后直接打开 `.ink` 或旧 `.inkspace.json` 文件即可自动启动引擎。
 
 当前验证版使用未修改的 Microsoft VS Code 和标准 Custom Editor 插件。无需修改 Electron 主进程或注入 IDE 窗口钩子。
 

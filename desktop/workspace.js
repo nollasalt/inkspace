@@ -48,8 +48,9 @@ const selectionClipboardHeader='INKSPACE_SELECTION_V1\n';
 function selectionClipboardText(){
   finishInteraction();const diagram=window.inkspaceDiagram?.copy(),origin=union([selectionBounds(),diagram?.bounds].filter(Boolean));if(!origin)return '';
   const fragment={format:'inkspace',version:1,background:{...backgroundSettings()},strokes:[],notes:[],shapes:[],pdfs:[]};
-  for(const {kind,value}of selectionScaleSnapshot())if(kind!=='diagram')fragment[kind].push(value);
-  const refs=new Set((window.inkspaceBlocks?.references()||[]).map(r=>r.kind+':'+r.id));fragment.groups=(doc.groups||[]).filter(g=>g.members.every(r=>refs.has(r.kind+':'+r.id))).map(g=>({...g,members:g.members.map(r=>r.kind==='diagram'?{...r,id:diagram.ids[r.id]}:{...r})}));
+  for(const {kind,value}of selectionScaleSnapshot())if(kind!=='diagram'&&kind!=='pdfPages')fragment[kind].push(value);
+  fragment.pdfs.push(...InkBlockModel.fragment(doc,selected.pdfPages||[]));fragment.pdfPageBlocks=!!selected.pdfPages?.length&&!selected.pdfs?.length;
+  const refs=new Set((window.inkspaceBlocks?.references()||[]).map(r=>r.kind+':'+r.id));fragment.groups=(doc.groups||[]).filter(g=>InkBlockModel.groupMembers(doc,g).every(r=>refs.has(r.kind+':'+r.id))).map(g=>({...g,members:InkBlockModel.groupMembers(doc,g).map(r=>r.kind==='diagram'?{...r,id:diagram.ids[r.id]}:{...r})}));
   if(diagram)fragment.diagram=diagram.xml;
   return selectionClipboardHeader+JSON.stringify({origin:{x:origin.x,y:origin.y},document:fragment});
 }
@@ -61,14 +62,18 @@ function pasteSelectionText(text){
   if(!['strokes','notes','shapes','pdfs'].some(kind=>data.document[kind]?.length)&&!data.document.diagram)return true;
   finishInteraction();const point=world(pasteAnchor?.x??viewport.clientWidth/2,pasteAnchor?.y??viewport.clientHeight/2),dx=point.x-data.origin.x,dy=point.y-data.origin.y;
   const translate=p=>({...p,x:p.x+dx,y:p.y+dy});
-  const fragment=data.document,idMaps={strokes:{},notes:{},shapes:{},pdfs:{},diagram:{}};for(const kind of ['strokes','notes','shapes','pdfs'])for(const item of fragment[kind]||[]){const old=item.id;if(old||kind==='notes'||kind==='pdfs'){item.id=crypto.randomUUID();if(old)idMaps[kind][old]=item.id}}
+  const fragment=data.document,idMaps={strokes:{},notes:{},shapes:{},pdfs:{},pdfPages:{},diagram:{}};for(const kind of ['strokes','notes','shapes','pdfs'])for(const item of fragment[kind]||[]){const old=item.id;if(old||kind==='notes'||kind==='pdfs'){item.id=crypto.randomUUID();if(old)idMaps[kind][old]=item.id}}
   fragment.strokes=fragment.strokes.map(s=>({...s,points:s.points.map(translate)}));
   fragment.shapes=fragment.shapes.map(s=>({...translate(s),x2:s.x2+dx,y2:s.y2+dy}));
-  fragment.notes=fragment.notes.map(translate);fragment.pdfs=(fragment.pdfs||[]).map(a=>({...a,pages:a.pages.map(translate)}));
+  fragment.notes=fragment.notes.map(translate);fragment.pdfs=(fragment.pdfs||[]).map(a=>({...a,pages:a.pages.map((p,i)=>{const old=p.id||Object.keys(idMaps.pdfs).find(k=>idMaps.pdfs[k]===a.id)+'-page-'+(i+1),id=crypto.randomUUID();idMaps.pdfPages[old]=id;return{...translate(p),id,pageIndex:p.pageIndex??i}})}));
   checkpoint();clearSelection();
-  for(const kind of ['strokes','notes','shapes','pdfs']){doc[kind]??=[];const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
+  for(const kind of ['strokes','notes','shapes']){doc[kind]??=[];const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
+  const aliases=InkBlockModel.insertAssets(doc,fragment.pdfs,fragment.pdfPageBlocks);
+  for(const old of Object.keys(idMaps.pdfs))idMaps.pdfs[old]=aliases.get(idMaps.pdfs[old])||idMaps.pdfs[old];
+  selected.pdfPages=fragment.pdfs.flatMap(a=>a.pages.map(p=>p.id));selected.pdfs=[];
+  const pastedSelection=selected;
   if(fragment.diagram)idMaps.diagram=window.inkspaceDiagram?.paste(fragment.diagram,dx,dy,idMaps.notes,idMaps)||{};doc.groups=(doc.groups||[]).concat((fragment.groups||[]).map(g=>({id:crypto.randomUUID(),members:g.members.flatMap(r=>idMaps[r.kind]?.[r.id]?[{kind:r.kind,id:idMaps[r.kind][r.id]}]:[])})).filter(g=>g.members.length>1));
-  render();persist();return true;
+  selected=pastedSelection;window.inkspaceBlocks?.expandSelection();render();persist();return true;
 }
 document.addEventListener('copy',event=>{
   if(event.target.closest?.('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||tool==='pdftext'||window.getSelection?.().toString())return;

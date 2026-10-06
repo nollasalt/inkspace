@@ -1,12 +1,12 @@
-# 在其他电脑安装 Inkspace 0.6.1
+# 在其他电脑安装 Inkspace 0.7.0
 
 适用于 Windows x64 桌面版 Microsoft VS Code。建议使用当前稳定版；本机测试版本为 1.140.0。暂不提供 macOS、Linux、Windows ARM64 或浏览器版运行时。
 
 ## 推荐：安装 VSIX
 
-1. 将 `Inkspace-VSCode-0.6.1-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
+1. 将 `Inkspace-VSCode-0.7.0-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
 2. 安装或打开 Microsoft VS Code。
-3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.6.1-win32-x64.vsix`。
+3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.7.0-win32-x64.vsix`。
 4. 若提示，重新加载 VS Code 窗口。
 5. 打开存放笔记的文件夹，在文件栏右键选择“墨境：新建笔记”；已有新格式笔记直接打开 `.ink`；旧 `.inkspace.json` 仍兼容。
 6. 首次点击“校准触控笔”，依次点击三个圆圈。以后同一设备与显示配置自动恢复。换电脑需要在新电脑校准一次。
@@ -14,7 +14,7 @@
 也可以在已提供 `code` 命令的终端中安装：
 
 ```powershell
-code --install-extension .\Inkspace-VSCode-0.6.1-win32-x64.vsix --force
+code --install-extension .\Inkspace-VSCode-0.7.0-win32-x64.vsix --force
 ```
 
 安装包内含 Raw Input 程序、Cairo 原生模块和引擎依赖。使用时不需要安装 Node.js、编译工具或本项目源码目录；引擎由 VS Code 自带的运行时启动。
@@ -30,8 +30,8 @@ code --install-extension .\Inkspace-VSCode-0.6.1-win32-x64.vsix --force
 
 ## 分发包内容
 
-- `Inkspace-VSCode-0.6.1-win32-x64.vsix`：直接安装的插件。
-- `Inkspace-VSCode-0.6.1-Source.zip`：对应源码、原生依赖源码和构建脚本。
+- `Inkspace-VSCode-0.7.0-win32-x64.vsix`：直接安装的插件。
+- `Inkspace-VSCode-0.7.0-Source.zip`：对应源码、原生依赖源码和构建脚本。
 - `INSTALL.md`：本说明。
 - `SHA256SUMS.txt`：文件校验和。
 
@@ -43,8 +43,8 @@ A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张�
 
 - Ctrl+F 搜索当前笔记的文本框 Markdown 原文，Enter / Shift+Enter 跳转，点击结果后可直接继续书写，Esc 关闭搜索。暂不提供手写笔迹、图片与 PDF 正文识别。
 - 状态栏提供后退、前进与搜索；Alt+← / Alt+→ 恢复缩放、画布位置和小窗滚动。
-- 一个 `.ink` 对应一个无限画布，A4 纸张随内容自动拼接。点击底栏“画布”进入 VS Code 画布列表，可新建、切换、重命名、排序和删除独立画布；每个画布内的 A4 纸张仍随内容自动拼接。
-- 鼠标默认选取、拖动对象；画笔／橡皮属性中的“鼠标也使用画笔 / 橡皮”可开启鼠标绘制。触控笔保持所选工具。
+- 一个 `.ink` 可包含多个独立无限画布，A4 纸张随内容自动拼接。点击底栏“画布”进入 VS Code 画布列表，可新建、切换、重命名、排序和删除独立画布；每个画布内的 A4 纸张仍随内容自动拼接。
+- 按 V 编排对象；画笔、橡皮、手绘模式中鼠标与触控笔均使用所选工具，不需额外开关。
 - 普通滚轮移动画布，Shift+滚轮横向移动，Ctrl+滚轮缩放；小窗文本优先滚动正文。按住鼠标中键可在任意工具下移动画布，松开恢复当前操作，不设单独移动工具。
 - 图形、PDF、纸张设置统一从顶栏打开，点击同一入口展开 / 收起；侧栏只显示对应内容，展开 / 收起按钮位于顶栏右侧。打开资源不改变触控笔工具，D 与顶栏图形入口行为相同。PDF 原文选取在 PDF 面板中开启。
 

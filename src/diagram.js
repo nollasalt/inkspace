@@ -109,7 +109,7 @@ function refreshProperties(){
 }
 function center(){return world(viewport.clientWidth/2,viewport.clientHeight/2)}
 function add(kind,position){
-  render();graph.stopEditing(false);const p=position||center(),w=160,h=90;let cell;
+  arrangeMouse();render();graph.stopEditing(false);const p=position||center(),w=160,h=90;let cell;
   graph.getModel().beginUpdate();try{
     if(kind==='line'||kind==='arrow'){
       cell=graph.insertEdge(graph.getDefaultParent(),null,'',null,null,`endArrow=${kind==='arrow'?'block':'none'};`);
