@@ -72,3 +72,6 @@ header .tools{gap:0;padding:0;background:transparent}.canvas-tool-group{display:
 /* Resource expansion differs from selecting a drawing tool. */
 header .tools .sidebar-resource-button{border-radius:0;border-bottom:2px solid transparent;padding-bottom:3px}header .tools .sidebar-resource-button.resource-open{border-bottom-color:var(--vscode-focusBorder,#007acc);background:var(--vscode-toolbar-hoverBackground,#eee);color:var(--vscode-editor-foreground,#333)}
 #sidebar-pdf [data-tool]{margin:6px 0;padding:6px 8px;width:100%;text-align:left}#sidebar-pdf [data-tool].active{background:var(--vscode-button-background,#007acc);color:var(--vscode-button-foreground,#fff)}#sidebar-pdf #pdf-options{display:block;padding:3px 0}#sidebar-pdf #pdf-options[hidden]{display:none}
+
+/* Selected blocks expose the same controls as mouse hover. */
+.note.note.selected :is(.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize){opacity:1;pointer-events:auto}

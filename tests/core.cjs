@@ -15,7 +15,7 @@ run("tool='shape'");pointer('pointerdown',100,100);pointer('pointermove',200,180
 assert.equal(run('doc.shapes.length'),1);assert.deepEqual(read('itemBounds("shapes",doc.shapes[0])'),{x:100,y:100,w:100,h:80});
 run("doc.notes.push({id:'n1',x:250,y:100,markdown:'# Hello'});tool='select'");
 pointer('pointerdown',0,0);pointer('pointermove',600,350);pointer('pointerup',600,350);
-assert.deepEqual(read('selected'),{strokes:[0],notes:[0],shapes:[0]});
+assert.deepEqual(read('selected'),{strokes:[0],notes:[0],shapes:[0],pdfs:[]});
 pointer('pointerdown',50,50);pointer('pointermove',70,80);pointer('pointerup',70,80);
 assert.equal(run('doc.strokes[0].points[0].x'),30);assert.equal(run('doc.notes[0].y'),130);assert.equal(run('doc.shapes[0].x'),120);
 run('undo()');assert.equal(run('doc.shapes[0].x'),100);run('redo()');assert.equal(run('doc.shapes[0].x'),120);

@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.5.43",
+  "version": "0.6.0",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -187,6 +187,16 @@
       {
         "command": "inkspace.tool.pan",
         "title": "触控笔移动画布",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.group",
+        "title": "组合选中的块",
+        "category": "墨境"
+      },
+      {
+        "command": "inkspace.ungroup",
+        "title": "取消块组合",
         "category": "墨境"
       }
     ],
@@ -385,6 +395,16 @@
       {
         "command": "inkspace.tool.pan",
         "key": "h",
+        "when": "inkspace.hasNotebook && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.group",
+        "key": "ctrl+g",
+        "when": "inkspace.hasNotebook && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
+      },
+      {
+        "command": "inkspace.ungroup",
+        "key": "ctrl+shift+g",
         "when": "inkspace.hasNotebook && !inputFocus && !terminalFocus && !inkspace.canvasKeyboardFocused"
       }
     ],

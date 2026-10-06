@@ -44,7 +44,7 @@ function init(){
   graph.getTooltipForCell=()=> '鼠标拖动移动 · 边角缩放 · 双击输入文字和 $公式$ · 拖动连接点添加箭头';
   const vertex=graph.getStylesheet().getDefaultVertexStyle();Object.assign(vertex,{fillColor:'#ffffff',strokeColor:'#263f43',strokeWidth:2,fontColor:'#263f43',fontSize:16,whiteSpace:'wrap',html:1,overflow:'hidden',spacing:8});
   Object.assign(graph.getStylesheet().getDefaultEdgeStyle(),{strokeColor:'#263f43',strokeWidth:2,endArrow:'block',edgeStyle:'orthogonalEdgeStyle',rounded:1,html:1,fontSize:16,labelBackgroundColor:'#ffffff'});
-  const constraints=[[.5,0],[1,.5],[.5,1],[0,.5],[0,0],[1,0],[1,1],[0,1]].map(([x,y])=>new mxConnectionConstraint(new mxPoint(x,y),true));
+  const constraints=[[.5,0],[1,.5],[.5,1],[0,.5]].map(([x,y])=>new mxConnectionConstraint(new mxPoint(x,y),true));
   graph.getAllConnectionConstraints=terminal=>terminal?.cell?.vertex?constraints:null;
   // Start a connector only from an explicit boundary connection point.
   const isResizeHandle=event=>graph.getSelectionCells().some(cell=>graph.selectionCellsHandler.getHandler(cell)?.sizers?.some(sizer=>sizer?.node===event.target||sizer?.node?.contains(event.target)));
@@ -90,7 +90,7 @@ function init(){
   const doubleClick=graph.dblClick;graph.dblClick=function(event,cell){if(!objectControls(event)||tool==='pan'||event.sourceCapabilities?.firesTouchEvents||typeof lastCanvasPointer!=='undefined'&&lastCanvasPointer==='pen')return;return doubleClick.call(this,event,cell)};
   noteConnectors=installNoteConnectors(graph,mx,{release:()=>{diagramContact=false},derived:(change,previewOnly)=>{if(loading||doc.diagram!==loaded&&!(loaded===''&&!doc.diagram))return;loading=true;const model=graph.getModel(),first=model.currentEdit.changes.length;model.beginUpdate();try{change();for(const item of model.currentEdit.changes.slice(first))derivedChanges.add(item)}finally{model.endUpdate();loading=false}}});
   graph.getModel().addListener(mxEvent.CHANGE,sync);
-  graph.getSelectionModel().addListener(mxEvent.CHANGE,()=>{if(!loading&&graph.getSelectionCount())clearSelection();refreshProperties();overlaySelection()});
+  graph.getSelectionModel().addListener(mxEvent.CHANGE,()=>{if(!loading&&graph.getSelectionCount())clearSelection();if(!loading)window.inkspaceBlocks?.onGraphSelection();refreshProperties();overlaySelection()});
 }
 function render(){
   init();const source=doc.diagram||'';
@@ -138,16 +138,26 @@ function bounds(selected=false){if(!graph)return null;const cells=selected?graph
 function copy(){
   if(!graph?.getSelectionCount())return null;
   const cells=graph.cloneCells(graph.getSelectionCells(),true),model=new mxGraphModel();model.beginUpdate();try{for(const cell of cells)model.add(model.getChildAt(model.getRoot(),0),cell)}finally{model.endUpdate()}
-  return{xml:mxUtils.getXml(new mxCodec().encode(model)),bounds:bounds(true)};
+  return{xml:mxUtils.getXml(new mxCodec().encode(model)),bounds:bounds(true),ids:Object.fromEntries(graph.getSelectionCells().map((cell,i)=>[cell.id,cells[i].id]))};
 }
-function paste(source,dx,dy){
+function paste(source,dx,dy,noteIds={},blockIds={}){
   render();const model=read(source),parent=model.getChildAt(model.getRoot(),0),cells=[];
   for(let i=0;i<model.getChildCount(parent);i++)cells.push(model.getChildAt(parent,i));
-  loading=true;try{const inserted=graph.importCells(cells,dx,dy,graph.getDefaultParent());graph.setSelectionCells(inserted);doc.diagram=xml();loaded=doc.diagram;}finally{loading=false}
+  loading=true;try{for(const cell of cells)if(cell.style)cell.style=cell.style.replace(/(inkNote(?:Source|Target)=)([^;]+)/g,(all,key,id)=>(()=>{const decoded=decodeURIComponent(id),[kind,old]=decoded.split(':');const replacement=noteIds[decoded]||(blockIds[kind]?.[old]?kind+':'+blockIds[kind][old]:null);return replacement?key+encodeURIComponent(replacement):all})());const inserted=graph.importCells(cells,dx,dy,graph.getDefaultParent());graph.setSelectionCells(inserted);doc.diagram=xml();loaded=doc.diagram;return Object.fromEntries(cells.map((cell,i)=>[cell.id,inserted[i].id]));}finally{loading=false}
 }
 function remove(){if(!graph?.getSelectionCount()||graph.isEditing())return false;graph.removeCells();return true}
 function svg(){if(!graph||!doc.diagram)return '';const canvas=graph.view.getCanvas(),copy=canvas.cloneNode(true),original=canvas.querySelectorAll('foreignObject *'),cloned=copy.querySelectorAll('foreignObject *');original.forEach((element,index)=>{const style=getComputedStyle(element);cloned[index].setAttribute('style',Array.from(style,key=>key+':'+style.getPropertyValue(key)).join(';'))});return `<g transform="translate(${-view.x/view.scale} ${-view.y/view.scale}) scale(${1/view.scale})">${copy.outerHTML}</g>`}
-window.inkspaceDiagram={render,add,connect,syncNotes:preview=>noteConnectors?.sync(preview),noteConnectors:()=>noteConnectors,ownsPointer,bounds,coverage,copy,paste,remove,svg,selectBox:r=>graph?.selectRegion(new mxRectangle(r.x*view.scale+view.x,r.y*view.scale+view.y,r.w*view.scale,r.h*view.scale)),editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
+
+function selectionSnapshot(){return(graph?.getSelectionCells()||[]).map(cell=>({kind:'diagram',index:cell.id,value:JSON.parse(JSON.stringify(cell.geometry))}))}
+function mutate(change){if(!graph)return;const prior=loading;loading=true;graph.getModel().beginUpdate();try{change()}finally{graph.getModel().endUpdate();doc.diagram=xml();loaded=doc.diagram;loading=prior}}
+function transformSelected(dx,dy,factor=1,origin={x:0,y:0},items=selectionSnapshot()){
+  if(!items.length)return;mutate(()=>{for(const {index,value}of items){const cell=graph.getModel().getCell(index);if(!cell)continue;const g=cell.geometry.clone(),map=p=>p&&new mxPoint(origin.x+(p.x-origin.x)*factor+dx,origin.y+(p.y-origin.y)*factor+dy);g.x=origin.x+(value.x-origin.x)*factor+dx;g.y=origin.y+(value.y-origin.y)*factor+dy;g.width=value.width*factor;g.height=value.height*factor;if(cell.edge){g.x=value.x;g.y=value.y;g.sourcePoint=map(value.sourcePoint);g.targetPoint=map(value.targetPoint);g.points=value.points?.map(map)||null}graph.getModel().setGeometry(cell,g)}});
+}
+function setSelected(ids){const prior=loading;loading=true;try{graph.setSelectionCells(ids.map(id=>graph.getModel().getCell(id)).filter(Boolean))}finally{loading=prior}}
+function previewSelection(dx,dy,factor=1,origin={x:0,y:0}){graph?.selectionCellsHandler.handlers.visit((_,handler)=>{handler.setHandlesVisible?.(false);if(handler.selectionBorder?.node)handler.selectionBorder.node.style.visibility='hidden';if(handler.selectionShape?.node)handler.selectionShape.node.style.visibility='hidden'});for(const cell of graph?.getSelectionCells()||[]){const state=graph.view.getState(cell);for(const node of [state?.shape?.node,state?.text?.node])if(node){node.style.transformOrigin='0 0';node.style.transform='translate('+ (dx+origin.x*(1-factor))+'px,'+(dy+origin.y*(1-factor))+'px) scale('+factor+')'}}}
+function clearPreview(){graph?.selectionCellsHandler.handlers.visit((_,handler)=>{handler.setHandlesVisible?.(true);if(handler.selectionBorder?.node)handler.selectionBorder.node.style.visibility='';if(handler.selectionShape?.node)handler.selectionShape.node.style.visibility=''});for(const cell of graph?.getSelectionCells()||[]){const state=graph.view.getState(cell);for(const node of [state?.shape?.node,state?.text?.node])if(node)node.style.transform=''}}
+
+window.inkspaceDiagram={selectionHasEdges:()=>!!graph?.getSelectionCells().some(c=>c.edge),selectionSnapshot,transformSelected,setSelected,previewSelection,clearPreview,deleteSelected:()=>mutate(()=>graph.removeCells()),render,add,connect,syncNotes:preview=>noteConnectors?.sync(preview),noteConnectors:()=>noteConnectors,ownsPointer,bounds,coverage,copy,paste,remove,svg,selectBox:r=>graph?.selectRegion(new mxRectangle(r.x*view.scale+view.x,r.y*view.scale+view.y,r.w*view.scale,r.h*view.scale)),editing:()=>!!graph?.isEditing(),interacting:()=>!!graph?.isMouseDown,clear:()=>{graph?.stopEditing(false);graph?.clearSelection()},get replayCount(){return replayCount},get graph(){return graph}};
 document.querySelectorAll('[data-diagram]').forEach(button=>{button.onclick=()=>add(button.dataset.diagram);button.draggable=true;button.addEventListener('dragstart',event=>event.dataTransfer.setData('application/x-inkspace-shape',button.dataset.diagram))});
 viewport.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('application/x-inkspace-shape'))event.preventDefault()});viewport.addEventListener('drop',event=>{const kind=event.dataTransfer.getData('application/x-inkspace-shape');if(!['rect','roundrect','ellipse','diamond','arrow','line'].includes(kind))return;event.preventDefault();const p=local(event);add(kind,world(p.x,p.y))});$('#diagram-connect').onclick=connect;$('#diagram-delete').onclick=remove;$('#diagram-front').onclick=()=>graph?.orderCells(false);$('#diagram-back').onclick=()=>graph?.orderCells(true);
 $('#diagram-stroke').onchange=()=>graph?.setCellStyles('strokeColor',$('#diagram-stroke').value);

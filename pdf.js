@@ -20,10 +20,10 @@ async function renderPdfPage(asset,index,entry){
   if(!cache){const el=document.createElement('section');el.className='pdf-page';el.dataset.pdf=asset.id;el.innerHTML='<canvas></canvas><div class="textLayer"></div>';cache={el,canvas:el.querySelector('canvas'),text:el.querySelector('.textLayer'),scale:0,job:null,token:0};entry.pages.set(index,cache);pdfRoot.append(el)}
   cache.el.style.left=(view.x+spec.x*view.scale)+'px';cache.el.style.top=(view.y+spec.y*view.scale)+'px';cache.el.style.width=(spec.width*view.scale)+'px';cache.el.style.height=(spec.height*view.scale)+'px';
   if(!visible({x:spec.x,y:spec.y,w:spec.width,h:spec.height})){
-    if(entry.pages.size>8&&cache.scale){cache.token++;cache.pending=null;cache.scale=0;cache.canvas.width=cache.canvas.height=0;cache.layer?.cancel();cache.text.replaceChildren()}
+    if(entry.pages.size>8&&cache.scale){cache.token++;cache.pending=null;cache.scale=0;cache.rasterKey=null;cache.canvas.width=cache.canvas.height=0;cache.layer?.cancel();cache.text.replaceChildren()}
     return;
   }
-  const scale=view.scale;if(cache.scale===scale||cache.pending===scale)return;cache.pending=scale;const token=++cache.token;
+  const scale=view.scale,key=scale+':'+spec.width+':'+spec.height;if(cache.rasterKey===key||cache.pending===key)return;cache.pending=key;const token=++cache.token;
   try{
     const pdf=await entry.promise,page=await pdf.getPage(index+1);if(token!==cache.token)return;
     const pdfScale=scale*spec.width/page.getViewport({scale:1}).width,viewport=page.getViewport({scale:pdfScale}),density=Math.max(1.5,devicePixelRatio),max=4096/Math.max(viewport.width,viewport.height),rasterDensity=Math.min(density,max);
@@ -32,7 +32,7 @@ async function renderPdfPage(asset,index,entry){
     if(token!==cache.token)return;
     cache.canvas.width=buffer.width;cache.canvas.height=buffer.height;cache.canvas.getContext('2d').drawImage(buffer,0,0);
     cache.text.replaceChildren();cache.text.style.setProperty('--total-scale-factor',String(pdfScale));cache.text.style.setProperty('--scale-factor',String(pdfScale));cache.text.style.setProperty('--scale-round-x','1px');cache.text.style.setProperty('--scale-round-y','1px');
-    cache.layer?.cancel();cache.layer=new PdfApi.TextLayer({textContentSource:await page.getTextContent(),container:cache.text,viewport});await cache.layer.render();cache.scale=scale;
+    cache.layer?.cancel();cache.layer=new PdfApi.TextLayer({textContentSource:await page.getTextContent(),container:cache.text,viewport});await cache.layer.render();cache.scale=scale;cache.rasterKey=key;
   }catch(e){if(!entry.disposed&&pdfSessions.get(asset.id)===entry&&token===cache.token)toast('PDF 页面加载失败：'+e.message)}finally{if(token===cache.token){cache.pending=null;cache.job=null}}
 }
 function renderPdfs(){

@@ -32,7 +32,8 @@
     "test:engine:binary": "node -e \"process.env.INKSPACE_ENGINE_BINARY_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
     "test:navigation": "node tests/navigation.cjs && electron tests/navigation-electron.cjs",
     "test:interaction": "electron tests/interaction-electron.cjs",
-    "test:text:caret": "electron tests/caret-electron.cjs"
+    "test:text:caret": "electron tests/caret-electron.cjs",
+    "test:blocks": "electron tests/blocks-electron.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -69,6 +70,7 @@
       "index.html",
       "style.css",
       "app.js",
+      "canvas-blocks.js",
       "renderer.js",
       "pdf.js",
       "desktop/**",

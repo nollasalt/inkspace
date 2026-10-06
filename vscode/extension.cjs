@@ -53,7 +53,7 @@ function activate(context){
           catch(error){panel.webview.postMessage({type:'ack',id:message.id,version:document.version,error:error.message});vscode.window.showErrorMessage(error.message)}return;
         }
         if(message.type==='command'){
-          if(message.command==='new')await newNote();else if(message.command==='open')await openNote();else if(message.command==='pages')await vscode.commands.executeCommand('inkspace.pages.focus');
+          if(message.command==='copy-blocks')await copySelection(state);else if(message.command==='paste-blocks')await pasteSelection(state);else if(message.command==='new')await newNote();else if(message.command==='open')await openNote();else if(message.command==='pages')await vscode.commands.executeCommand('inkspace.pages.focus');
           return;
         }
         if(message.type==='export'){
@@ -88,7 +88,7 @@ function activate(context){
     vscode.commands.registerCommand('inkspace.navigateBack',()=>active&&request(active,'navigate',{direction:'back'})),vscode.commands.registerCommand('inkspace.navigateForward',()=>active&&request(active,'navigate',{direction:'forward'})),
     ...[-1,1].map(direction=>vscode.commands.registerCommand(direction===-1?'inkspace.movePageUp':'inkspace.movePageDown',item=>{const state=active;return state&&request(state,'movePage',{page:item?.id||state.activePage,direction})})),
     ...toolNames.map(tool=>vscode.commands.registerCommand('inkspace.tool.'+tool,()=>active&&request(active,'tool',{tool}))),
-    vscode.commands.registerCommand('inkspace.showPages',()=>vscode.commands.executeCommand('inkspace.pages.focus')),
+    vscode.commands.registerCommand('inkspace.group',()=>active&&request(active,'group')),vscode.commands.registerCommand('inkspace.ungroup',()=>active&&request(active,'ungroup')),vscode.commands.registerCommand('inkspace.showPages',()=>vscode.commands.executeCommand('inkspace.pages.focus')),
     vscode.commands.registerCommand('inkspace.addPage',()=>active&&request(active,'addPage')),
     vscode.commands.registerCommand('inkspace.renamePage',async item=>{const state=active,page=state?.pages.find(p=>p.id===(item?.id||state.activePage));if(!page)return;const title=await vscode.window.showInputBox({title:'画布名称',value:page.title,validateInput:value=>value.trim()?null:'请输入名称'});if(title!==undefined)await request(state,'renamePage',{page:page.id,title:title.trim().slice(0,100)})}),
     vscode.commands.registerCommand('inkspace.deletePage',async item=>{const state=active,page=state?.pages.find(p=>p.id===(item?.id||state.activePage));if(!page)return;if(state.pages.length===1){vscode.window.showInformationMessage('至少保留一个画布');return}if(await vscode.window.showWarningMessage('删除“'+page.title+'”及其全部内容？',{modal:true},'删除')==='删除')await request(state,'deletePage',{page:page.id})}),

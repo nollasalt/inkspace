@@ -66,3 +66,5 @@ for(const name of ['math_inline','math_inline_double','math_block','math_block_e
   const rule=parser.renderer.rules[name];if(rule)parser.renderer.rules[name]=(tokens,index,options,env,self)=>rule(tokens,index,options,env,self).replace(/^(\s*<[\w-]+)/,tag=>`${tag} data-ink-math="${escape(tokens[index].content)}"`);
 }
 export {createStrokeState,appendStrokePoint,strokeTailPath,strokeTailPoints,strokePath,strokeOutline} from './ink-detail.js';
+
+export function html(source){return DOMPurify.sanitize(source,{WHOLE_DOCUMENT:true,ADD_TAGS:['style'],FORBID_TAGS:['script','iframe','object','embed','form','input','button','textarea','select','base','meta','link'],FORBID_ATTR:['contenteditable']})}

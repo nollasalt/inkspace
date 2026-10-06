@@ -5,7 +5,7 @@ const pageValidator=valid;
 const imageSource=s=>typeof s==='string'&&/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s);
 valid=function(d){
   if(d?.version===2)return d.format==='inkspace'&&typeof d.title==='string'&&Array.isArray(d.pages)&&d.pages.length>0&&d.pages.length<=10000&&new Set(d.pages.map(p=>p.id)).size===d.pages.length&&d.pages.some(p=>p.id===d.activePage)&&d.pages.every(p=>typeof p.id==='string'&&/^[\w-]+$/.test(p.id)&&typeof p.title==='string'&&p.document?.version===1&&valid(p.document)&&(!p.view||[p.view.x,p.view.y,p.view.scale].every(Number.isFinite)&&p.view.scale>0&&Number.isFinite(1/p.view.scale)));
-  return pageValidator(d)&&d.notes.every(n=>n.kind===undefined||n.kind==='image'&&imageSource(n.src)&&Number.isFinite(n.aspect)&&n.aspect>0);
+  return pageValidator(d)&&d.notes.every(n=>n.kind===undefined||n.kind==='html'||n.kind==='image'&&imageSource(n.src)&&Number.isFinite(n.aspect)&&n.aspect>0);
 };
 function rememberPage(){const p=notebook.pages.find(p=>p.id===notebook.activePage);if(p){p.document=doc;p.view={...view};pageSessions.set(p.id,{history,future})}}
 function documentData(){rememberPage();return notebook}
@@ -47,8 +47,9 @@ viewport.addEventListener('pointermove',e=>{if(e.pointerType!=='touch')pasteAnch
 const selectionClipboardHeader='INKSPACE_SELECTION_V1\n';
 function selectionClipboardText(){
   finishInteraction();const diagram=window.inkspaceDiagram?.copy(),origin=union([selectionBounds(),diagram?.bounds].filter(Boolean));if(!origin)return '';
-  const fragment={format:'inkspace',version:1,background:{...backgroundSettings()},strokes:[],notes:[],shapes:[]};
-  for(const {kind,value}of selectionScaleSnapshot())fragment[kind].push(value);
+  const fragment={format:'inkspace',version:1,background:{...backgroundSettings()},strokes:[],notes:[],shapes:[],pdfs:[]};
+  for(const {kind,value}of selectionScaleSnapshot())if(kind!=='diagram')fragment[kind].push(value);
+  const refs=new Set((window.inkspaceBlocks?.references()||[]).map(r=>r.kind+':'+r.id));fragment.groups=(doc.groups||[]).filter(g=>g.members.every(r=>refs.has(r.kind+':'+r.id))).map(g=>({...g,members:g.members.map(r=>r.kind==='diagram'?{...r,id:diagram.ids[r.id]}:{...r})}));
   if(diagram)fragment.diagram=diagram.xml;
   return selectionClipboardHeader+JSON.stringify({origin:{x:origin.x,y:origin.y},document:fragment});
 }
@@ -57,16 +58,16 @@ function pasteSelectionText(text){
   if(text.length>150*1024*1024)throw Error('选中内容超过 150 MB');
   const data=JSON.parse(text.slice(header[0].length));
   if(![data.origin?.x,data.origin?.y].every(Number.isFinite)||!valid(data.document))throw Error('剪贴板中的笔记内容无效');
-  if(!['strokes','notes','shapes'].some(kind=>data.document[kind].length)&&!data.document.diagram)return true;
+  if(!['strokes','notes','shapes','pdfs'].some(kind=>data.document[kind]?.length)&&!data.document.diagram)return true;
   finishInteraction();const point=world(pasteAnchor?.x??viewport.clientWidth/2,pasteAnchor?.y??viewport.clientHeight/2),dx=point.x-data.origin.x,dy=point.y-data.origin.y;
   const translate=p=>({...p,x:p.x+dx,y:p.y+dy});
-  const fragment=data.document;
+  const fragment=data.document,idMaps={strokes:{},notes:{},shapes:{},pdfs:{},diagram:{}};for(const kind of ['strokes','notes','shapes','pdfs'])for(const item of fragment[kind]||[]){const old=item.id;if(old||kind==='notes'||kind==='pdfs'){item.id=crypto.randomUUID();if(old)idMaps[kind][old]=item.id}}
   fragment.strokes=fragment.strokes.map(s=>({...s,points:s.points.map(translate)}));
   fragment.shapes=fragment.shapes.map(s=>({...translate(s),x2:s.x2+dx,y2:s.y2+dy}));
-  fragment.notes=fragment.notes.map(n=>({...translate(n),id:crypto.randomUUID()}));
+  fragment.notes=fragment.notes.map(translate);fragment.pdfs=(fragment.pdfs||[]).map(a=>({...a,pages:a.pages.map(translate)}));
   checkpoint();clearSelection();
-  for(const kind of ['strokes','notes','shapes']){const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
-  if(fragment.diagram)window.inkspaceDiagram?.paste(fragment.diagram,dx,dy);
+  for(const kind of ['strokes','notes','shapes','pdfs']){doc[kind]??=[];const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
+  if(fragment.diagram)idMaps.diagram=window.inkspaceDiagram?.paste(fragment.diagram,dx,dy,idMaps.notes,idMaps)||{};doc.groups=(doc.groups||[]).concat((fragment.groups||[]).map(g=>({id:crypto.randomUUID(),members:g.members.flatMap(r=>idMaps[r.kind]?.[r.id]?[{kind:r.kind,id:idMaps[r.kind][r.id]}]:[])})).filter(g=>g.members.length>1));
   render();persist();return true;
 }
 document.addEventListener('copy',event=>{

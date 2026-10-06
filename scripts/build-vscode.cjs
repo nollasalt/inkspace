@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),media=path.join(root,'vscode','media');
 fs.mkdirSync(media,{recursive:true});
-for(const file of ['index.html','style.css','app.js','renderer.js','pdf.js','desktop/bridge.js','desktop/ink-renderer.js','desktop/workspace.js','vendor/content.js','vendor/diagram.js','vendor/pdf-api.js','vendor/katex.min.css','vendor/highlight.min.css','vendor/pdf_viewer.css']){
+for(const file of ['index.html','style.css','canvas-blocks.js','app.js','renderer.js','pdf.js','desktop/bridge.js','desktop/ink-renderer.js','desktop/workspace.js','vendor/content.js','vendor/diagram.js','vendor/pdf-api.js','vendor/katex.min.css','vendor/highlight.min.css','vendor/pdf_viewer.css']){
   const destination=path.join(media,file);fs.mkdirSync(path.dirname(destination),{recursive:true});let data=fs.readFileSync(path.join(root,file));
   if(file==='index.html')data=Buffer.from(data.toString().replace('<script src="vendor/terminal.js"></script>','').replace('<script src="desktop/titlebar.js"></script>','').replace('<script src="desktop/explorer.js"></script>','').replace('<link rel="stylesheet" href="vendor/terminal.css">','').replace('<script src="desktop/files.js"></script>','').replace('<script src="desktop/workbench.js"></script>','').replace('<script src="vendor/text-editor.js"></script>','').replace('<link rel="stylesheet" href="vendor/text-editor.css">',''));
   if(file==='pdf.js')data=Buffer.from(data.toString().replaceAll('location.href',"document.querySelector('#inkspace-assets').content").replace('async function openPdf(asset){','async function openPdf(asset){await window.inkspacePdfWorkerReady;'));
