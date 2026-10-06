@@ -20,12 +20,14 @@ export function installDiagramDrag(graph,{dimensions,view,stats}){
   };
   function remember(node){if(!node)return;preview.nodes.push({node,translate:node.style.translate,willChange:node.style.willChange});node.style.willChange='transform'}
   function begin(){
+    window.inkspaceBlocks?.hideHover();
     compositor=true;preview={nodes:[],hidden:[],edges:[],moving:new Set(),layer:document.createElementNS('http://www.w3.org/2000/svg','g')};
+    preview.layer.setAttribute('pointer-events','none');preview.layer.dataset.inkspaceDrag='true';graph.view.getOverlayPane().append(preview.layer);
     handler.allCells?.visit((key,state)=>{preview.moving.add(state.cell);remember(state.shape?.node);remember(state.text?.node);remember(state.control?.node);const selected=graph.selectionCellsHandler.getHandler(state.cell),border=selected?.selectionBorder?.node||selected?.shape?.node;if(border){preview.hidden.push({node:border,visibility:border.style.visibility});border.style.visibility='hidden'}});
     const edges=new Set();for(const cell of preview.moving)if(cell.vertex)for(const edge of graph.getEdges(cell))if(!preview.moving.has(edge))edges.add(edge);
     for(const edge of edges){const state=graph.view.getState(edge);if(!state?.absolutePoints)continue;
       const node=state.shape?.node;if(node){preview.hidden.push({node,visibility:node.style.visibility});node.style.visibility='hidden'}
-      const routed=state.clone();routed.shape=graph.cellRenderer.createShape(routed);graph.cellRenderer.configureShape(routed);routed.shape.dialect=graph.dialect;routed.shape.pointerEvents=false;routed.shape.init(preview.layer);
+      const routed=state.clone();routed.shape=graph.cellRenderer.createShape(routed);graph.cellRenderer.configureShape(routed);routed.shape.dialect='svg';routed.shape.pointerEvents=false;routed.shape.init(preview.layer);
       const text=state.text?.node;if(text)preview.hidden.push({node:text,visibility:text.style.visibility,translate:text.style.translate});
       preview.edges.push({state,routed,text});
     }
@@ -42,10 +44,11 @@ export function installDiagramDrag(graph,{dimensions,view,stats}){
         if(copy&&preview.moving.has(terminal.cell)){copy.x+=dx;copy.y+=dy;copy.origin.x+=dx/graph.view.scale;copy.origin.y+=dy/graph.view.scale}
         routed[key]=copy;
       }
-      graph.view.updateEdgeState(routed,state.cell.geometry);
+      const route=graph.routeBlockEdge?.(state.cell,state.cell.geometry.clone(),{source:routed.visibleSourceState,target:routed.visibleTargetState})||state.cell.geometry;graph.view.updateEdgeState(routed,route);
       routed.shape.points=routed.absolutePoints;routed.shape.scale=graph.view.scale;routed.shape.redraw();
       if(text)text.style.translate=`${routed.absoluteOffset.x-state.absoluteOffset.x}px ${routed.absoluteOffset.y-state.absoluteOffset.y}px`;
     }
+    window.inkspaceBlocks?.previewSelectionFrame(dx,dy);
     stats().diagramDragFrames=(stats().diagramDragFrames||0)+1;
   }
   handler.updateLivePreview=function(dx,dy){
@@ -57,6 +60,6 @@ export function installDiagramDrag(graph,{dimensions,view,stats}){
     pending=null;
     for(const item of preview.nodes){item.node.style.translate=item.translate;item.node.style.willChange=item.willChange}
     for(const item of preview.hidden){item.node.style.visibility=item.visibility;if(item.translate!==undefined)item.node.style.translate=item.translate}
-    preview.layer.remove();preview=null;graph.connectionHandler.reset();
+    preview.layer.remove();preview=null;graph.connectionHandler.reset();window.inkspaceBlocks?.clearSelectionFrame();overlaySelection();
   };
 }

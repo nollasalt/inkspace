@@ -25,13 +25,13 @@ function label(cell){return typeof cell.value==='string'?cell.value:''}
 function sync(sender,event){
   // Derived endpoints can finish inside mxGraph's outer model transaction.
   if(loading||event?.getProperty('edit')?.changes?.every(change=>derivedChanges.has(change)))return;
-  const before=loaded;checkpoint();doc.diagram=xml();loaded=doc.diagram;
+  noteConnectors?.sync();const before=loaded;checkpoint();doc.diagram=xml();loaded=doc.diagram;
   const edit=event?.getProperty("edit");if(edit){edits.push({before,after:loaded,edit});if(edits.length>80)edits.shift()}persist();renderBackground();
-  $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
+  $('#undo').disabled=!history.length;$('#redo').disabled=!future.length;overlaySelection();
 }
 function init(){
   if(graph)return;
-  graph=new mxGraph(node);graph.setConnectable(true);graph.setAllowDanglingEdges(true);graph.setCellsDisconnectable(true);graph.setHtmlLabels(true);graph.setTooltips(true);graph.setCellsCloneable(true);graph.setGridEnabled(true);graph.gridSize=10;graph.setMultigraph(true);graph.setAllowLoops(true);graph.setAutoSizeCells(false);graph.setResizeContainer(false);graph.autoScroll=false;graph.keepEdgesInBackground=true;
+  graph=new mxGraph(node);graph.setConnectable(false);graph.setAllowDanglingEdges(true);graph.setCellsDisconnectable(true);graph.setHtmlLabels(true);graph.setTooltips(true);graph.setCellsCloneable(true);graph.setGridEnabled(true);graph.gridSize=10;graph.setMultigraph(true);graph.setAllowLoops(true);graph.setAutoSizeCells(false);graph.setResizeContainer(false);graph.autoScroll=false;graph.keepEdgesInBackground=true;
   graph.getLabel=cell=>{
     const source=label(cell),cached=labelCache.get(cell);if(cached?.source===source)return cached.html;
     const content=document.createElement('div');content.innerHTML=InkContent.markdown(source);content.querySelectorAll('.katex-mathml').forEach(element=>element.remove());
@@ -41,20 +41,13 @@ function init(){
   graph.isToggleEvent=event=>!!(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey));
   graph.graphHandler.guidesEnabled=true;
   graph.graphHandler.useGuidesForEvent=event=>!event.getEvent().altKey&&!graph.isConstrainedEvent(event.getEvent());
-  graph.getTooltipForCell=()=> '鼠标拖动移动 · 边角缩放 · 双击输入文字和 $公式$ · 拖动连接点添加箭头';
+  graph.getTooltipForCell=()=> '鼠标拖动移动 · 边角缩放 · 双击输入文字和 $公式$ · 点击边缘箭头，再点击目标';
   const vertex=graph.getStylesheet().getDefaultVertexStyle();Object.assign(vertex,{fillColor:'#ffffff',strokeColor:'#263f43',strokeWidth:2,fontColor:'#263f43',fontSize:16,whiteSpace:'wrap',html:1,overflow:'hidden',spacing:8});
   Object.assign(graph.getStylesheet().getDefaultEdgeStyle(),{strokeColor:'#263f43',strokeWidth:2,endArrow:'block',edgeStyle:'orthogonalEdgeStyle',rounded:1,html:1,fontSize:16,labelBackgroundColor:'#ffffff'});
   const constraints=[[.5,0],[1,.5],[.5,1],[0,.5]].map(([x,y])=>new mxConnectionConstraint(new mxPoint(x,y),true));
   graph.getAllConnectionConstraints=terminal=>terminal?.cell?.vertex?constraints:null;
-  // Start a connector only from an explicit boundary connection point.
-  const isResizeHandle=event=>graph.getSelectionCells().some(cell=>graph.selectionCellsHandler.getHandler(cell)?.sizers?.some(sizer=>sizer?.node===event.target||sizer?.node?.contains(event.target)));
-  graph.connectionHandler.isStartEvent=event=>!isResizeHandle(event.getEvent())&&!!(graph.connectionHandler.constraintHandler.currentFocus&&graph.connectionHandler.constraintHandler.currentConstraint);
-  graph.connectionHandler.createTarget=false;graph.connectionHandler.select=false;
+  // Connection gestures belong to the shared block controller.
   installDiagramDrag(graph,{dimensions:()=>a4Dimensions(),view:()=>view,stats:()=>renderStats});
-  graph.connectionHandler.marker.getMarkerColor=()=>graph.connectionHandler.first?'#007acc':null;
-  graph.connectionHandler.constraintHandler.highlightColor='#007acc';
-  graph.connectionHandler.isConnectableCell=cell=>!cell||cell.vertex;
-  const connectionMove=graph.connectionHandler.mouseMove;graph.connectionHandler.mouseMove=function(sender,event){if(!this.first&&isResizeHandle(event.getEvent())){this.reset();return}connectionMove.call(this,sender,event);if(!this.first&&this.currentState)this.currentState.setCursor(this.constraintHandler.currentConstraint?'crosshair':'move')};
   const createHandler=graph.createHandler;graph.createHandler=function(...args){
     const handler=createHandler.apply(this,args);if(!handler?.state.cell.vertex)return handler;
     handler.livePreview=true;handler.roundLength=value=>value;const baseUnion=handler.union;
@@ -94,7 +87,7 @@ function init(){
 }
 function render(){
   init();const source=doc.diagram||'';
-  if(source!==loaded){loading=true;try{
+  if(source!==loaded){window.inkspaceBlocks?.hideHover();loading=true;try{
     graph.cancelPendingDiagramMove();graph.graphHandler.reset();diagramContact=false;graph.isMouseDown=false;graph.stopEditing(true);graph.clearSelection();graph.connectionHandler.reset();
     const entry=edits.findLast(e=>e.after===loaded&&e.before===source||e.before===loaded&&e.after===source);
     if(entry){if(entry.after===loaded)entry.edit.undo();else entry.edit.redo();replayCount++}
@@ -104,6 +97,7 @@ function render(){
   noteConnectors.sync();
   if(graph.view.scale!==view.scale||graph.view.translate.x!==view.x/view.scale||graph.view.translate.y!==view.y/view.scale)graph.view.scaleAndTranslate(view.scale,view.x/view.scale,view.y/view.scale);
 }
+function isResizeHandle(event){return !!graph?.getSelectionCells().some(cell=>graph.selectionCellsHandler.getHandler(cell)?.sizers?.some(sizer=>sizer?.node===event.target||sizer?.node?.contains(event.target)))}
 function ownsPointer(event){
   if(!graph||event.pointerType&&event.pointerType!=='mouse')return false;
   if(!objectControls(event)||tool==='pan'||event.button===1||event.button===2||event.buttons&6)return false;

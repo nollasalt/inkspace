@@ -1,15 +1,15 @@
 # Inkspace · 墨境
 
 
-0.6.0 增加 HTML 源码编辑与静态渲染、混合介质组合（Ctrl+G / Ctrl+Shift+G）和画布右键菜单。文本、图片、HTML、PDF、笔迹与图形可统一移动、缩放、复制粘贴。操作见 [交互规则](docs/INTERACTION.md)，扩展介质结构见 [块架构](docs/BLOCKS.md)。
+0.6.1 重构块交互和连线，修复文本缩放、宽度调整、鼠标绘制与图形拖动；顶栏提供鼠标绘制开关。支持 HTML、混合介质组合（Ctrl+G / Ctrl+Shift+G）和画布右键菜单。文本、图片、HTML、PDF、笔迹与图形可统一移动、缩放、复制粘贴。操作见 [交互规则](docs/INTERACTION.md)，扩展介质结构见 [块架构](docs/BLOCKS.md)。
 
-Windows 触控笔无限笔记画布，支持基于 mxGraph 的鼠标图形编辑、附着箭头和公式标签，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.6.0 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
+Windows 触控笔无限笔记画布，支持基于 mxGraph 的鼠标图形编辑、附着箭头和公式标签，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.6.1 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
 
 鼠标默认选取和拖动对象，触控笔保持独立书写意图；支持显式开启鼠标绘制。顶栏资源入口、侧栏内容与输入优先级见 [交互规则](docs/INTERACTION.md)。
 
 ## 安装和使用
 
-在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.6.0-win32-x64.vsix`。
+在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.6.1-win32-x64.vsix`。
 
 打开文件夹，文件栏右键选择“墨境：新建笔记”。首次点击“校准触控笔”，依次点击三个圆圈；同一设备与显示配置下自动恢复校准。新笔记格式为 `.ink`，采用二进制增量保存；旧 `.inkspace.json` 仍可打开。
 

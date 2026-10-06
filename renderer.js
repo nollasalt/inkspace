@@ -8,7 +8,7 @@ function cancelZoomPreview(){clearTimeout(zoomTimer);if(zoomFrame!==null)(window
 function settleZoom(){if(!zoomBase)return;render()}
 function previewZoom(){
   if(typeof refreshPenCursor==='function')refreshPenCursor();
-  $('#scene').style.willChange='transform';
+  window.inkspaceBlocks?.hideHover();$('#scene').style.willChange='transform';
   if(!zoomBase)zoomBase={...paintedView,scale:renderedScale};
   if(zoomFrame===null)zoomFrame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{zoomFrame=null;if(!zoomBase)return;const ratio=view.scale/zoomBase.scale;if(ratio>1.5||ratio<2/3){render();return}$('#scene').style.transform=`translate(${view.x-zoomBase.x*ratio}px,${view.y-zoomBase.y*ratio}px) scale(${ratio})`;presentBackground();$('#reset').textContent=zoomLabel(view.scale)});
   clearTimeout(zoomTimer);zoomTimer=setTimeout(settleZoom,120);
@@ -142,12 +142,12 @@ function placeNote(n,el,dx=0,dy=0){
   // metrics, fixed CSS padding, or browser minimum-font-size decisions.
   el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.setProperty('--control-unit',(1/s)+'px');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
 }
-function renderNotes(){
+function renderNotes(target=null){
   window.inkspaceInlineText?.sync();
   const ids=new Set(doc.notes.map(n=>n.id));
-  for(const [id,c] of noteCache)if(!ids.has(id)){c.el.remove();noteCache.delete(id)}
+  for(const [id,c] of noteCache)if(!target&&!ids.has(id)){c.el.remove();noteCache.delete(id)}
   for(const [index,n] of doc.notes.entries()){
-    let c=noteCache.get(n.id);
+    if(target&&n!==target)continue;let c=noteCache.get(n.id);
     if(!c){let controlClick=false;const el=document.createElement('article');el.className='note';el.dataset.id=n.id;el.innerHTML='<div class="note-bar">⋮⋮ 移动文本框</div><div class="note-body"></div><div class="note-hit" aria-hidden="true"></div><div class="note-resize" title="拖动调整宽度"></div><div class="note-scale" title="拖动等比例缩放文本" aria-label="缩放文本"></div>';el.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse')controlClick=!!event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow')},{capture:true});el.addEventListener('dblclick',event=>{if(!objectControls(event)||controlClick||event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow')||event.pointerType==='pen'||event.sourceCapabilities?.firesTouchEvents)return;const current=doc.notes.find(item=>item.id===n.id);if(current&&current.kind!=='image'){event.stopPropagation();edit(current,{x:event.clientX,y:event.clientY})}});c={el,body:el.querySelector('.note-body'),markdown:null};noteCache.set(n.id,c);notes.append(el)}
     if(window.inkspaceInlineText?.renderNote(n)){placeNote(n,c.el);window.inkspaceInlineText.layoutNote(n,c);continue}
     if(c.markdown!==n.markdown||c.src!==n.src||c.kind!==n.kind){c.body.replaceChildren();if(n.kind==='image'){const image=document.createElement('img');image.src=n.src;image.alt='粘贴的图片';image.draggable=false;image.style.aspectRatio=String(n.aspect);image.addEventListener('load',()=>{c.guideSignature=null;renderNotes()},{once:true});c.body.append(image)}else if(!window.inkspaceBlocks?.renderBody(n,c))c.body.innerHTML=markdown(n.markdown);c.markdown=n.markdown;c.src=n.src;c.kind=n.kind;c.el.classList.toggle('image-note',n.kind==='image');const bar=c.el.querySelector('.note-bar');if(bar)bar.textContent=n.kind==='image'?'⋮⋮ 移动图片':n.kind==='html'?'⋮⋮ 移动 HTML 块':'⋮⋮ 移动文本框';const scaleControl=c.el.querySelector('.note-scale');if(scaleControl){const label=n.kind==='image'?'缩放图片':n.kind==='html'?'缩放 HTML 块':'缩放文本';scaleControl.title='拖动等比例'+label;scaleControl.setAttribute('aria-label',label)}renderStats.noteBuilds++}
@@ -271,7 +271,7 @@ function presentInteraction(){
   if(active?.type==='erase'){
     flushErasing();
   }else if(active?.type==='pan'){
-    $('#scene').style.willChange='transform';
+    window.inkspaceBlocks?.hideHover();$('#scene').style.willChange='transform';
     const dx=view.x-paintedView.x,dy=view.y-paintedView.y;
     if(Math.max(Math.abs(dx),Math.abs(dy))>surface.padding*.7)rebasePan();
     else{const d=surface.dpr;$('#scene').style.transform=`translate(${Math.round(dx*d)/d}px,${Math.round(dy*d)/d}px)`}
@@ -293,7 +293,7 @@ function presentInteraction(){
     for(const i of selected.notes){const n=doc.notes[i];placeNote(n,noteCache.get(n.id).el,dx,dy)}
     $('#selection').style.transform=`translate3d(${dx}px,${dy}px,0)`;window.inkspaceBlocks?.preview(active.offset.x*view.scale,active.offset.y*view.scale);renderStats.moveFrames++;
   }else if(active?.type==='note'){
-    const n=active.n;placeNote(n,noteCache.get(n.id).el,active.offset.x*view.scale,active.offset.y*view.scale);renderStats.moveFrames++;
+    const n=active.n;placeNote(n,noteCache.get(n.id).el,active.offset.x*view.scale,active.offset.y*view.scale);window.inkspaceBlocks?.previewSelectionFrame(active.offset.x*view.scale,active.offset.y*view.scale);renderStats.moveFrames++;
   }
   if(['note','resize-text','resize-selection','move-selection','resize-note','resize-window'].includes(active?.type)&&!(['move-selection','resize-selection'].includes(active?.type)&&window.inkspaceDiagram?.selectionHasEdges()))window.inkspaceDiagram?.syncNotes(true);
 }
