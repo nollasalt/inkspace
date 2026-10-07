@@ -42,14 +42,15 @@ function init(){
   graph.graphHandler.guidesEnabled=true;
   graph.graphHandler.useGuidesForEvent=event=>!event.getEvent().altKey&&!graph.isConstrainedEvent(event.getEvent());
   graph.getTooltipForCell=()=> '鼠标拖动移动 · 边角缩放 · 双击输入文字和 $公式$ · 点击边缘箭头，再点击目标';
-  const vertex=graph.getStylesheet().getDefaultVertexStyle();Object.assign(vertex,{fillColor:'#ffffff',strokeColor:'#263f43',strokeWidth:2,fontColor:'#263f43',fontSize:16,whiteSpace:'wrap',html:1,overflow:'hidden',spacing:8});
-  Object.assign(graph.getStylesheet().getDefaultEdgeStyle(),{strokeColor:'#263f43',strokeWidth:2,endArrow:'block',edgeStyle:'orthogonalEdgeStyle',rounded:1,html:1,fontSize:16,labelBackgroundColor:'#ffffff'});
+  const vertex=graph.getStylesheet().getDefaultVertexStyle();Object.assign(vertex,{fillColor:'#f4f8fc',strokeColor:'#788d9d',strokeWidth:1,fontColor:'#262626',fontSize:16,whiteSpace:'wrap',html:1,overflow:'hidden',spacing:8});
+  Object.assign(graph.getStylesheet().getDefaultEdgeStyle(),{strokeColor:'#73869a',strokeWidth:1.5,endArrow:'open',edgeStyle:'orthogonalEdgeStyle',rounded:1,html:1,fontSize:16,labelBackgroundColor:'#ffffff'});
   const constraints=[[.5,0],[1,.5],[.5,1],[0,.5]].map(([x,y])=>new mxConnectionConstraint(new mxPoint(x,y),true));
   graph.getAllConnectionConstraints=terminal=>terminal?.cell?.vertex?constraints:null;
   // Connection gestures belong to the shared block controller.
   installDiagramDrag(graph,{dimensions:()=>a4Dimensions(),view:()=>view,stats:()=>renderStats});
   const createHandler=graph.createHandler;graph.createHandler=function(...args){
     const handler=createHandler.apply(this,args);if(!handler?.state.cell.vertex)return handler;
+    if(document.body.classList.contains('media-workbench')){handler.setHandlesVisible(false);if(handler.selectionBorder?.node){handler.selectionBorder.node.style.visibility='hidden';handler.selectionBorder.node.style.pointerEvents='none'}}
     handler.livePreview=true;handler.roundLength=value=>value;const baseUnion=handler.union;
     handler.union=function(bounds,dx,dy,index,grid,scale,tr,constrained,centered){
       if(index<0||index>7||constrained||centered||Number(this.state.style.rotation)||graph.getModel().getParent(this.state.cell)!==graph.getDefaultParent())return baseUnion.apply(this,arguments);
@@ -108,12 +109,12 @@ function refreshProperties(){
   if(style){if(/^#[a-f0-9]{6}$/i.test(style.strokeColor))$('#diagram-stroke').value=style.strokeColor;if(/^#[a-f0-9]{6}$/i.test(style.fillColor))$('#diagram-fill').value=style.fillColor;$('#diagram-width').value=String(style.strokeWidth||2)}
 }
 function center(){return world(viewport.clientWidth/2,viewport.clientHeight/2)}
-function add(kind,position){
-  arrangeMouse();render();graph.stopEditing(false);const p=position||center(),w=160,h=90;let cell;
+function add(kind,position,size){
+  arrangeMouse();render();graph.stopEditing(false);const p=position||center(),w=size?.w||160,h=size?.h||90;let cell;
   graph.getModel().beginUpdate();try{
     if(kind==='line'||kind==='arrow'){
       cell=graph.insertEdge(graph.getDefaultParent(),null,'',null,null,`endArrow=${kind==='arrow'?'block':'none'};`);
-      const g=cell.geometry.clone();g.setTerminalPoint(new mxPoint(p.x-80,p.y),true);g.setTerminalPoint(new mxPoint(p.x+80,p.y),false);graph.getModel().setGeometry(cell,g);
+      const g=cell.geometry.clone();g.setTerminalPoint(new mxPoint(size?.start?.x??p.x-w/2,size?.start?.y??p.y),true);g.setTerminalPoint(new mxPoint(size?.end?.x??p.x+w/2,size?.end?.y??p.y),false);graph.getModel().setGeometry(cell,g);
     }else cell=graph.insertVertex(graph.getDefaultParent(),null,'',p.x-w/2,p.y-h/2,w,h,kind==='ellipse'?'shape=ellipse;':kind==='diamond'?'shape=rhombus;':kind==='roundrect'?'rounded=1;arcSize=20;':'');
   }finally{graph.getModel().endUpdate()}
   graph.setSelectionCell(cell);return cell;

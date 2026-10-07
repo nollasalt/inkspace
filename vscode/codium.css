@@ -79,3 +79,6 @@ header .tools .sidebar-resource-button{border-radius:0;border-bottom:2px solid t
 /* Controls and the visible frame share one measured content/editor width. */
 .note.note .note-connect-right{left:calc(var(--text-left) - calc(6 * var(--control-unit,1px)) + var(--text-controls-width) + calc(8 * var(--control-unit,1px)))}
 .note.note .note-connect-arrow::before{pointer-events:none}
+
+/* Pen hover never activates mouse arrangement chrome, including selected notes. */
+#viewport.pen-input .note.note :is(.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow){opacity:0!important;pointer-events:none!important}

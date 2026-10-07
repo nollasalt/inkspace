@@ -43,15 +43,15 @@ app.whenReady().then(async()=>{
   send('keyDown',{keyCode:'Escape'});send('keyUp',{keyCode:'Escape'});await pause(30);send('mouseUp',{x:p.x+70,y:p.y+30},{button:'left',clickCount:1});
   assert.equal(await run('doc.notes[0].x'),40);assert.equal(await run('history.length'),0);assert.equal(await run('window.inkspaceInteraction.machine.gesture'),null);
   // Cancellation restores a width change even when the 80-entry history is full.
-  await run('history=Array.from({length:80},()=>snapshot());future=[];noteCache.get("source").el.classList.add("mouse-hover");');
-  p=await elementPoint('[data-id=source] .note-resize');send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseMove',{x:p.x+50,y:p.y});await pause(40);
+  await run('history=Array.from({length:80},()=>snapshot());future=[];clearSelection();selected.notes=[0];overlaySelection();');
+  p=await elementPoint('.media-width');send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseMove',{x:p.x+50,y:p.y});await pause(40);
   assert.equal(await run('doc.notes[0].width'),380);send('keyDown',{keyCode:'Escape'});send('keyUp',{keyCode:'Escape'});send('mouseUp',{x:p.x+50,y:p.y},{button:'left',clickCount:1});await pause(30);
   assert.equal(await run('doc.notes[0].width'),330);assert.equal(await run('history.length'),80);
   // Explicit connection remains usable; external document transitions clear ownership.
   await reset();p=await elementPoint('[data-id=source] .note-hit');send('mouseMove',p);await pause(25);
   await click(await elementPoint('[data-id=source] .note-connect-right'));assert(await run('!!window.inkspaceInteraction.machine.connection'));
   const target=await elementPoint('[data-id=target] .note-hit');await click(target);assert.equal(await run('window.inkspaceDiagram.graph.getChildEdges(window.inkspaceDiagram.graph.getDefaultParent()).length'),1);
-  await run('clearSelection();selected.notes=[0];overlaySelection();');p=await elementPoint('[data-id=source] .note-bar');send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseMove',{x:p.x+40,y:p.y+20});await pause(40);
+  await run('clearSelection();selected.notes=[0];overlaySelection();');p=await elementPoint('[data-id=source] .note-hit');send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseMove',{x:p.x+40,y:p.y+20});await pause(40);
   const live=await run('window.inkspaceDiagram.graph.getChildEdges(window.inkspaceDiagram.graph.getDefaultParent())[0].geometry.sourcePoint.x');send('mouseUp',{x:p.x+40,y:p.y+20},{button:'left',clickCount:1});await pause(30);
   const committed=await run('window.inkspaceDiagram.graph.getChildEdges(window.inkspaceDiagram.graph.getDefaultParent())[0].geometry.sourcePoint.x');assert(Math.abs(live-committed)<.1,'Live and committed geometry differ: '+live+' / '+committed);
   fs.writeFileSync(path.join(root,'artifacts/ownership-layout.png'),(await w.webContents.capturePage()).toPNG());

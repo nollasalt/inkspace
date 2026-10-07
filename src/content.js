@@ -50,6 +50,14 @@ for(const name of ['fence','code_block','math_block','math_block_eqno']){
 }
 export function markdown(source){const normalized=source.replace(/\r\n|\r/g,'\n'),lines=[0];for(let i=0;i<normalized.length;i++)if(normalized[i]==='\n')lines.push(i+1);return clean(parser.render(normalized,{inkSourceLines:lines,inkSourceLength:normalized.length})).trimEnd()}
 export const unescapeMarkdown=source=>parser.utils.unescapeAll(source);
+// The same Markdown parser supplies edit ranges and rendered source anchors.
+// Ranges contain complete syntax, never a reconstruction of visible characters.
+export function sourceRange(source,offset){
+  const text=source.replace(/\r\n|\r/g,'\n'),lines=[0];for(let i=0;i<text.length;i++)if(text[i]==='\n')lines.push(i+1);
+  const blocks=parser.parse(text,{}).filter(t=>t.map&&['paragraph_open','heading_open','fence','code_block','math_block','math_block_eqno','list_item_open'].includes(t.type));
+  const found=blocks.map(token=>({start:lines[token.map[0]]??0,end:lines[token.map[1]]??text.length,type:token.type})).filter(r=>offset>=r.start&&offset<r.end).sort((a,b)=>(a.end-a.start)-(b.end-b.start));
+  const range=found[0];return range||{start:0,end:text.length,type:'document'};
+}
 // Use the renderer's Markdown grammar so code and horizontal rules stay literal.
 export function listEnterEdit(source,start,end=start){
   if(start!==end)return null;

@@ -79,8 +79,8 @@ function erase(p){eraseInk(p)}
 // Both pointer types use the selected tool; middle-button navigation is temporary.
 function arrangeMouse(){activateTool('select',false)}
 
-const canvasUiSelector='.zoom,#notebook-find,input,textarea,select,[contenteditable="true"],.mxCellEditor';
-function canvasUi(e){if((e.button===1||e.button===2||space)&&(!e.pointerType||e.pointerType==='mouse')&&e.target.closest?.('.inline-note-editor,.mxCellEditor'))return false;if(tool==='pdftext'&&e.type!=='wheel'&&e.target.closest?.('.textLayer'))return true;if(e.pointerType==='pen'&&e.target.closest?.('.inline-note-editor'))return false;return !!e.target.closest?.(canvasUiSelector)}
+const canvasUiSelector='.zoom,#notebook-find,.media-action-strip,input,textarea,select,[contenteditable="true"],.mxCellEditor';
+function canvasUi(e){if(e.target.closest?.('.media-grip'))return false;if((e.button===1||e.button===2||space)&&(!e.pointerType||e.pointerType==='mouse')&&e.target.closest?.('.inline-note-editor,.mxCellEditor'))return false;if(tool==='pdftext'&&e.type!=='wheel'&&e.target.closest?.('.textLayer'))return true;if(e.pointerType==='pen'&&e.target.closest?.('.inline-note-editor'))return false;return !!e.target.closest?.(canvasUiSelector)}
 function pointerTool(e){return tool}
 function objectControls(e){return !space&&!canvasUi(e)&&(!e.pointerType||e.pointerType==='mouse')&&['select','pan','text','diagram'].includes(pointerTool(e))}
 function penOverContent(e){return !space&&['pen','erase','shape'].includes(pointerTool(e))&&(e.pointerType==='pen'||e.pointerType==='mouse')&&!canvasUi(e)}

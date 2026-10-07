@@ -20,10 +20,16 @@ npm run start:engine:vscode
 
 ```powershell
 npm test
+npm run test:workbench
+npm run test:blocks
+npm run test:ownership
+npm run test:text:caret
 npm run test:engine
 ```
 
-`test:engine` 验证校准及持久化，并在真实 Microsoft VS Code 内验证自动启动、300 个小数坐标采样、60 次快速打点、连续缩放、未缓存笔迹即时预览、统一位图替换、页面设置自动落盘及目录内新建笔记。结果位于 `artifacts/engine-vscode-test/result.json`。真实触控笔手感仍需实测。
+`test:workbench` 在实际 Chromium 中验证 DESIGN 布局、主题和控件尺寸，以及真实鼠标绘制、编辑与缩放。`test:engine` 验证校准及持久化，接着在真实 Microsoft VS Code 和独立引擎内执行 0.9 工作台验证：300 个小数坐标采样、60 次快速打点、100 次延迟回包打点、连续缩放、焦点返回、公共控件、居中插入及二进制保存重开。结果位于 `artifacts/workbench-vscode-test/result.json`。合成采样不替代实体触控笔手感验证。
+
+旧的 `test:engine:legacy`、`test:engine:binary` 保留 0.8 宿主诊断入口，部分断言引用已经移除的块顶部控件；不用于 0.9 工作台界面验收。旧诊断源码保留在 `vscode/diagnostics.js`，只在验证宿主加载。
 
 保留原 VSCodium 路线时可运行 `npm run test:vscode`，需要已有原生宿主构建。
 

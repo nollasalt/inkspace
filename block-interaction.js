@@ -128,6 +128,7 @@
   // Shared selection overlay effect, also used by the delegated graph preview.
   function previewSelectionFrame(dx = 0, dy = 0, factor = 1) {
     const el = $('#selection');el.style.transformOrigin = '0 0';el.style.transform = `translate(${dx}px,${dy}px) scale(${factor})`;
+    window.inkspaceMediaFrame?.refresh();
   }
   function clearSelectionFrame() {
     const el = $('#selection');

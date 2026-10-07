@@ -8,7 +8,7 @@ valid=function(d){
   return pageValidator(d)&&d.notes.every(n=>n.kind===undefined||n.kind==='html'||n.kind==='image'&&imageSource(n.src)&&Number.isFinite(n.aspect)&&n.aspect>0);
 };
 function rememberPage(){const p=notebook.pages.find(p=>p.id===notebook.activePage);if(p){p.document=doc;p.view={...view};pageSessions.set(p.id,{history,future})}}
-function documentData(){rememberPage();return notebook}
+function documentData(){rememberPage();return window.inkspaceInlineText?.excludeDraft(notebook)||notebook}
 function documentJSON(pretty=false){return JSON.stringify(documentData(),null,pretty?2:0)}
 function newCanvas(){return{format:'inkspace',version:1,strokes:[],notes:[],shapes:[],pdfs:[],background:{...backgroundSettings()}}}
 function adoptDocument(data){

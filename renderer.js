@@ -11,7 +11,7 @@ function previewZoom(){
   window.inkspaceBlocks?.hideHover();$('#scene').style.willChange='transform';
   for(const n of doc.notes){const el=noteCache.get(n.id)?.el;if(el)el.style.setProperty('--control-unit',(1/(view.scale*(n.scale||1)))+'px')}
   if(!zoomBase)zoomBase={...paintedView,scale:renderedScale};
-  if(zoomFrame===null)zoomFrame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{zoomFrame=null;if(!zoomBase)return;const ratio=view.scale/zoomBase.scale;if(ratio>1.5||ratio<2/3){render();return}$('#scene').style.transform=`translate(${view.x-zoomBase.x*ratio}px,${view.y-zoomBase.y*ratio}px) scale(${ratio})`;presentBackground();$('#reset').textContent=zoomLabel(view.scale)});
+  if(zoomFrame===null)zoomFrame=(window.requestAnimationFrame||((f)=>setTimeout(f,16)))(()=>{zoomFrame=null;if(!zoomBase)return;const ratio=view.scale/zoomBase.scale;if(ratio>1.5||ratio<2/3){render();return}$('#scene').style.transform=`translate(${view.x-zoomBase.x*ratio}px,${view.y-zoomBase.y*ratio}px) scale(${ratio})`;presentBackground();window.inkspaceMediaFrame?.refresh();$('#reset').textContent=zoomLabel(view.scale)});
   clearTimeout(zoomTimer);zoomTimer=setTimeout(settleZoom,120);
 }
 function interactiveZoom(s,x,y){const p=world(x,y);view.scale=usableZoom(s);view.x=x-p.x*view.scale;view.y=y-p.y*view.scale;previewZoom()}
@@ -295,6 +295,7 @@ function presentInteraction(){
     $('#selection').style.transform=`translate3d(${dx}px,${dy}px,0)`;window.inkspaceBlocks?.preview(active.offset.x*view.scale,active.offset.y*view.scale);renderStats.moveFrames++;
   }
   if(['resize-text','resize-selection','move-selection','resize-note','resize-window'].includes(active?.type)&&!(['move-selection','resize-selection'].includes(active?.type)&&window.inkspaceDiagram?.selectionHasEdges()))window.inkspaceDiagram?.syncNotes(true);
+  window.inkspaceMediaFrame?.refresh();
 }
 function rebasePan(){
   const d=surface.dpr,dx=Math.round((view.x-paintedView.x)*d),dy=Math.round((view.y-paintedView.y)*d),w=canvas.width,h=canvas.height;
@@ -325,8 +326,8 @@ function finishGroupScale(){
   $('#selection').style.transform='';$('#selection').style.transformOrigin='';clearLayer(inkLayers[1]);render();
 }
 function finishGroupMove(){if(active.pendingMove){active=null;overlaySelection();return}const offset=active.offset;window.inkspaceBlocks?.clearPreview();detachSelection();moveSelection(offset.x,offset.y);active=null;inkLayers[1].canvas.style.transform='';$('#selection').style.transform='';clearLayer(inkLayers[1]);render()}
-function finishInteraction(){window.inkspaceInteraction?.finishExternal();if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='erase'){finishErasing();active=null}else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='resize-text')finishTextScale();else if(active?.type==='resize-window')window.inkspaceInlineText?.finishHeight();else if(active?.type==='pan')settlePan();else active=null;pointers.clear();gesture=null;selectionRect=null}
-function snapshot(){return {...doc,strokes:doc.strokes.slice(),notes:doc.notes.map(n=>({...n})),shapes:doc.shapes.map(s=>({...s}))}}
+function finishInteraction(){window.inkspaceWorkbench?.clearShapePreview?.();window.inkspaceInteraction?.finishExternal();if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='erase'){finishErasing();active=null}else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='resize-text')finishTextScale();else if(active?.type==='resize-window')window.inkspaceInlineText?.finishHeight();else if(active?.type==='pan')settlePan();else active=null;pointers.clear();gesture=null;selectionRect=null}
+function snapshot(){return {...doc,strokes:doc.strokes.slice(),notes:doc.notes.filter(n=>n.id!==window.inkspaceInlineText?.transientNoteId()).map(n=>({...n})),shapes:doc.shapes.map(s=>({...s}))}}
 function detachSelection(){for(const i of selected.strokes){const s=doc.strokes[i];doc.strokes[i]={...s,points:s.points.map(p=>({...p}))}}}
 function persist(){clearTimeout(saveTimer);saveTimer=setTimeout(flushPersist,700)}
 function flushPersist(){if(active){persist();return}try{localStorage.setItem('inkspace.document',JSON.stringify(doc))}catch{toast('自动保存失败，请下载 JSON 保存。')}}

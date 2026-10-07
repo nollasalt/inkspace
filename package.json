@@ -1,6 +1,6 @@
 {
   "name": "inkspace",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "scripts": {
     "build:theia": "npm run build && node theia/build-media.cjs && node theia/prepare-native.cjs && npm run build --prefix theia",
@@ -26,7 +26,7 @@
     "build:engine": "node scripts/build-raw-input-probe.cjs && node scripts/build-vscode.cjs",
     "start:engine": "node ink-engine/service.cjs",
     "start:engine:vscode": "node scripts/start-ink-engine-validation.cjs",
-    "test:engine": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && node scripts/test-ink-engine.cjs",
+    "test:engine": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && npm run test:engine:workbench",
     "dist:vscode": "node scripts/build-vscode.cjs && node scripts/package-vscode-engine.cjs",
     "dist:vscode:bundle": "node scripts/package-vscode-bundle.cjs",
     "test:engine:binary": "node -e \"process.env.INKSPACE_ENGINE_BINARY_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
@@ -35,7 +35,10 @@
     "test:text:caret": "electron tests/caret-electron.cjs",
     "test:blocks": "node tests/block-geometry.cjs && electron tests/blocks-electron.cjs && electron tests/block-interaction-electron.cjs && electron tests/block-model-electron.cjs",
     "test:ownership": "electron tests/ownership-electron.cjs",
-    "typecheck": "tsc -p tsconfig.interaction.json"
+    "typecheck": "tsc -p tsconfig.interaction.json",
+    "test:workbench": "electron tests/workbench-electron.cjs",
+    "test:engine:workbench": "node -e \"process.env.INKSPACE_ENGINE_WORKBENCH_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
+    "test:engine:legacy": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && node scripts/test-ink-engine.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -82,7 +85,11 @@
       "LICENSE",
       "block-interaction.js",
       "block-model.js",
-      "canvas-interaction.js"
+      "canvas-interaction.js",
+      "workbench.js",
+      "workbench-commands.js",
+      "media-frame.js",
+      "workbench.css"
     ],
     "win": {
       "target": "nsis",

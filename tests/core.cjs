@@ -44,7 +44,7 @@ for(const name of ['pen','erase','pan','select','text','shape','diagram','pdftex
 run('doc={format:"inkspace",version:1,strokes:[],notes:[],shapes:[]};view={x:0,y:0,scale:1};tool="pen";history=[];future=[];clearSelection()');
 pointer('pointerdown',10,10);pointer('pointermove',40,40);pointer('pointerup',40,40);assert.equal(run('doc.strokes.length'),1);assert.equal(run('doc.strokes[0].hasPressure'),false);
 run('tool="select";clearSelection();history=[]');pointer('pointerdown',25,25);pointer('pointerup',25,25);assert.equal(run('selected.strokes[0]'),0);assert.equal(run('history.length'),0,'Selecting creates no drawing undo entry');
-const ui={closest:()=>({})};handlers.get('#viewport:pointerdown')({pointerId:2,pointerType:'mouse',button:0,target:ui,preventDefault:noop,stopImmediatePropagation:noop,clientX:10,clientY:10});assert.equal(run('active'),null);assert.equal(run('pointers.size'),0);
+const ui={closest:selector=>selector.includes('input')?{}:null};handlers.get('#viewport:pointerdown')({pointerId:2,pointerType:'mouse',button:0,target:ui,preventDefault:noop,stopImmediatePropagation:noop,clientX:10,clientY:10});assert.equal(run('active'),null);assert.equal(run('pointers.size'),0);
 console.log('Passed 8-tool mouse/pen policy, mouse drawing without a toggle, click-hit selection, selection without undo entries and embedded UI ownership.');
 
 assert.equal(run('validPdfs([null])'),false);assert.equal(run('validPdfs([{id:"null-page",name:"test",data:"AAAA",pages:[null]}])'),false);

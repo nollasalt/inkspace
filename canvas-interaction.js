@@ -5,6 +5,7 @@
     ['.note-connect-arrow','connection'], ['.note-resize','width'],
     ['.note-height-resize','height'], ['.note-view-toggle','view-toggle'],
     ['.note-scale','text-scale'], ['.selection-scale','selection'], ['.note-bar','selection']
+    ,['.media-grip','selection']
   ]);
   const connector = () => window.inkspaceDiagram?.noteConnectors();
   let transaction = null;
@@ -26,10 +27,10 @@
     }
     return null;
   };
-  const noteAtControl = event => doc.notes.find(n => n.id === event.target.closest?.('.note')?.dataset.id);
-  function capture(event, position) {
+  const noteAtControl = event => doc.notes.find(n => n.id === (event.target.closest?.('[data-block-id]')?.dataset.blockId || event.target.closest?.('.note')?.dataset.id));
+  function capture(event, position, defer=false) {
     pointers.set(event.pointerId, position);
-    if (!event.nativeInk) { try { viewport.setPointerCapture(event.pointerId); } catch {} }
+    if (!defer && !event.nativeInk) { try { viewport.setPointerCapture(event.pointerId); } catch {} }
   }
   function beginMove(event, hit) {
     const p=local(event),pos=world(p.x,p.y);
@@ -51,7 +52,9 @@
     beginGroupMove();
   }
   function startDrawing(event, owner, pos) {
-    clearSelection(); window.inkspaceDiagram?.setSelected([]); checkpoint();
+    clearSelection(); window.inkspaceDiagram?.setSelected([]);
+    if(owner==='shape'&&window.inkspaceWorkbench?.completeShape){active={type:'graph-create',id:event.pointerId,start:pos,end:pos};window.inkspaceWorkbench.previewShape(pos,pos);return;}
+    checkpoint();
     if (owner === 'shape') {
       const shape = {kind:$('#shape-kind').value,x:pos.x,y:pos.y,x2:pos.x,y2:pos.y,color:$('#color').value,width:Number($('#width').value)};
       doc.shapes.push(shape); active = {type:'shape',id:event.pointerId,shape}; render(); paintShapeLive();
@@ -70,11 +73,13 @@
     if (['blur','pointercancel','capture-lost'].includes(reason) && ['ink','erase'].includes(owner)) { finishInteraction(); persist(); transaction = null; return; }
     const before = transaction;
     cancelInteractionFrame(); window.inkspaceBlocks?.clearPreview(); window.inkspaceBlocks?.clearSelectionFrame();
+    window.inkspaceWorkbench?.clearShapePreview();
     for (const cache of noteCache.values()) cache.el.classList.remove('scaling-text','resizing-window');
     // Preview-only gestures have not touched the document. Changed gestures
     // restore their first existing checkpoint, rather than adding a new undo.
     if (before?.snapshot) { doc = before.snapshot; history = before.historyEntries; future = before.future; }
     active = null; pointers.clear(); gesture = null; selectionRect = null;
+    if(owner==='shape'&&window.inkspaceWorkbench?.completeShape)activateTool('select',false);
     for (const layer of inkLayers.slice(1)) { layer.canvas.style.transform=''; layer.canvas.style.transformOrigin=''; clearLayer(layer); }
     $('#scene').style.transform=''; $('#selection').style.transform='';
     transaction = null; render(); persist();
@@ -120,7 +125,7 @@
       }
       transaction??={historyEntries:history.slice(),future:future.slice(),snapshot:null};
       const rect=viewport.getBoundingClientRect(),p={x:event.clientX-rect.left,y:event.clientY-rect.top},pos=world(p.x,p.y);
-      capture(event,p);
+      capture(event,p,owner==='selection'&&!controlAt(event));
       if (owner === 'pan') {
         if (pointers.size === 2) {
           active=null; const [a,b]=[...pointers.values()];
@@ -148,7 +153,8 @@
         checkpoint(); active={type:'resize-selection',id:event.pointerId,bounds:selectionBounds(),items:selectionScaleSnapshot(),factor:1,rect}; beginGroupMove();
       } else if (tool === 'text' && !note && !window.inkspaceBlocks?.pick(event)) {
         pointers.delete(event.pointerId); edit({id:crypto.randomUUID(),...pos,width:560,markdown:''}); return false;
-      } else beginMove(event,control?.el.matches('.note-bar')&&note?{kind:'notes',index:doc.notes.indexOf(note),id:note.id}:window.inkspaceBlocks?.pick(event)||hitCanvasItem(pos));
+      } else if(control?.el.matches('.media-grip')){const entry=window.inkspaceBlocks.selectionEntries()[0];beginMove(event,entry&&{kind:entry.kind,index:entry.index,id:entry.value.id});}
+      else beginMove(event,control?.el.matches('.note-bar')&&note?{kind:'notes',index:doc.notes.indexOf(note),id:note.id}:window.inkspaceBlocks?.pick(event)||hitCanvasItem(pos));
       return true;
     },
     move(event, owner) {
@@ -161,6 +167,7 @@
     end(event, owner) {
       if (owner !== 'diagram') endCanvasContact(event);
       transaction=null;
+      if(event.pointerType==='mouse'&&owner==='selection')window.inkspaceBlocks?.hover(event);
     },
     cancel:cancelContact,
     hover(event) {
@@ -170,9 +177,9 @@
     key(event) {
       if(event.target.closest?.('.note-height-resize')&&['ArrowUp','ArrowDown'].includes(event.key))return false;
       if (event.key === 'Escape' && connector()?.pending) { connector().cancel(); return true; }
+      if (router.shortcut(event)) return true;
       if (window.inkspaceBlocks?.keyDown(event)) return true;
       if (canvasUi(event)||event.isComposing||window.inkspaceDiagram?.editing()) return false;
-      if (router.shortcut(event)) return true;
       if (window.inkspaceDiagram?.keyDown(event)) return true;
       canvasKeyDown(event); return event.defaultPrevented;
     },
@@ -184,11 +191,11 @@
       if (!objectControls(event)||event.button!==0||event.detail>0&&lastCanvasPointer!=='mouse'||event.sourceCapabilities?.firesTouchEvents||event.detail>0&&lastControlGesture||controlAt(event)||document.querySelector('dialog[open]')) return;
       const hit=window.inkspaceBlocks?.pick(event);
       if (hit?.kind==='notes') {
-        const note=blockValue(hit.kind,hit.index); if (note.kind==='image') return;
-        connector()?.cancel(); edit(note,{x:event.clientX,y:event.clientY});
+        const note=blockValue(hit.kind,hit.index);
+        connector()?.cancel();if(note.kind==='image')window.inkspaceCommands?.execute('view');else edit(note,{x:event.clientX,y:event.clientY});
       } else if (hit?.kind==='diagram') { window.inkspaceDiagram?.editAt(hit.id); }
       else if ((!hit||['strokes','shapes'].includes(hit.kind)) && !canvasUi(event)) { finishInteraction(); const p=local(event); edit({id:crypto.randomUUID(),...world(p.x,p.y),width:560,markdown:''}); }
-      else return;
+      else if(hit?.kind==='pdfPages')window.inkspaceCommands?.execute('view');else return;
       event.preventDefault(); event.stopImmediatePropagation();
     }
   };
@@ -230,7 +237,8 @@ function moveCanvasContact(e) {
   }
   if (!active || active.id !== e.pointerId) return;
   const pos = world(p.x, p.y);
-  if (active.type === "resize-text") {
+  if (active.type === 'graph-create') {active.end=pos;window.inkspaceWorkbench.previewShape(active.start,pos);return;
+  } else if (active.type === "resize-text") {
     const b = active.bounds, factor = 1 + ((pos.x - active.start.x) * b.w + (pos.y - active.start.y) * b.h) / Math.max(1e-12, b.w * b.w + b.h * b.h);
     active.factor = Math.max(0.05 / active.base.scale, Math.min(20 / active.base.scale, factor));
     scheduleInteractionFrame();
@@ -254,6 +262,7 @@ function moveCanvasContact(e) {
       if (Math.hypot(pos.x - active.last.x, pos.y - active.last.y) * view.scale < 3) return;
       checkpoint();
       active.pendingMove = false;
+      if(!e.nativeInk){try{viewport.setPointerCapture(e.pointerId)}catch{}}
       window.inkspaceInteraction.machine.transition(e.pointerId,'dragging');
     }
     active.offset.x += pos.x - active.last.x;
@@ -288,6 +297,7 @@ function endCanvasContact(e) {
   window.inkspaceBlocks?.clearSelectionFrame();
   settleZoom();
   cancelInteractionFrame();
+  if(active?.type==='graph-create'&&active.id===e.pointerId){const creation=active;active=null;pointers.delete(e.pointerId);window.inkspaceWorkbench.clearShapePreview();window.inkspaceWorkbench.completeShape(creation.start,creation.end);return;}
   if (active?.type === "pan" && active.id === e.pointerId) {
     settlePan();
     persist();
