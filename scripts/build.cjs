@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),esbuild=require('esbuild');
 fs.mkdirSync('vendor',{recursive:true});
+esbuild.buildSync({entryPoints:['src/interaction/index.ts'],bundle:true,format:'iife',globalName:'InkInteraction',outfile:'vendor/interaction.js',target:'es2022',legalComments:'eof'});
 esbuild.buildSync({entryPoints:['src/diagram.js'],bundle:true,format:'iife',outfile:'vendor/diagram.js',minify:true,keepNames:true,target:'es2022',legalComments:'eof'});
 fs.copyFileSync('node_modules/mxgraph/LICENSE','vendor/mxgraph-LICENSE');
 fs.cpSync('node_modules/mxgraph/javascript/src/images','vendor/mxgraph/images',{recursive:true});

@@ -3,12 +3,12 @@
 ## 分层
 
 - block-model.js：纯模型适配器，无 DOM、输入工具或宿主依赖。提供介质枚举、稳定 ID、PDF 单页读取/更新/删除、资产插入复用、片段复制及旧组合引用转换。
-- canvas-blocks.js：组合、选区扩展、右键菜单和块操作；注册渲染入口。block-interaction.js：命中、手势优先级、临时悬停控件和选区预览。
+- canvas-blocks.js：组合、选区扩展、右键菜单和块操作；注册渲染入口。block-interaction.js：统一命中、临时悬停控件和选区预览；不再持有独立拖动监听。canvas-interaction.js 将唯一输入路由的决策转换为预览/提交效果。
 - renderer.js、pdf.js、vscode/inline-text.js、mxGraph：各自的渲染、布局和编辑器。纯模型不读取渲染缓存；几何适配需要实际内容边界时，由渲染层提供世界坐标尺寸。
 - src/block-geometry.cjs、src/obstacle-router.cjs：纯世界坐标端点、法向起终段、正交避障。src/note-connectors.js 负责把不同介质适配为端点；src/diagram-drag.js 负责图形拖动合成。
 - VS Code 扩展与 Ink Engine 继续负责文件、校准、Raw Input 和 Cairo，不依赖块控件。
 
-已有 app.js 仍持有画布状态和历史，宿主适配器仍负责界面装配；本次先抽出变化频繁的模型和路由边界，便于后续逐步缩减入口代码。
+交互所有权、状态机、稳定 ID 选择及介质接入约束见 [交互架构](INTERACTION-ARCHITECTURE.md)。app.js 仍持有画布状态、公共操作和历史，输入决策已经移至独立核心。
 
 ## 文本与 PDF
 

@@ -1,4 +1,4 @@
-// Own mouse gestures and transient controls; do not serialize UI state.
+// Geometry adapters and transient controls; the shared router owns gestures.
 (() => {
   const graph = () => window.inkspaceDiagram;
   const keys = ['strokes', 'notes', 'shapes', 'pdfs', 'pdfPages'];
@@ -43,7 +43,7 @@
     const item = blockItems(match[1]).find(n => n.id === match[2]);
     return item ? {
       id, connectionKind: match[1], connectionItem: item,
-      connectionBounds: () => itemBounds(match[1], item)
+      connectionBounds: () => window.inkspaceGeometry.displayBounds(match[1], item)
     } : null;
   }
 
@@ -53,7 +53,7 @@
     return item ? {
       id: item.id ? hit.kind + ':' + item.id : null,
       connectionKind: hit.kind, connectionItem: item,
-      connectionBounds: () => itemBounds(hit.kind, item)
+      connectionBounds: () => window.inkspaceGeometry.displayBounds(hit.kind, item)
     } : null;
   }
 
@@ -67,15 +67,15 @@
   }
 
   function eventTarget(event) {
-    const el = event.target.closest?.('.note,.media-block');
-    if (el) return el.classList.contains('media-block') ? hovered : connectionTarget(el.dataset.id);
-    const p = local(event);
-    return cellTarget(graph()?.graph?.getCellAt(p.x, p.y)) || targetAt(hitCanvasItem(world(p.x, p.y)));
+    const control=window.inkspaceInteraction?.controlAt(event);
+    if(control){const el=control.el.closest('.note,.media-block');if(el)return el.classList.contains('media-block')?hovered:connectionTarget(el.dataset.id)}
+    const hit=pick(event);if(hit?.kind==='notes')return blockValue(hit.kind,hit.index);
+    return hit?.kind==='diagram'?cellTarget(graph()?.graph?.getModel().getCell(hit.id)):targetAt(hit);
   }
 
   function hideHover() {frame.hidden = true; hovered = null;}
 
-  viewport.addEventListener('pointermove', event => {
+  function hover(event) {
     if (event.pointerType !== 'mouse' || viewport.classList.contains('pen-input') ||
         active || !objectControls(event) || space || tool === 'pan') {
       hideHover();
@@ -101,24 +101,17 @@
     });
     frame.dataset.id = hovered.id || '';
     frame.hidden = false;
-  });
+  }
   viewport.addEventListener('pointerleave', hideHover);
   window.addEventListener('blur', hideHover);
 
-  function keepsSelection(event) {
-    if (!graph()?.selectionSnapshot().length) return false;
-    const b = selectionBounds(), p = local(event), pos = world(p.x, p.y);
-    return b && pos.x >= b.x && pos.y >= b.y && pos.x <= b.x + b.w && pos.y <= b.y + b.h;
-  }
-
   function pick(event) {
-    const p = local(event), pos = world(p.x, p.y), note = event.target.closest?.('.note');
-    if (!note) {
-      const cell = graph()?.graph?.getCellAt(p.x, p.y);
-      if (cell) return {kind: 'diagram', index: cell.id, id: cell.id};
-    }
-    const hit = hitCanvasItem(pos, note);
-    return hit ? {kind: hit.kind, index: hit.index, id: blockValue(hit.kind,hit.index).id} : null;
+    const p=local(event),pos=world(p.x,p.y);
+    const hit=hitCanvasItem(pos);
+    if(hit?.kind==='notes')return{...hit,id:blockValue(hit.kind,hit.index).id};
+    const cell=graph()?.graph?.getCellAt(p.x,p.y);
+    if(cell)return{kind:'diagram',index:cell.id,id:cell.id};
+    return hit?{...hit,id:blockValue(hit.kind,hit.index).id}:null;
   }
 
   function selectHit(hit) {
@@ -132,52 +125,9 @@
     overlaySelection();
   }
 
-  function beginSelectionDrag(event, scale = false) {
-    settleZoom();
-    hideHover();
-    const p = local(event), pos = world(p.x, p.y);
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    pointers.set(event.pointerId, p);
-    try {viewport.setPointerCapture(event.pointerId);} catch {}
-    if (scale) {
-      checkpoint();
-      active = {type: 'resize-selection', id: event.pointerId, bounds: selectionBounds(),
-        items: selectionScaleSnapshot(), factor: 1, rect: viewport.getBoundingClientRect()};
-    } else {
-      active = {type: 'move-selection', id: event.pointerId, last: pos, pendingMove: true,
-        offset: {x: 0, y: 0}, rect: viewport.getBoundingClientRect()};
-    }
-    beginGroupMove();
-  }
-
-  viewport.addEventListener('pointerdown', event => {
-    if (event.pointerType !== 'mouse' || canvasUi(event)) return;
-    if (event.button === 2) {
-      clearPenCursor();
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      window.inkspaceInlineText?.finish();
-      finishInteraction();
-      const hit = pick(event), chosen = hit && (hit.kind === 'diagram' ?
-        graph()?.selectionSnapshot().some(i => i.index === hit.id) : selected[hit.kind]?.includes(hit.index));
-      if (!chosen) selectHit(hit);
-      return;
-    }
-    // Dedicated controls own their gestures before group or selection dragging.
-    if (event.button !== 0 || !objectControls(event) || tool === 'pan' || space ||
-        event.target.closest('.note-connect-arrow,.note-view-toggle,.note-height-resize,.selection-scale,.note-resize')) return;
-    const hit = pick(event);
-    const group = hit?.id && (doc.groups || []).some(g => InkBlockModel.groupMembers(doc,g).some(r => r.kind === hit.kind && r.id === hit.id));
-    const mixed = keys.some(k => selected[k]?.length) && graph()?.selectionSnapshot().length && keepsSelection(event);
-    if (group) {selectHit(hit); beginSelectionDrag(event, !!event.target.closest('.note-scale')); return;}
-    if (mixed && !event.target.closest('.note-resize,.note-scale,.selection-scale')) beginSelectionDrag(event);
-  }, {capture: true});
-
+  // Shared selection overlay effect, also used by the delegated graph preview.
   function previewSelectionFrame(dx = 0, dy = 0, factor = 1) {
-    const el = $('#selection');
-    el.style.transformOrigin = '4px 4px';
-    el.style.transform = `translate(${dx}px,${dy}px) scale(${factor})`;
+    const el = $('#selection');el.style.transformOrigin = '0 0';el.style.transform = `translate(${dx}px,${dy}px) scale(${factor})`;
   }
   function clearSelectionFrame() {
     const el = $('#selection');
@@ -186,7 +136,7 @@
   }
 
   Object.assign(window.inkspaceBlocks, {
-    hideHover, previewSelectionFrame, clearSelectionFrame, connectionTarget,
-    ensureConnectionTarget, eventTarget, keepsSelection, pick, selectHit
+    hover, hideHover, previewSelectionFrame, clearSelectionFrame, connectionTarget,
+    ensureConnectionTarget, eventTarget, pick, selectHit
   });
 })();

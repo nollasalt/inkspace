@@ -3,9 +3,9 @@ const noop=()=>{},handlers=new Map(),elements=new Map(),storage=new Map();
 const ctx=new Proxy({},{get:()=>noop,set:()=>true});
 function element(id){if(elements.has(id))return elements.get(id);const e={id,value:id==='#color'?'#263f43':id==='#width'?'4':id==='#shape-kind'?'rect':'',style:{setProperty:noop},classList:{add:noop,toggle:noop,remove:noop},dataset:{},clientWidth:1000,clientHeight:700,offsetHeight:200,getContext:()=>ctx,getBoundingClientRect:()=>({left:0,top:0,width:1000,height:700}),addEventListener:(name,fn)=>handlers.set(id+':'+name,fn),setPointerCapture:noop,replaceChildren:noop,append:noop,remove:noop,querySelector:s=>s==='.note-body'?element(id+':body'):null,closest:()=>null,showModal(){this.open=true},close(){this.open=false},focus:noop,click(){this.onclick?.()},matches:()=>false};elements.set(id,e);return e}
 const context=vm.createContext({document:{compatMode:'CSS1Compat',querySelector:element,querySelectorAll:()=>[],createElement:()=>element('article')},window:{devicePixelRatio:1,innerHeight:800,addEventListener:(name,fn)=>handlers.set('window:'+name,fn)},localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)},crypto:{randomUUID:()=> 'test-note'},setTimeout:()=>0,clearTimeout:noop,URL:{},Blob,console,Path2D:class{constructor(d){this.d=d}addPath(){}}});
-for(const file of ['block-model.js','vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+for(const file of ['vendor/interaction.js','block-model.js','vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js','canvas-interaction.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
 const run=s=>vm.runInContext(s,context),read=s=>JSON.parse(JSON.stringify(run(s)));
-function pointer(name,x,y,pointerType='mouse'){handlers.get('#viewport:'+name)({pointerId:1,pointerType,pressure:.7,button:0,clientX:x,clientY:y,target:element('target')})}
+function pointer(name,x,y,pointerType='mouse'){handlers.get('#viewport:'+name)({pointerId:1,pointerType,pressure:.7,button:0,preventDefault:noop,stopImmediatePropagation:noop,clientX:x,clientY:y,target:element('target')})}
 run("doc={format:'inkspace',version:1,strokes:[],notes:[],shapes:[]};view={x:0,y:0,scale:1};history=[];future=[];tool='select'");
 pointer('pointerdown',10,10);pointer('pointermove',40,40);pointer('pointerup',40,40);assert.equal(run('doc.strokes.length'),0);run("clearSelection();tool='pen'");pointer('pointerdown',10,10,'pen');pointer('pointermove',40,40,'pen');pointer('pointerup',40,40,'pen');
 assert.equal(run('doc.strokes.length'),1);assert.equal(run('doc.strokes[0].points.length'),2);
@@ -44,7 +44,7 @@ for(const name of ['pen','erase','pan','select','text','shape','diagram','pdftex
 run('doc={format:"inkspace",version:1,strokes:[],notes:[],shapes:[]};view={x:0,y:0,scale:1};tool="pen";history=[];future=[];clearSelection()');
 pointer('pointerdown',10,10);pointer('pointermove',40,40);pointer('pointerup',40,40);assert.equal(run('doc.strokes.length'),1);assert.equal(run('doc.strokes[0].hasPressure'),false);
 run('tool="select";clearSelection();history=[]');pointer('pointerdown',25,25);pointer('pointerup',25,25);assert.equal(run('selected.strokes[0]'),0);assert.equal(run('history.length'),0,'Selecting creates no drawing undo entry');
-const ui={closest:()=>({})};handlers.get('#viewport:pointerdown')({pointerId:2,pointerType:'mouse',button:0,target:ui,clientX:10,clientY:10});assert.equal(run('active'),null);assert.equal(run('pointers.size'),0);
+const ui={closest:()=>({})};handlers.get('#viewport:pointerdown')({pointerId:2,pointerType:'mouse',button:0,target:ui,preventDefault:noop,stopImmediatePropagation:noop,clientX:10,clientY:10});assert.equal(run('active'),null);assert.equal(run('pointers.size'),0);
 console.log('Passed 8-tool mouse/pen policy, mouse drawing without a toggle, click-hit selection, selection without undo entries and embedded UI ownership.');
 
 assert.equal(run('validPdfs([null])'),false);assert.equal(run('validPdfs([{id:"null-page",name:"test",data:"AAAA",pages:[null]}])'),false);

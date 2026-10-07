@@ -23,3 +23,5 @@ flowchart LR
 历史独立桌面和 VSCodium 宿主使用 Windows Pointer/HIMETRIC 路线；Theia 和这些宿主保留用于参考与回归，不是普通 VS Code 插件的运行依赖。
 
 块模型、输入交互与介质渲染的分层，以及 PDF 单页资产、文本格式和避障路由边界，见 [块架构](BLOCKS.md)。
+
+画布输入由统一状态机分配所有权，渲染器只提供效果；模块职责、取消与扩展契约见 [交互架构](INTERACTION-ARCHITECTURE.md)。

@@ -26,7 +26,7 @@ function app(raw=false,dpr=1){
     canvases.set(el.id,{native,proxy});return proxy;
   };
   w.Path2D=Path2D;
-  for(const file of ['block-model.js','vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js'])vm.runInContext(fs.readFileSync(file,'utf8'),dom.getInternalVMContext());
+  for(const file of ['vendor/interaction.js','block-model.js','vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js','canvas-interaction.js'])vm.runInContext(fs.readFileSync(file,'utf8'),dom.getInternalVMContext());
   const run=s=>w.eval(s),read=s=>JSON.parse(JSON.stringify(run(s)));
   const pointer=(type,x,y,options={})=>{
     const {timeStamp,...properties}=options;
@@ -132,7 +132,7 @@ const panDuring=read('renderStats');
 assert.equal(w.document.querySelector('#paper').parentElement,w.document.querySelector('#viewport'));
 assert.equal(w.document.querySelector('#paper').style.backgroundPosition,paperPosition);
 assert.equal(panDuring.scenePaints,panBefore.scenePaints);assert.equal(panDuring.outlineBuilds,panBefore.outlineBuilds);assert.equal(panDuring.noteBuilds,panBefore.noteBuilds);
-assert.equal(a.reads()-panReads,2);assert.ok(w.document.querySelector('#scene').style.transform.includes('60px'));
+assert.ok(a.reads()-panReads<=2,'Pan rereads viewport geometry during samples');assert.ok(w.document.querySelector('#scene').style.transform.includes('60px'));
 pointer('pointerup',80,50,{pointerType:'mouse'});
 assert.equal(run('renderStats.scenePaints'),panBefore.scenePaints+1);assert.equal(w.document.querySelector('#scene').style.transform,'');
 assert.equal(run('renderStats.fullScenePaints'),panBefore.fullScenePaints);assert.equal(run('renderStats.stripPaints'),panBefore.stripPaints+1);

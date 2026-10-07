@@ -3,7 +3,8 @@ const root=path.resolve(__dirname,'..'),html=path.join(root,'vscode/media/block-
 app.setPath('userData',path.join(root,'artifacts/block-model-profile'));
 app.whenReady().then(async()=>{
  const w=new BrowserWindow({width:1380,height:920,show:true,webPreferences:{backgroundThrottling:false}}),run=async s=>{try{return await w.webContents.executeJavaScript(s)}catch(e){console.error(s.slice(0,400));throw e}};
- const send=(type,p,extra={})=>w.webContents.sendInputEvent({type,...p,...extra});
+ const inject=require('./mouse-input.cjs')(w.webContents);
+ const send=(type,p,extra={})=>inject({type,...p,...extra});
  const click=async p=>{send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseUp',p,{button:'left',clickCount:1});await pause(30)};
  const start=async p=>{send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});await pause(30)};
  const move=async(p,dx,dy)=>{send('mouseMove',{x:p.x+dx,y:p.y+dy});await pause(60)};
@@ -37,7 +38,7 @@ app.whenReady().then(async()=>{
   for(const scale of [.5,1,2]){
    await reset();await run('view={x:40,y:40,scale:'+scale+'};doc.notes[0].scale=1.5;render();');
    const hit=await elementPoint('[data-id=text] .note-hit');send('mouseMove',hit);await pause(30);let p=await elementPoint('[data-id=text] .note-resize');await start(p);assert.equal(await run('active?.type'),'resize-note');await move(p,60,0);await end(p,60,0);assert.ok(Math.abs(await run('doc.notes[0].width')-(330+60/(scale*1.5)))<1,'World width delta wrong');
-   const next=await elementPoint('[data-id=text] .note-resize');assert.ok(Number.isFinite(next.x)&&Number.isFinite(next.y),'Width control lost after short-text resize');await start(next);await move(next,30,0);await end(next,30,0);assert.ok(Math.abs(await run('doc.notes[0].width')-(330+90/(scale*1.5)))<1,'Repeated width drag failed');
+   const next=await elementPoint('[data-id=text] .note-resize');assert.ok(Number.isFinite(next.x)&&Number.isFinite(next.y),'Width control lost after short-text resize');await start(next);assert.equal(await run('active?.type'),'resize-note',JSON.stringify({scale,next,state:await run('({type:active?.type,hover:noteCache.get("text").el.className,selected:selected.notes,width:doc.notes[0].width,owner:window.inkspaceInteraction.machine.gesture})')}));await move(next,30,0);await end(next,30,0);assert.ok(Math.abs(await run('doc.notes[0].width')-(330+90/(scale*1.5)))<1,'Repeated width drag failed '+JSON.stringify({scale,next,width:await run('doc.notes[0].width'),state:await run('window.inkspaceInteraction.machine.gesture')}));
   }
   await reset();let p=await elementPoint('[data-id=text] .note-hit');send('mouseMove',p);send('mouseDown',p,{button:'right',clickCount:1});send('mouseUp',p,{button:'right',clickCount:1});await pause(40);
   await run("doc.notes[0].markdown='<h2>Same source</h2>';document.querySelector('#block-menu button:nth-child(2)').click();");assert.equal(await run('doc.notes[0].format'),'html');assert.equal(await run('doc.notes[0].kind'),undefined);assert.equal(await run("noteCache.get('text').body.querySelector('.html-content').shadowRoot.querySelector('h2').textContent"),'Same source');await run("window.inkspaceBlocks.setTextFormat(doc.notes[0],'md');");assert.equal(await run('doc.notes[0].markdown'),'<h2>Same source</h2>');assert(await run('valid(doc)'));

@@ -3,7 +3,8 @@ const root=path.resolve(__dirname,'..'),html=path.join(root,'vscode/media/block-
 app.setPath('userData',path.join(root,'artifacts/block-interaction-profile'));
 app.whenReady().then(async()=>{
  const w=new BrowserWindow({width:1380,height:920,show:true,webPreferences:{backgroundThrottling:false}}),run=async s=>{try{return await w.webContents.executeJavaScript(s)}catch(e){console.error(s.slice(0,400));throw e}};
- const send=(type,p,extra={})=>w.webContents.sendInputEvent({type,...p,...extra});
+ const inject=require('./mouse-input.cjs')(w.webContents);
+ const send=(type,p,extra={})=>inject({type,...p,...extra});
  const click=async p=>{send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseUp',p,{button:'left',clickCount:1});await pause(30)};
  const start=async p=>{send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});await pause(30)};
  const move=async(p,dx,dy)=>{send('mouseMove',{x:p.x+dx,y:p.y+dy});await pause(60)};

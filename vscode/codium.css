@@ -77,3 +77,5 @@ header .tools .sidebar-resource-button{border-radius:0;border-bottom:2px solid t
 .note.note.selected :is(.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize){opacity:1;pointer-events:auto}
 
 /* Controls and the visible frame share one measured content/editor width. */
+.note.note .note-connect-right{left:calc(var(--text-left) - calc(6 * var(--control-unit,1px)) + var(--text-controls-width) + calc(8 * var(--control-unit,1px)))}
+.note.note .note-connect-arrow::before{pointer-events:none}

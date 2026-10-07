@@ -3,12 +3,12 @@
   let session=null,hovered=null,viewTarget=null,viewSignature=null;
   function viewChanged(){const note=selectedNote();viewSignature=JSON.stringify([note?.id,note?.viewMode,!!session,tool]);window.dispatchEvent(new CustomEvent('inkspace-text-view-change'))}
   function selectedNote(){const note=session?.note||doc.notes.find(n=>n.id===viewTarget?.id);return note&&doc.notes.includes(note)&&note.kind!=='image'?note:null}
-  viewport.addEventListener('pointerdown',event=>{if(event.pointerType!=='mouse'||event.button!==0)return;const el=event.target.closest('.note'),note=el&&doc.notes.find(n=>n.id===el.dataset.id);if(note&&note.kind!=='image'){viewTarget=note;viewChanged()}else if(!el&&!event.target.closest('.zoom')){viewTarget=null;viewChanged()}},{capture:true});
+  function observePointer(event){if(event.pointerType!=='mouse'||event.button!==0)return;const el=event.target.closest('.note'),note=el&&doc.notes.find(n=>n.id===el.dataset.id);if(note&&note.kind!=='image'){viewTarget=note;viewChanged()}else if(!el&&!event.target.closest('.zoom')){viewTarget=null;viewChanged()}}
   function applyView(note,cache){
     const temporary=session?.note===note?session.temporaryView:null,storedWindow=note.viewMode==='window',small=note.kind!=='image'&&(storedWindow||!!temporary);cache.el.classList.toggle('window-text',small);cache.el.classList.toggle('editing-window',!!temporary);
     if(temporary)cache.el.style.width=temporary.width+'px';
     if(note.kind!=='image'&&!cache.viewToggle){
-      const toggle=document.createElement('button');toggle.className='note-view-toggle';toggle.type='button';toggle.addEventListener('pointerdown',event=>{if(event.pointerType==='mouse'&&event.button===0){event.preventDefault();event.stopPropagation()}});toggle.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation()});toggle.onclick=event=>{if(!objectControls(event)||event.pointerType&&event.pointerType!=='mouse'||event.sourceCapabilities?.firesTouchEvents)return;event.stopPropagation();const current=doc.notes.find(n=>n.id===note.id);if(current){setView(current.viewMode==='window'?'full':'window',current);toggle.focus({preventScroll:true})}};cache.el.append(toggle);cache.viewToggle=toggle;
+      const toggle=document.createElement('button');toggle.className='note-view-toggle';toggle.type='button';toggle.onclick=event=>window.inkspaceInteraction?.activateTextView(note.id,event);cache.el.append(toggle);cache.viewToggle=toggle;
       const height=document.createElement('div');height.className='note-height-resize';height.tabIndex=0;height.setAttribute('role','slider');height.setAttribute('aria-label','小窗高度');height.setAttribute('aria-valuemin','80');height.setAttribute('aria-valuemax','1200');height.title='拖动调整小窗高度 · 方向键微调';height.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();event.stopPropagation();const current=doc.notes.find(n=>n.id===note.id);if(current?.viewMode==='window'){finish();finishInteraction();const value=Math.max(80,Math.min(1200,(Number(current.viewHeight)||240)+(event.key==='ArrowUp'?-1:1)*(event.shiftKey?48:16)));if(value!==current.viewHeight){checkpoint();current.viewHeight=value;renderNotes();renderBackground();persist()}}});height.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation()});cache.el.append(height);cache.heightControl=height;
     }
     if(cache.viewToggle){cache.viewToggle.hidden=note.kind==='image'||!!temporary;cache.viewToggle.textContent=small?'↕':'▤';cache.viewToggle.title=small?'全部显示：展开完整文本':'小窗显示：固定高度、滚轮查看';cache.viewToggle.setAttribute('aria-label',cache.viewToggle.title);cache.viewToggle.setAttribute('aria-pressed',String(small));cache.heightControl.hidden=!storedWindow||!!temporary;cache.heightControl.setAttribute('aria-valuenow',String(note.viewHeight||240))}
@@ -20,26 +20,34 @@
   function setView(mode,note=selectedNote()){if(!note||!['full','window'].includes(mode)||(note.viewMode==='window'?'window':'full')===mode)return false;finish();finishInteraction();checkpoint();if(mode==='window'){note.viewMode='window';note.viewHeight=Number(note.viewHeight)||240}else delete note.viewMode;renderNotes();renderBackground();overlaySelection();persist();viewChanged();return true}
   function previewHeight(){if(active?.type!=='resize-window')return;const cache=noteCache.get(active.n.id);if(cache){cache.guideSignature=null;layoutNote(active.n,cache);cache.heightControl.setAttribute('aria-valuenow',String(Math.round(active.height)))}}
   function finishHeight(){if(active?.type!=='resize-window')return;cancelInteractionFrame();const current=active;active=null;const cache=noteCache.get(current.n.id);cache?.el.classList.remove('resizing-window');if(Math.abs(current.height-current.baseHeight)>.001){checkpoint();current.n.viewHeight=current.height}if(cache){cache.guideSignature=null;layoutNote(current.n,cache)}renderBackground();overlaySelection();persist()}
-  viewport.addEventListener('pointerdown',event=>{const handle=event.target.closest('.note-height-resize');if(!handle||!objectControls(event)||event.pointerType!=='mouse'||event.button!==0)return;event.preventDefault();event.stopImmediatePropagation();finish();finishInteraction();const note=doc.notes.find(n=>n.id===handle.closest('.note').dataset.id);if(note?.viewMode!=='window')return;clearSelection();const height=Number(note.viewHeight)||240;active={type:'resize-window',id:event.pointerId,n:note,baseHeight:height,height,startY:event.clientY,scale:view.scale*(note.scale||1)};noteCache.get(note.id).el.classList.add('resizing-window');try{handle.setPointerCapture(event.pointerId)}catch{}},{capture:true});
-  viewport.addEventListener('pointermove',event=>{if(active?.type!=='resize-window'||active.id!==event.pointerId)return;event.preventDefault();event.stopImmediatePropagation();active.height=Math.max(80,Math.min(1200,active.baseHeight+(event.clientY-active.startY)/active.scale));scheduleInteractionFrame()},{capture:true});
-  viewport.addEventListener('lostpointercapture',event=>{if(active?.type==='resize-window'&&active.id===event.pointerId)finishHeight()});
-  window.addEventListener('keydown',event=>{if(event.key!=='Escape'||active?.type!=='resize-window')return;event.preventDefault();event.stopImmediatePropagation();cancelInteractionFrame();const current=active;active=null;const cache=noteCache.get(current.n.id);if(cache){cache.el.classList.remove('resizing-window');cache.guideSignature=null;layoutNote(current.n,cache);if(cache.heightControl.hasPointerCapture(current.id))cache.heightControl.releasePointerCapture(current.id)}},{capture:true});
-  viewport.addEventListener('wheel',event=>{
-    if(!objectControls(event)||tool==='pan'||event.ctrlKey||event.metaKey||event.altKey||active)return;
+  function scrollWheel(event){
+    if(!objectControls(event)||tool==='pan'||event.ctrlKey||event.metaKey||event.altKey||active)return false;
     const el=event.target.closest('.note'),cache=el&&noteCache.get(el.dataset.id),frame=cache?.scrollViewport;
-    if(!frame||event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize'))return;
+    if(!frame||event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize'))return false;
     event.preventDefault();event.stopImmediatePropagation();const note=doc.notes.find(n=>n.id===el.dataset.id),unit=event.deltaMode===1?textSize()*1.75:event.deltaMode===2?frame.clientHeight:1,scale=event.deltaMode===0?view.scale*(note?.scale||1):1;
-    frame.scrollTop+=event.deltaY*unit/scale;frame.scrollLeft+=event.deltaX*unit/scale;
-  },{capture:true,passive:false});
+    frame.scrollTop+=event.deltaY*unit/scale;frame.scrollLeft+=event.deltaX*unit/scale;return true;
+  }
   function mouseHover(el){if(hovered===el){hovered?.classList.add('mouse-hover');return;}hovered?.classList.remove('mouse-hover');hovered=el;hovered?.classList.add('mouse-hover')}
-  function hoverPointer(event){if(event.pointerType==='pen'||event.pointerType==='touch'){mouseHover(null);return}if(event.pointerType==='mouse'&&!event.sourceCapabilities?.firesTouchEvents&&!viewport.classList.contains('pen-input'))mouseHover(objectControls(event)?event.target.closest('.note'):null)}
-  for(const type of ['pointerover','pointermove','pointerdown'])viewport.addEventListener(type,hoverPointer,{capture:true});
+  function hoverPointer(event){
+    if(event.pointerType==='pen'||event.pointerType==='touch'){mouseHover(null);return}
+    if(event.pointerType!=='mouse'||event.sourceCapabilities?.firesTouchEvents||viewport.classList.contains('pen-input'))return;
+    if(!objectControls(event)){mouseHover(null);return}
+    const control=window.inkspaceInteraction?.controlAt(event),hit=window.inkspaceBlocks?.pick(event);
+    const el=event.target.closest('.inline-note-editor')?.closest('.note')||control?.el.closest('.note')||(hit?.kind==='notes'?noteCache.get(blockValue(hit.kind,hit.index).id)?.el:null);
+    if(el){mouseHover(el);return}
+    if(!hit||hit.kind==='diagram'&&window.inkspaceDiagram?.graph?.getModel().getCell(hit.id)?.edge){
+      const p=local(event),pos=world(p.x,p.y);let nearest=null,distance=40/view.scale;
+      for(const note of doc.notes){const b=itemBounds('notes',note);if(!b)continue;const d=Math.hypot(Math.max(b.x-pos.x,0,pos.x-b.x-b.w),Math.max(b.y-pos.y,0,pos.y-b.y-b.h));if(d<=distance){distance=d;nearest=note}}
+      if(nearest){mouseHover(noteCache.get(nearest.id)?.el);return}
+    }
+    mouseHover(null);
+  }
   viewport.addEventListener('pointerleave',()=>mouseHover(null));window.addEventListener('blur',()=>mouseHover(null));
   const cursorBeforeTextHover=updatePenCursor;
   updatePenCursor=function(event,rect){cursorBeforeTextHover(event,rect);if(event.pointerType==='pen')mouseHover(null)};
   function bounds(note){if(!note)return null;if(session?.note===note&&session.temporaryView&&session.previewBounds)return{...session.previewBounds};const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
   function finish(redraw=true,keepEmpty=false){
-    const current=session;if(!current)return;session=null;
+    const current=session;if(!current)return;session=null;window.inkspaceInteraction?.machine.edit(null);
     current.el.classList.remove('editing-text');current.cache.markdown=null;
     if(current.created&&!keepEmpty&&!current.note.markdown.trim()&&notebook.activePage===current.page&&doc.notes.includes(current.note)){doc.notes=doc.notes.filter(n=>n!==current.note);persist()}
     if(redraw){renderNotes();if(current.cache.scrollViewport&&current.previewScroll!==undefined){current.cache.scrollViewport.scrollTop=current.previewScroll;current.cache.viewScrollTop=current.previewScroll}renderBackground()}viewChanged();
@@ -106,7 +114,7 @@
   edit=function(note,position){
     if(note.kind==='image')return;
     if(session?.note===note){session.input.focus({preventScroll:true});return}
-    const previousCache=noteCache.get(note.id),caret=position&&InkBlockModel.textFormat(note)!=='html'?sourceCaret(note,previousCache,position):note.markdown.replace(/\r\n|\r/g,'\n').length,previewBounds=previousCache?bounds(note):null,temporaryView=doc.notes.includes(note)?editingViewport(note,previousCache,position):null,previewScroll=previousCache?.scrollViewport?.scrollTop;
+    const previousFrame=window.inkspaceGeometry?.bounds(note);const previousCache=noteCache.get(note.id),caret=position&&InkBlockModel.textFormat(note)!=='html'?sourceCaret(note,previousCache,position):note.markdown.replace(/\r\n|\r/g,'\n').length,previewBounds=previousCache?bounds(note):null,temporaryView=doc.notes.includes(note)?editingViewport(note,previousCache,position):null,previewScroll=previousCache?.scrollViewport?.scrollTop;
     if(previousCache?.scrollViewport)previousCache.viewScrollTop=previousCache.scrollViewport.scrollTop;
     finish();finishInteraction();clearSelection();
     const created=!doc.notes.includes(note);
@@ -120,15 +128,12 @@
     input.addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();event.stopImmediatePropagation();indentText(input,event.shiftKey);return}if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey){const change=InkBlockModel.textFormat(note)==='html'?null:InkContent.listEnterEdit(input.value,input.selectionStart,input.selectionEnd);if(change){event.preventDefault();event.stopImmediatePropagation();input.setSelectionRange(change.start,change.end);document.execCommand('insertText',false,change.text);return}}if((event.ctrlKey||event.metaKey)&&!event.altKey){const key=event.key.toLowerCase(),command=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;if(command){event.preventDefault();event.stopImmediatePropagation();history(command);return}}if(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();event.stopImmediatePropagation();finish();viewport.tabIndex=-1;viewport.focus()}});
     input.addEventListener('blur',()=>{if(session?.input===input)finish()});
     input.addEventListener('keyup',event=>{if(session?.input===input&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(event.key))revealCaret(note,cache,input,input.selectionEnd)});
-    input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);revealCaret(note,cache,input,caret,position);renderBackground();overlaySelection();if(created)persist();
+    session.previewFrame=previousFrame;window.inkspaceInteraction?.machine.edit(note.id);input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);revealCaret(note,cache,input,caret,position);renderBackground();overlaySelection();if(created)persist();
   };
-  document.addEventListener('pointerdown',event=>{
+  function preparePointer(event,control){
     if(!session||event.pointerType!=='mouse'||session.input.contains(event.target))return;
-    // A structural gesture uses an empty block; only an untouched dismissal
-    // should discard it. Commit before the canvas handler starts its gesture.
-    const control=event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow');
     finish(true,event.button===0&&control?.closest('.note')===session.el);
-  },{capture:true});
+  }
   const switchBeforeInlineText=switchPage;
   switchPage=function(id){if(id!==notebook.activePage)finish();return switchBeforeInlineText(id)};
   function contentRects(root){
@@ -170,6 +175,6 @@
     mirror?.remove();cache.guideSignature=signature;
     if(input)input.style.clipPath='';
   }
-  window.inkspaceInlineText={finish,sync,history,layoutNote,bounds,selectedNote,setView,previewHeight,finishHeight,clearViewTarget:()=>{viewTarget=null},renderNote:note=>session?.note===note,isEditing:()=>!!session};
+  window.inkspaceInlineText={preparePointer,observePointer,hoverPointer,scrollWheel,frameBounds:note=>session?.note===note&&session.temporaryView?session.previewFrame:null,finish,sync,history,layoutNote,bounds,selectedNote,setView,previewHeight,finishHeight,clearViewTarget:()=>{viewTarget=null},renderNote:note=>session?.note===note,isEditing:()=>!!session};
   document.fonts?.ready.then(()=>{for(const cache of noteCache.values())cache.guideSignature=null;renderNotes()});
 })();

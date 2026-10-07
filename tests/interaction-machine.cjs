@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict'),esbuild=require('esbuild'),Module=require('node:module');
+const compiled=esbuild.buildSync({entryPoints:['src/interaction/index.ts'],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
+const moduleUnderTest=new Module('interaction-test',module);moduleUnderTest._compile(compiled,'interaction-test.cjs');
+const {InteractionMachine,intent,Selection,selectionProjection,InputRouter}=moduleUnderTest.exports;
+const facts={pointerId:1,device:'mouse',button:0,tool:'select',space:false,ui:false,duplicate:false,connection:false,diagram:false};
+let policies=0;
+for(const tool of ['pen','erase','shape'])for(const control of ['connection','width','height','selection','text-scale']){
+ assert.equal(intent({...facts,tool,control,connection:true,diagram:true}),{pen:'ink',erase:'erase',shape:'shape'}[tool]);
+ assert.equal(intent({...facts,tool,control,button:1}),'pan');policies+=2;
+}
+assert.equal(intent({...facts,control:'connection'}),'connection');assert.equal(intent({...facts,connection:true}),'connection');
+assert.equal(intent({...facts,connection:true,control:'width'}),'width');assert.equal(intent({...facts,ui:true,tool:'pen'}),'editor');
+const state=new InteractionMachine();assert(state.begin('selection',1,'mouse'));assert(!state.begin('connection',1,'mouse'));assert(!state.begin('ink',2,'pen'));
+assert.equal(state.transition(2,'dragging'),false);assert.equal(state.transition(1,'drawing'),false);assert(state.transition(1,'dragging'));assert.equal(state.gesture.phase,'dragging');
+state.end(2);assert(state.owns(1,'selection'));state.end(1);assert.equal(state.gesture,null);
+state.edit('text');assert(state.begin('ink',9,'pen'));state.end(9);assert.equal(state.editor,'text');
+state.startConnection('source','canvas');state.cancelConnection();assert.equal(state.connection,null);
+assert(state.begin('pan',1,'touch'));assert(state.begin('pan',2,'touch'));state.end(2);assert(state.owns(1));state.reset();assert.equal(state.editor,null);
+const selection=new Selection(),items=[{id:'a'},{id:'b'}],projection=selectionProjection(selection,{kinds:['notes','pdfPages'],items:()=>items,id:item=>item.id});
+projection.notes=[1];items.unshift({id:'new'});assert.deepEqual(projection.notes,[2]);assert(selection.has('notes','b'));projection.notes.push(0);
+assert(selection.has('notes','new'));assert.deepEqual(structuredClone(projection.notes),[0,2]);items.reverse();assert.deepEqual(projection.notes,[0,2]);assert.equal(items[projection.notes[0]].id,'b');
+items[0]={id:'replacement'};assert.deepEqual(projection.notes,[2]);items[0]={id:'b'};assert.deepEqual(projection.notes,[0,2]);selection.setKind('diagram',['cell']);assert(selection.has('diagram','cell'));
+let events=[];const router=new InputRouter({facts:()=>facts,prepare:()=>{},begin:()=>true,move:(_,owner)=>events.push(owner),end:()=>{},cancel:reason=>events.push(reason),hover:()=>{},key:()=>false,wheel:()=>{},doubleClick:()=>{}});
+const event={pointerId:1,preventDefault(){},stopImmediatePropagation(){}};router.down(event);facts.control='connection';router.move(event);assert.deepEqual(events,['selection']);router.cancel('escape');assert.equal(router.machine.gesture,null);assert.deepEqual(events,['selection','escape']);
+console.log(JSON.stringify({passed:true,policies,exclusiveGesture:true,legalTransitions:true,editorAndInk:true,multiTouch:true,stableSelectionIds:true,cloneableProjections:true,sameLengthReorder:true,removedAndRestoredIds:true,controlsCannotStealDrag:true}));

@@ -11,16 +11,7 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
 
   function box(block) {
     if (block.connectionBounds) return block.connectionBounds();
-    const cache=noteCache.get(block.id);
-    if (!cache) return null;
-    const el=cache.el, r=el.getBoundingClientRect(), vp=viewport.getBoundingClientRect();
-    const scale=r.width/el.offsetWidth, value=key=>parseFloat(el.style.getPropertyValue('--text-'+key));
-    // Use the renderer's actual transform, including an in-flight zoom preview.
-    const sceneScale=zoomBase ? view.scale/zoomBase.scale : 1;
-    const rendered=sceneScale*(renderedScale||view.scale);
-    return {x:(r.left-vp.left-view.x+(value('left')+1)*scale)/rendered,
-      y:(r.top-vp.top-view.y+(value('top')+1)*scale)/rendered,
-      w:value('width')*scale/rendered, h:value('height')*scale/rendered};
+    return window.inkspaceGeometry?.displayBounds('notes',block)||itemBounds('notes',block);
   }
   function point(block, side) {
     const p=geometry.port(box(block),side);
@@ -75,7 +66,7 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
   graph.routeBlockEdge=(edge,g,states)=>route(edge,g,states);
 
   function cancel() {
-    pending=null;preview?.remove();preview=null;viewport.classList.remove('note-connecting');
+    pending=null;window.inkspaceInteraction?.machine.cancelConnection();preview?.remove();preview=null;viewport.classList.remove('note-connecting');
   }
   function paint(p) {
     const block=resolve(pending?.id), a=block&&geometry.port(box(block),pending.side);
@@ -88,7 +79,7 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
   function start(block,side) {
     block=window.inkspaceBlocks?.ensureConnectionTarget(block)||block;
     window.inkspaceInlineText?.finish();finishInteraction();graph.clearSelection();cancel();
-    pending={id:block.id,side,page:notebook.activePage};viewport.classList.add('note-connecting');
+    pending={id:block.id,side,page:notebook.activePage};window.inkspaceInteraction?.machine.startConnection(block.id,notebook.activePage);viewport.classList.add('note-connecting');
     preview=document.createElementNS('http://www.w3.org/2000/svg','path');
     for(const [key,value]of Object.entries({fill:'none',stroke:'#007acc','stroke-width':'2','stroke-dasharray':'5 4','pointer-events':'none'}))preview.setAttribute(key,value);
     graph.view.getOverlayPane().append(preview);
@@ -99,7 +90,7 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
     target=window.inkspaceBlocks?.ensureConnectionTarget(target)||target;
     const source=resolve(pending?.id);
     if(!source||pending.page!==notebook.activePage||source.id===target?.id){cancel();return}
-    const sourceSide=pending.side, a=point(source,sourceSide), b=target?point(target,side):p;
+    side=side||(target?nearest(target,p):null);const sourceSide=pending.side, a=point(source,sourceSide), b=target?point(target,side):p;
     let style='inkspaceRoute=1;edgeStyle=none;noEdgeStyle=1;rounded=0;';
     for(const [block,port,isSource]of [[source,sourceSide,true],[target,side,false]]) {
       if(!block)continue;
@@ -141,19 +132,6 @@ export function installNoteConnectors(graph, mx, {derived, release}) {
     },previewOnly);
     if(changed.length){for(const edge of changed)graph.view.invalidate(edge,false,false);graph.view.validate()}
   }
-  viewport.addEventListener('pointerdown',event=>{
-    if(!objectControls(event)||event.pointerType!=='mouse'||event.button!==0||tool==='pan')return;
-    const button=event.target.closest('.note-connect-arrow');if(!button&&!pending)return;
-    event.preventDefault();event.stopImmediatePropagation();const block=eventTarget(event),p=local(event),pos=world(p.x,p.y);
-    if(button&&!pending){if(block)start(block,button.dataset.side);return}
-    complete(block,block?(button?.dataset.side||nearest(block,pos)):null,pos);
-  },{capture:true});
-  viewport.addEventListener('pointermove',event=>{
-    if(!pending||event.pointerType!=='mouse')return;
-    event.preventDefault();pending.hoverEvent=event;const p=local(event);paint(world(p.x,p.y));
-  },{capture:true});
-  viewport.addEventListener('click',event=>{if(event.target.closest('.note-connect-arrow')){event.preventDefault();event.stopImmediatePropagation()}},{capture:true});
-  window.addEventListener('keydown',event=>{if(pending&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();cancel()}},{capture:true});
-  window.addEventListener('blur',cancel);
-  return {sync,cancel,start,point,complete,route,box,get pending(){return pending}};
+  function hover(event){if(!pending||event.pointerType!=='mouse')return;pending.hoverEvent=event;const p=local(event);paint(world(p.x,p.y))}
+  return {sync,cancel,start,hover,point,complete,route,box,get pending(){return pending}};
 }

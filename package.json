@@ -1,6 +1,6 @@
 {
   "name": "inkspace",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "build:theia": "npm run build && node theia/build-media.cjs && node theia/prepare-native.cjs && npm run build --prefix theia",
@@ -11,8 +11,8 @@
     "dist:vscodium": "npm run build:vscode && node scripts/package-vscodium-installer.cjs",
     "test:installer:vscodium": "node scripts/verify-vscodium-installer.cjs",
     "test:vscode": "node scripts/test-vscode.cjs",
-    "build": "node scripts/build.cjs",
-    "test": "node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs && node tests/binary-notebook.cjs && node tests/autosave.cjs && node tests/recovery.cjs && node tests/navigation.cjs && node tests/block-geometry.cjs && node tests/block-model.cjs",
+    "build": "npm run typecheck && node scripts/build.cjs",
+    "test": "npm run typecheck && node tests/interaction-machine.cjs && node tests/core.cjs && node tests/rendering.cjs && node tests/low-zoom.cjs && node tests/folder-files.cjs && node tests/native-frame-geometry.cjs && node tests/explorer-operations.cjs && node tests/binary-notebook.cjs && node tests/autosave.cjs && node tests/recovery.cjs && node tests/navigation.cjs && node tests/block-geometry.cjs && node tests/block-model.cjs",
     "start": "electron .",
     "test:desktop": "electron . --smoke-test",
     "dist": "npm run build:native && npm run build:terminal && npm run build && electron-builder --win nsis --x64 && node scripts/package-source.cjs",
@@ -33,7 +33,9 @@
     "test:navigation": "node tests/navigation.cjs && electron tests/navigation-electron.cjs",
     "test:interaction": "electron tests/interaction-electron.cjs",
     "test:text:caret": "electron tests/caret-electron.cjs",
-    "test:blocks": "node tests/block-geometry.cjs && electron tests/blocks-electron.cjs && electron tests/block-interaction-electron.cjs && electron tests/block-model-electron.cjs"
+    "test:blocks": "node tests/block-geometry.cjs && electron tests/blocks-electron.cjs && electron tests/block-interaction-electron.cjs && electron tests/block-model-electron.cjs",
+    "test:ownership": "electron tests/ownership-electron.cjs",
+    "typecheck": "tsc -p tsconfig.interaction.json"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -57,7 +59,8 @@
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
-    "jsdom": "^30.1.1"
+    "jsdom": "^30.1.1",
+    "typescript": "7.0.2"
   },
   "main": "desktop/main.cjs",
   "build": {
@@ -78,7 +81,8 @@
       "package.json",
       "LICENSE",
       "block-interaction.js",
-      "block-model.js"
+      "block-model.js",
+      "canvas-interaction.js"
     ],
     "win": {
       "target": "nsis",
