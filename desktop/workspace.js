@@ -68,7 +68,11 @@ function pasteSelectionText(text){
   fragment.notes=fragment.notes.map(translate);fragment.pdfs=(fragment.pdfs||[]).map(a=>({...a,pages:a.pages.map((p,i)=>{const old=p.id||Object.keys(idMaps.pdfs).find(k=>idMaps.pdfs[k]===a.id)+'-page-'+(i+1),id=crypto.randomUUID();idMaps.pdfPages[old]=id;return{...translate(p),id,pageIndex:p.pageIndex??i}})}));
   checkpoint();clearSelection();
   for(const kind of ['strokes','notes','shapes']){doc[kind]??=[];const start=doc[kind].length;doc[kind].push(...fragment[kind]);selected[kind]=fragment[kind].map((_,i)=>start+i)}
-  const aliases=InkBlockModel.insertAssets(doc,fragment.pdfs,fragment.pdfPageBlocks);
+  // Legacy connectors address a whole PDF container. Appending copied pages
+  // would change the original endpoint's bounds, so keep those containers apart.
+  const diagramGraph=window.inkspaceDiagram?.graph,legacyAssets=new Set();
+  if(fragment.pdfs.length&&diagramGraph)for(const edge of diagramGraph.getChildEdges(diagramGraph.getDefaultParent()))for(const key of ['inkNoteSource','inkNoteTarget']){const ref=decodeURIComponent(diagramGraph.getCellStyle(edge)[key]||'');if(ref.startsWith('pdfs:'))legacyAssets.add(ref.slice(5))}
+  const aliases=InkBlockModel.insertAssets(doc,fragment.pdfs,fragment.pdfPageBlocks,legacyAssets);
   for(const old of Object.keys(idMaps.pdfs))idMaps.pdfs[old]=aliases.get(idMaps.pdfs[old])||idMaps.pdfs[old];
   selected.pdfPages=fragment.pdfs.flatMap(a=>a.pages.map(p=>p.id));selected.pdfs=[];
   const pastedSelection=selected;

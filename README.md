@@ -1,15 +1,15 @@
 # Inkspace · 墨境
 
 
-0.7.0 分离块模型、交互与几何路由。文本控件保持固定屏幕尺寸，鼠标按所选工具直接绘制；Markdown / HTML 共用文本框，PDF 每页独立移动、缩放、组合和复制。操作见 [交互规则](docs/INTERACTION.md)，扩展介质结构见 [块架构](docs/BLOCKS.md)。
+0.7.1 修正文本框控件与边框对齐，以及旧 PDF 复制后的组合和连接引用。文本控件保持固定屏幕尺寸，鼠标按所选工具直接绘制；Markdown / HTML 共用文本框，PDF 每页独立移动、缩放、组合和复制。操作见 [交互规则](docs/INTERACTION.md)，扩展介质结构见 [块架构](docs/BLOCKS.md)，本轮修正见 [检查记录](docs/REVIEW.md)。
 
-Windows 触控笔无限笔记画布，支持基于 mxGraph 的鼠标图形编辑、附着箭头和公式标签，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.7.0 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
+Windows 触控笔无限笔记画布，支持基于 mxGraph 的鼠标图形编辑、附着箭头和公式标签，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.7.1 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
 
 按 V 编排对象；选择画笔、橡皮或手绘时，鼠标直接使用所选工具，无额外开关。顶栏资源入口、侧栏内容与输入优先级见 [交互规则](docs/INTERACTION.md)。
 
 ## 安装和使用
 
-在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.7.0-win32-x64.vsix`。
+在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.7.1-win32-x64.vsix`。
 
 打开文件夹，文件栏右键选择“墨境：新建笔记”。首次点击“校准触控笔”，依次点击三个圆圈；同一设备与显示配置下自动恢复校准。新笔记格式为 `.ink`，采用二进制增量保存；旧 `.inkspace.json` 仍可打开。
 

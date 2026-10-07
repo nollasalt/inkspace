@@ -10,3 +10,7 @@ let checked=0;for(const side of ['top','right','bottom','left'])for(const target
 console.log(JSON.stringify({passed:true,immutablePageEdits:true,sharedBytes:true,deletedPageKeepsSourceIndex:true,legacyHtml:true,obstacleRoutes:checked}));
 
 const inserted={pdfs:[]},before=inserted.pdfs;model.insertAssets(inserted,[old],true);assert.equal(before.length,0);const prior=inserted.pdfs;const aliases=model.insertAssets(inserted,[{...old,id:'copy',pages:[{...old.pages[0],id:'copy-page',pageIndex:0}]}],true);assert.equal(aliases.get('copy'),old.id);assert.equal(prior[0].pages.length,2);assert.equal(inserted.pdfs[0].pages.length,3);assert.equal(inserted.pdfs[0].data,old.data);
+
+const legacy={pdfs:[old,{...old,id:'other'}],groups:[{id:'legacy',members:[{kind:'pdfs',id:old.id},{kind:'pdfs',id:'other'}]}]},previousGroups=legacy.groups;model.insertAssets(legacy,[{...old,id:'fresh',pages:[{...old.pages[0],id:'copied-page'}]}],true);assert.equal(legacy.groups[0].members.length,4);assert(!legacy.groups[0].members.some(ref=>ref.id==='copied-page'));assert.equal(previousGroups[0].members[0].kind,'pdfs');
+
+const protectedAsset={pdfs:[old]};model.insertAssets(protectedAsset,[{...old,id:'separate',pages:[{...old.pages[0],id:'separate-page'}]}],true,new Set([old.id]));assert.equal(protectedAsset.pdfs.length,2);assert.equal(protectedAsset.pdfs[0],old);assert.equal(old.pages.length,2);

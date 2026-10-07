@@ -44,11 +44,15 @@
       members: group.members.filter(ref => ref.kind !== 'pdfPages' || !deleted.has(ref.id))
     })).filter(group => group.members.length > 1);
   }
-  function insertAssets(document, assets, reuse) {
+  function insertAssets(document, assets, reuse, separateAssets=new Set()) {
+    // Legacy asset groups must capture their original page membership before
+    // shared-byte insertion appends new pages to the same asset container.
+    if(assets.length&&document.groups?.some(group=>group.members.some(ref=>ref.kind==='pdfs')))
+      document.groups=document.groups.map(group=>({...group,members:groupMembers(document,group)}));
     const aliases = new Map();
     let current = document.pdfs || [];
     for (const asset of assets) {
-      const existing = reuse && current.find(item => item.data === asset.data && item.name === asset.name);
+      const existing = reuse && current.find(item => item.data === asset.data && item.name === asset.name && !separateAssets.has(item.id));
       if (existing) {
         aliases.set(asset.id, existing.id);
         current = current.map(item => item === existing ? {...item,

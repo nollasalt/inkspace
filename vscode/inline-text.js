@@ -38,10 +38,10 @@
   const cursorBeforeTextHover=updatePenCursor;
   updatePenCursor=function(event,rect){cursorBeforeTextHover(event,rect);if(event.pointerType==='pen')mouseHover(null)};
   function bounds(note){if(!note)return null;if(session?.note===note&&session.temporaryView&&session.previewBounds)return{...session.previewBounds};const el=noteCache.get(note.id)?.el;if(!el)return null;const size=note.scale||1,value=key=>parseFloat(el.style.getPropertyValue('--text-'+key)),r={x:note.x+value('left')*size,y:note.y+value('top')*size,w:Math.max(1,value('width')*size),h:Math.max(1,value('height')*size)};return Object.values(r).every(Number.isFinite)?r:null}
-  function finish(redraw=true){
+  function finish(redraw=true,keepEmpty=false){
     const current=session;if(!current)return;session=null;
     current.el.classList.remove('editing-text');current.cache.markdown=null;
-    if(current.created&&!current.note.markdown.trim()&&notebook.activePage===current.page&&doc.notes.includes(current.note)){doc.notes=doc.notes.filter(n=>n!==current.note);persist()}
+    if(current.created&&!keepEmpty&&!current.note.markdown.trim()&&notebook.activePage===current.page&&doc.notes.includes(current.note)){doc.notes=doc.notes.filter(n=>n!==current.note);persist()}
     if(redraw){renderNotes();if(current.cache.scrollViewport&&current.previewScroll!==undefined){current.cache.scrollViewport.scrollTop=current.previewScroll;current.cache.viewScrollTop=current.previewScroll}renderBackground()}viewChanged();
   }
   function history(command){if(!session||document.activeElement!==session.input)return false;document.execCommand(command);return true}
@@ -122,7 +122,13 @@
     input.addEventListener('keyup',event=>{if(session?.input===input&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(event.key))revealCaret(note,cache,input,input.selectionEnd)});
     input.focus({preventScroll:true});resizeInput();input.setSelectionRange(caret,caret);revealCaret(note,cache,input,caret,position);renderBackground();overlaySelection();if(created)persist();
   };
-  document.addEventListener('pointerdown',event=>{if(session&&event.pointerType==='mouse'&&!session.input.contains(event.target))finish()},{capture:true});
+  document.addEventListener('pointerdown',event=>{
+    if(!session||event.pointerType!=='mouse'||session.input.contains(event.target))return;
+    // A structural gesture uses an empty block; only an untouched dismissal
+    // should discard it. Commit before the canvas handler starts its gesture.
+    const control=event.target.closest('.note-bar,.note-resize,.note-scale,.note-view-toggle,.note-height-resize,.note-connect-arrow');
+    finish(true,event.button===0&&control?.closest('.note')===session.el);
+  },{capture:true});
   const switchBeforeInlineText=switchPage;
   switchPage=function(id){if(id!==notebook.activePage)finish();return switchBeforeInlineText(id)};
   function contentRects(root){
@@ -135,7 +141,6 @@
   }
   function layoutNote(note,cache){
     applyView(note,cache);
-    cache.el.style.setProperty('--layout-width',Math.max(1,cache.el.clientWidth-40)+'px');
     const input=session?.note===note?session.input:null,signature=JSON.stringify([note.width,note.kind,note.format,note.height,textSize(),note.markdown,note.src,note.aspect,note.viewMode,note.viewHeight,active?.type==='resize-window'&&active.n.id===note.id?active.height:null,!!input]);if(cache.guideSignature===signature)return;
     if(InkBlockModel.textFormat(note)==='html'&&!input&&!cache.scrollViewport){const host=cache.body.querySelector('.html-content');if(host){const r=host.getBoundingClientRect(),outer=cache.el.getBoundingClientRect(),scale=view.scale*(note.scale||1),left=(r.left-outer.left)/scale-1,top=(r.top-outer.top)/scale-1,width=r.width/scale,height=r.height/scale;for(const [key,value]of Object.entries({left,top,width,height,startX:left,startY:top,endX:left+width,endY:top+height}))cache.el.style.setProperty('--text-'+key,value+'px');cache.guideSignature=signature;return}}
     // Frame geometry includes the scrollbar; clientWidth only measures its content.
@@ -156,8 +161,14 @@
       for(const [key,value]of Object.entries({left:(x-origin.left)/scale,top:(y-origin.top)/scale,width:(right-x)/scale,height:(bottom-y)/scale,startX:(first.left-origin.left)/scale,startY:(first.top-origin.top)/scale,endX:(last.right-origin.left)/scale,endY:(last.bottom-origin.top)/scale}))cache.el.style.setProperty('--text-'+key,value+'px');
     }else{for(const [key,value]of Object.entries({left:21,top:33,width:Math.max(0,(note.width||320)-42),height:textSize()*1.75,startX:21,startY:33,endX:21,endY:33+textSize()*1.75}))cache.el.style.setProperty('--text-'+key,value+'px')}
     if(cache.scrollViewport){const r=cache.scrollViewport.getBoundingClientRect(),left=(r.left-origin.left)/scale,top=(r.top-origin.top)/scale,width=cache.scrollViewport.offsetWidth,height=cache.scrollViewport.offsetHeight;for(const [key,value]of Object.entries({left,top,width,height,startX:left,startY:top,endX:left+width,endY:top+height}))cache.el.style.setProperty('--text-'+key,value+'px')}
+    if(input&&!cache.scrollViewport){
+      // The editor is a full-width input surface, even for an empty or short
+      // source. Its frame and controls must not use placeholder/glyph bounds.
+      const r=input.getBoundingClientRect();
+      for(const [key,value]of Object.entries({left:(r.left-origin.left)/scale,top:(r.top-origin.top)/scale,width:input.offsetWidth,height:input.offsetHeight}))cache.el.style.setProperty('--text-'+key,value+'px');
+    }
     mirror?.remove();cache.guideSignature=signature;
-    if(input){const visibleWidth=parseFloat(cache.el.style.getPropertyValue('--text-left'))+parseFloat(cache.el.style.getPropertyValue('--text-width'))-input.offsetLeft+6;input.style.clipPath=`inset(0 ${Math.max(0,input.clientWidth-visibleWidth)}px 0 0)`}
+    if(input)input.style.clipPath='';
   }
   window.inkspaceInlineText={finish,sync,history,layoutNote,bounds,selectedNote,setView,previewHeight,finishHeight,clearViewTarget:()=>{viewTarget=null},renderNote:note=>session?.note===note,isEditing:()=>!!session};
   document.fonts?.ready.then(()=>{for(const cache of noteCache.values())cache.guideSignature=null;renderNotes()});
