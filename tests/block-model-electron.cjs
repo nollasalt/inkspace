@@ -24,7 +24,7 @@ app.whenReady().then(async()=>{
   for(const zoom of [.25,.5,1,2,4])for(const blockScale of [.25,1,2]){
    await run('doc.notes[0].scale='+blockScale+';view={x:40,y:40,scale:'+zoom+'};clearSelection();selected.notes=[0];render();overlaySelection();');
    const controls=await run("(()=>{const el=noteCache.get('text').el;el.classList.add('mouse-hover');return ['.media-action-strip','.media-width','#selection .selection-scale','[data-id=text] .note-connect-right'].map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{selector,w:r.width,h:r.height}})})()");
-   for(const c of controls){const expected=c.selector==='.media-action-strip'?26:c.selector==='#selection .selection-scale'?10:22;assert.ok(Math.abs(c.h-expected)<.7,c.selector+' screen height '+c.h)}checks++;
+   for(const c of controls){const expected=c.selector==='.media-action-strip'?26:c.selector==='#selection .selection-scale'?0:22;assert.ok(Math.abs(c.h-expected)<.7,c.selector+' screen height '+c.h)}checks++;
   }
   let editorFrames=0;
   for(const zoom of [.5,1,2])for(const blockScale of [.5,1,2])for(const source of ['', 'Short', '# Title\n\nSome text']){

@@ -79,15 +79,15 @@
     // restore their first existing checkpoint, rather than adding a new undo.
     if (before?.snapshot) { doc = before.snapshot; history = before.historyEntries; future = before.future; }
     active = null; pointers.clear(); gesture = null; selectionRect = null;
-    if(owner==='shape'&&window.inkspaceWorkbench?.completeShape)activateTool('select',false);
+    if(owner==='shape'&&window.inkspaceWorkbench?.completeShape)activateTool('select',false,true,'mouse');
     for (const layer of inkLayers.slice(1)) { layer.canvas.style.transform=''; layer.canvas.style.transformOrigin=''; clearLayer(layer); }
     $('#scene').style.transform=''; $('#selection').style.transform='';
     transaction = null; render(); persist();
   }
   const host = {
     facts(event) {
-      if(event.type==='pointerdown')window.inkspaceInlineText?.hoverPointer(event);
-      const canControl=objectControls(event)||event.pointerType==='pen'&&!canvasUi(event)&&!space&&['select','diagram','text'].includes(tool);
+      if(event.type==='pointerdown'&&!duplicateBrowserPen(event)&&!event.sourceCapabilities?.firesTouchEvents){useInputDevice(event.pointerType);window.inkspaceInlineText?.hoverPointer(event)}
+      const canControl=objectControls(event)||event.pointerType==='pen'&&!canvasUi(event)&&!space&&['select','diagram','text'].includes(pointerTool(event));
       const control = canControl ? controlAt(event)?.owner : undefined;
       const state = connector()?.pending;
       if (state && state.page !== notebook.activePage) connector().cancel();
@@ -151,7 +151,7 @@
       else if (control?.el.matches('.selection-scale') && selectionBounds()) {
         window.inkspaceInteraction.machine.transition(event.pointerId,'resizing');
         checkpoint(); active={type:'resize-selection',id:event.pointerId,bounds:selectionBounds(),items:selectionScaleSnapshot(),factor:1,rect}; beginGroupMove();
-      } else if (tool === 'text' && !note && !window.inkspaceBlocks?.pick(event)) {
+      } else if (pointerTool(event) === 'text' && !note && !window.inkspaceBlocks?.pick(event)) {
         pointers.delete(event.pointerId); edit({id:crypto.randomUUID(),...pos,width:560,markdown:''}); return false;
       } else if(control?.el.matches('.media-grip')){const entry=window.inkspaceBlocks.selectionEntries()[0];beginMove(event,entry&&{kind:entry.kind,index:entry.index,id:entry.value.id});}
       else beginMove(event,control?.el.matches('.note-bar')&&note?{kind:'notes',index:doc.notes.indexOf(note),id:note.id}:window.inkspaceBlocks?.pick(event)||hitCanvasItem(pos));

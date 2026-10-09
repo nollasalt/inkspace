@@ -80,7 +80,7 @@ function pasteSelectionText(text){
   selected=pastedSelection;window.inkspaceBlocks?.expandSelection();render();persist();return true;
 }
 document.addEventListener('copy',event=>{
-  if(event.target.closest?.('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||tool==='pdftext'||window.getSelection?.().toString())return;
+  if(event.target.closest?.('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||pointerTool({pointerType:'mouse'})==='pdftext'||window.getSelection?.().toString())return;
   const text=selectionClipboardText();if(!text||!event.clipboardData)return;
   event.preventDefault();event.clipboardData.setData('text/plain',text);
 });
@@ -101,9 +101,10 @@ function updatePenCursor(e,rect){
     // input must not replace the pen cursor before the next hover sample.
     if(nativeContact||e.sourceCapabilities?.firesTouchEvents)return;
     if(penPosition&&e.type!=='pointerdown'&&(e.type==='pointerover'||e.type==='pointerup'||performance.now()-lastPenCursorTime<150))return;
-    clearPenCursor();return;
+    clearPenCursor();useInputDevice('mouse');return;
   }
   if(e.pointerType!=='pen')return;
+  useInputDevice('pen');
   lastPenCursorTime=performance.now();const bounds=rect||(active?.type==='pen'?active.rect:null);penPosition=bounds?{x:e.clientX-bounds.left,y:e.clientY-bounds.top}:local(e);viewport.classList.add('pen-input');refreshPenCursor();
 }
 function refreshPenCursor(){if(!penPosition)return;const diameter=Number($('#width').value)*view.scale;penCursor.style.width=penCursor.style.height=diameter+'px';penCursor.style.left=penPosition.x+'px';penCursor.style.top=penPosition.y+'px';penCursor.style.backgroundColor=$('#color').value;penCursor.hidden=false}

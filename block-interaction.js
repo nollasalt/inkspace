@@ -77,7 +77,7 @@
 
   function hover(event) {
     if (event.pointerType !== 'mouse' || viewport.classList.contains('pen-input') ||
-        active || !objectControls(event) || space || tool === 'pan') {
+        active || !objectControls(event) || space || pointerTool(event) === 'pan') {
       hideHover();
       return;
     }

@@ -15,9 +15,19 @@ app.whenReady().then(async () => {
   });
   const errors = [];
   w.webContents.on("console-message", (e) => {
-    if (e.level === "error") errors.push(e.message);
+    if (e.level === "error") {
+      errors.push(e.message);
+      console.error(e.message);
+    }
   });
-  const run = (source) => w.webContents.executeJavaScript(source),
+  const run = async (source) => {
+      try {
+        return await w.webContents.executeJavaScript(source);
+      } catch (error) {
+        console.error(source.slice(0, 600));
+        throw error;
+      }
+    },
     inject = require("./mouse-input.cjs")(w.webContents);
   const point = (selector) =>
     run(
@@ -93,6 +103,48 @@ app.whenReady().then(async () => {
       await run(fs.readFileSync(path.join(root, "vscode", file), "utf8"));
     w.focus();
     await pause(100);
+    await reset();
+    assert.equal(await run("backgroundSettings().layout"), "infinite");
+    assert.equal(await run('document.querySelector("#a4-pages")'), null);
+    const placement = await run(
+      "pdfPagePlacement([{width:600,height:800},{width:800,height:600}],{x:300,y:250})",
+    );
+    assert.equal(placement[0].x + placement[0].width / 2, 300);
+    assert.equal(placement[0].y + placement[0].height / 2, 250);
+    assert.equal(placement[1].y, placement[0].y + placement[0].height + 24);
+    await run("doc.background.layout='a4-portrait';render();");
+    const a4 = await run(
+      "pdfPagePlacement([{width:600,height:800}],{x:100,y:100})[0]",
+    );
+    assert(a4.x >= 0 && a4.y >= 0);
+    await run("doc.background.layout='infinite';render();");
+    // Real pointer routing: pen writes through text while mouse independently arranges it.
+    const penPoint = await run(
+      '(()=>{const r=noteCache.get("text").el.getBoundingClientRect();return{x:r.left+40,y:r.top+30}})()',
+    );
+    await run(`activateTool('pen',false,true,'pen');activateTool('select',false,true,'mouse');(()=>{
+      for(const [type,dx] of [['pointerdown',0],['pointermove',18],['pointerup',18]]){
+        const e=new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'pen',pointerId:99,button:0,buttons:type==='pointerup'?0:1,pressure:.75,clientX:${penPoint.x}+dx,clientY:${penPoint.y}});
+        Object.defineProperties(e,{nativeInk:{value:true},nativePrecision:{value:true}});viewport.dispatchEvent(e);
+      }
+    })();`);
+    assert.equal(await run("doc.strokes.length"), 1);
+    assert.equal(await run("doc.strokes[0].points[0].p"), 0.75);
+    assert.equal(await run("inputTools.get('mouse')"), "select");
+    await click({ x: Math.round(penPoint.x), y: Math.round(penPoint.y + 35) });
+    assert.equal(await run("selected.notes.length"), 1);
+    assert.equal(await run("inputTools.get('pen')"), "pen");
+    await run("useInputDevice('pen');viewport.focus();");
+    key("H");
+    await pause(20);
+    assert.equal(await run("inputTools.get('pen')"), "pan");
+    key("H");
+    await pause(20);
+    assert.equal(await run("inputTools.get('pen')"), "pen");
+    assert.equal(await run("inputTools.get('mouse')"), "select");
+    await run("activateTool('erase',false,true,'pen');window.inkspaceDiagram.add('rect');");
+    assert.equal(await run("inputTools.get('pen')"), "erase", "Graph insertion must preserve the pen tool");
+    await run("activateTool('pen',false,true,'pen');useInputDevice('mouse');");
     await reset();
     assert.equal(
       await run(
@@ -177,7 +229,9 @@ app.whenReady().then(async () => {
     // Template drawing is the same mxGraph model; one gesture is one undo item.
     await reset();
     await click(await point("#sidebar-diagram-toggle"));
-    await click(await point(".workbench-choices button:nth-child(2)"));
+    await click(
+      await point("#sidebar-diagram .workbench-choices button:nth-child(2)"),
+    );
     await click(await point("[data-diagram=ellipse]"));
     assert.equal(await run("tool"), "shape");
     const blank = await run(
@@ -216,7 +270,7 @@ app.whenReady().then(async () => {
       0,
     );
     assert.equal(await run("history.length"), 0);
-    // Shared width and scale controls retain physical size during both kinds of zoom.
+    // Text has layout controls, visual media has scale controls; both stay screen sized.
     await reset();
     await run("clearSelection();selected.notes=[0];overlaySelection();");
     for (const zoom of [0.5, 1, 2])
@@ -227,21 +281,75 @@ app.whenReady().then(async () => {
         );
         assert.equal(sizes.width, 6);
         assert.equal(sizes.height, 22);
-        assert(Math.abs(sizes.scale - 10) < 0.6, JSON.stringify(sizes));
+        assert.equal(
+          sizes.scale,
+          0,
+          "Text must not expose the visual scale control",
+        );
         assert.equal(sizes.toolbar, 26);
       }
     await run("view.scale=1;doc.notes[0].scale=1;render();");
     const widthBefore = await run("doc.notes[0].width");
     await drag(await point(".media-width"), 80, 0);
     assert.equal(await run("doc.notes[0].width"), widthBefore + 80);
-    const scaleBefore = await run("doc.notes[0].scale");
-    await drag(await point("#selection .selection-scale"), 60, 30);
-    assert((await run("doc.notes[0].scale")) > scaleBefore);
+    assert.equal(
+      await run('getComputedStyle(noteCache.get("text").el).fontSize'),
+      "16px",
+    );
+    await run(
+      `(()=>{const input=[...document.querySelectorAll('#block-properties label')].find(el=>el.querySelector('span')?.textContent==='字号').querySelector('input');input.value=24;input.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+    );
+    assert.equal(await run("doc.notes[0].fontSize"), 24);
+    assert.equal(
+      await run('getComputedStyle(noteCache.get("text").el).fontSize'),
+      "24px",
+    );
+    await run("undo();selected.notes=[0];overlaySelection();");
+    assert.equal(
+      await run('getComputedStyle(noteCache.get("text").el).fontSize'),
+      "16px",
+    );
+    assert.equal(
+      await run(
+        'getComputedStyle(document.querySelector("#selection .selection-scale")).display',
+      ),
+      "none",
+    );
     assert.equal(await run("doc.notes[0].width"), widthBefore + 80);
     const positionBefore = await run("({x:doc.notes[0].x,y:doc.notes[0].y})");
     await drag(await point(".media-grip"), 40, 20);
     assert.equal(await run("doc.notes[0].x"), positionBefore.x + 40);
     assert.equal(await run("doc.notes[0].y"), positionBefore.y + 20);
+    // Mixed scaling reflows text but scales the image. Cancellation and undo restore both.
+    await run(
+      `doc.notes.push({id:'image-sizing',kind:'image',markdown:'',x:530,y:220,width:180,aspect:2,src:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='});selected.notes=[0,1];render();history=[];future=[];`,
+    );
+    const mixedBefore = await run("JSON.stringify(doc.notes)");
+    const mixedWidth = await run("doc.notes[0].width");
+    await drag(await point("#selection .selection-scale"), 65, 30);
+    assert((await run("doc.notes[0].width")) > mixedWidth);
+    assert.equal(await run("doc.notes[0].scale"), 1);
+    assert((await run("doc.notes[1].scale")) > 1);
+    assert.equal(
+      await run('getComputedStyle(noteCache.get("text").el).fontSize'),
+      "16px",
+    );
+    await run("undo()");
+    assert.equal(await run("JSON.stringify(doc.notes)"), mixedBefore);
+    await run("selected.notes=[0,1];overlaySelection();");
+    const corner = await point("#selection .selection-scale");
+    inject({ type: "mouseDown", button: "left", ...corner });
+    inject({ type: "mouseMove", x: corner.x + 40, y: corner.y + 20 });
+    await pause(30);
+    key("Escape");
+    inject({
+      type: "mouseUp",
+      button: "left",
+      x: corner.x + 40,
+      y: corner.y + 20,
+    });
+    await pause(30);
+    assert.equal(await run("JSON.stringify(doc.notes)"), mixedBefore);
     // Native double click enters a source-mapped fragment. Unedited paragraphs stay put.
     const original =
       "First paragraph.\r\n\r\nSecond paragraph with **bold target** text.\r\n\r\nFinal paragraph.";
@@ -384,6 +492,11 @@ app.whenReady().then(async () => {
         commandLocalUndoRedo: true,
         cancelEditing: true,
         middlePanKeepsEditor: true,
+        independentMouseAndPen: true,
+        penDrawsThroughText: true,
+        continuousCanvasDefault: true,
+        textLayoutInsteadOfVisualScale: true,
+        mixedResizeUndoAndCancel: true,
       }),
     );
   } catch (error) {

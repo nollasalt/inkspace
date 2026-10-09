@@ -1,5 +1,7 @@
 # 当前架构
 
+当前产品边界见 [产品范围](PRODUCT-SCOPE.md)。普通 VS Code 是唯一持续维护的发布宿主；其他宿主保留历史代码。`src/interaction/tools.ts` 管理独立的鼠标/笔工具偏好，`machine.ts` 管理唯一接触手势，二者不混入文档历史。`media-sizing.ts` 统一尺寸策略：文本重新排版，视觉介质等比缩放；同一策略用于实时预览与事务提交。
+
 普通 VS Code 扩展注册 `.ink` 二进制 Custom Editor、旧 `.inkspace.json` 文本 Custom Editor 和画布树。打开笔记时检查本机服务，必要时启动随插件打包的 Ink Engine。`.ink` 采用追加式二进制增量保存及合并自动保存；旧 JSON 编辑器使用 TextDocument API。
 
 ```mermaid

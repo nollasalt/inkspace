@@ -158,6 +158,21 @@
       return el;
     };
     const properties = section("tool-properties");
+    const inputSection = subSection(properties, "配置输入设备");
+    const inputChoices = choices(
+      inputSection,
+      [
+        ["mouse", "鼠标"],
+        ["pen", "触控笔"],
+      ],
+      inputTools.device,
+      (value) => useInputDevice(value),
+    );
+    inputChoices.classList.add("workbench-input-choices");
+    note(
+      inputSection,
+      "鼠标默认编排，笔默认书写；工具分别记忆。中键始终移动画布。",
+    );
     properties.append(toolOptions);
     const blockProperties = document.createElement("div");
     blockProperties.id = "block-properties";
@@ -266,7 +281,7 @@
     const labels = {
       width: "粗细",
       "diagram-width": "边线粗细",
-      "page-layout": "纸张方向",
+      "page-layout": "画布布局",
       "background-kind": "背景",
       "text-size": "默认字号",
       "background-spacing": "背景间距",
@@ -289,7 +304,7 @@
       select.hidden = true;
       const shortLabels = {
         width: ["极细", "细", "中", "粗"],
-        "page-layout": ["竖向", "横向"],
+        "page-layout": ["连续", "A4 竖向", "A4 横向"],
         "background-kind": ["空白", "点阵", "横线", "网格"],
       };
       for (const [index, option] of Array.from(select.options).entries()) {
@@ -334,9 +349,10 @@
       sync();
     }
     const settingsPanel = pageSettings.querySelector(".settings-panel"),
-      backgroundField = $("#background-kind").closest(".sidebar-choice-field");
-    const extraFields = ["page-layout", "text-size", "background-spacing"].map(
-      (id) => $("#" + id).closest(".sidebar-choice-field"),
+      backgroundField = $("#background-kind").closest(".sidebar-choice-field"),
+      layoutField = $("#page-layout").closest(".sidebar-choice-field");
+    const extraFields = ["text-size", "background-spacing"].map((id) =>
+      $("#" + id).closest(".sidebar-choice-field"),
     );
     const backgroundColor = $("#background-color");
     backgroundColor.hidden = true;
@@ -353,8 +369,9 @@
     settingsPanel.append(backgroundColor, backgroundField);
     note(
       subSection(settingsPanel, "页面边界"),
-      "A4 无间隔拼接 · 淡虚线边界\n按内容占用自动拓展",
+      "连续画布用于日常编排；A4 边界用于纸张布局与 PDF 对齐。",
     );
+    settingsPanel.append(layoutField);
     const advanced = document.createElement("details");
     advanced.className = "workbench-advanced";
     const advancedTitle = document.createElement("summary");
@@ -630,7 +647,7 @@
       if (placementMode === "center") window.inkspaceDiagram.add(kind);
       else {
         exitResource();
-        activateTool("shape", false);
+        activateTool("shape", false, true, "mouse");
         refresh();
       }
     }
@@ -647,7 +664,7 @@
           ? null
           : { w: Math.max(12, b.w), h: Math.max(12, b.h), start, end },
       );
-      activateTool(repeat ? "shape" : "select", false);
+      activateTool(repeat ? "shape" : "select", false, true, "mouse");
       if (cell) window.inkspaceDiagram.setSelected([cell.id]);
       overlaySelection();
     }
@@ -656,6 +673,7 @@
       group.className = "workbench-choices";
       for (const [value, label] of items) {
         const el = button(label, label, () => commit(value));
+        el.dataset.value = value;
         el.setAttribute("aria-pressed", String(value === current));
         group.append(el);
       }
@@ -720,6 +738,19 @@
           overlaySelection();
           persist();
         });
+        numberField(grid, "字号", textSize(noteItem), 8, 96, (value) => {
+          window.inkspaceInlineText.finish();
+          checkpoint();
+          noteItem.fontSize = value;
+          renderNotes(noteItem);
+          renderBackground();
+          overlaySelection();
+          persist();
+        });
+        note(
+          blockProperties,
+          "宽度调整只改变换行；小窗高度只改变视口。字号独立设置。",
+        );
         if (noteItem.viewMode === "window")
           numberField(
             grid,
@@ -747,7 +778,7 @@
                 ? "图像 · 固定宽高比"
                 : "自由笔迹",
         );
-      if (noteItem) {
+      if (noteItem?.kind === "image") {
         const scaleSection = subSection(blockProperties, "整体比例"),
           grid = document.createElement("div");
         grid.className = "workbench-field-grid";
@@ -854,6 +885,16 @@
       }
     }
     function refresh() {
+      for (const button of inputChoices.children)
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.value === inputTools.device),
+        );
+      toolbar.setAttribute(
+        "aria-label",
+        inputTools.device === "pen" ? "触控笔工具" : "鼠标工具",
+      );
+      toolbar.dataset.inputDevice = inputTools.device === "pen" ? "笔" : "鼠标";
       const entries = window.inkspaceCommands.selection(),
         editing = window.inkspaceInlineText?.isEditing(),
         editingNote = window.inkspaceInlineText?.selectedNote();
@@ -870,7 +911,10 @@
       pageSettings.hidden = mode !== "settings";
       exportSection.hidden = mode !== "settings";
       back.hidden = !resource;
-      const arranging = ["select", "text", "diagram"].includes(tool) || editing,
+      const arranging =
+          ["select", "text", "diagram"].includes(
+            pointerTool({ pointerType: "mouse" }),
+          ) || editing,
         hasSelection = arranging && displayed.length > 0,
         item = displayed.length === 1 ? displayed[0] : null;
       propertyTitle.textContent =
@@ -909,6 +953,7 @@
           e.kind,
           e.value.id,
           e.value.width,
+          e.value.fontSize,
           e.value.scale,
           e.value.viewMode,
           e.value.viewHeight,
@@ -952,7 +997,9 @@
         : tool === "shape"
           ? "点击使用默认大小；拖动确定位置和尺寸。"
           : hasSelection
-            ? "正文拖动 · 角柄缩放 · 悬停连线 · 双击编辑"
+            ? item?.kind === "notes" && item.value.kind !== "image"
+              ? "拖动移动 · 边柄调宽 · 字号独立设置 · 双击编辑段落"
+              : "正文拖动 · 角柄缩放 · 悬停连线 · 双击编辑"
             : tool === "pan"
               ? "按 H 返回原工具。鼠标中键始终平移。"
               : tool === "pen"
@@ -1029,6 +1076,7 @@
     });
     window.addEventListener("inkspace-sidebar-change", refresh);
     window.addEventListener("inkspace-text-view-change", refresh);
+    window.addEventListener("inkspace-input-tools-change", refresh);
     new ResizeObserver(() => window.inkspaceMediaFrame?.refresh()).observe(
       viewport,
     );
@@ -1055,7 +1103,7 @@
     };
     window.inkspaceMediaFrame?.install();
     setPlacement("center");
-    activateTool("select", false);
+    activateTool(inputTools.get("mouse"), false, true, "mouse");
     refresh();
     return window.inkspaceWorkbench;
   }

@@ -1,7 +1,14 @@
 const assert=require('node:assert/strict'),esbuild=require('esbuild'),Module=require('node:module');
 const compiled=esbuild.buildSync({entryPoints:['src/interaction/index.ts'],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
 const moduleUnderTest=new Module('interaction-test',module);moduleUnderTest._compile(compiled,'interaction-test.cjs');
-const {InteractionMachine,intent,Selection,selectionProjection,InputRouter}=moduleUnderTest.exports;
+const {InteractionMachine,intent,Selection,selectionProjection,InputRouter,InputTools,resizeNote}=moduleUnderTest.exports;
+const tools=new InputTools();assert.equal(tools.get('mouse'),'select');assert.equal(tools.get('pen'),'pen');
+tools.use('pen');tools.set('erase');assert.equal(tools.get('mouse'),'select');tools.set('pan');tools.set('pan',true);assert.equal(tools.get('pen'),'erase');
+tools.use('mouse');tools.set('pen');assert.equal(tools.get('pen'),'erase');tools.set('pen',true);assert.equal(tools.get('mouse'),'select');
+tools.restore({mouse:'shape',pen:'invalid'});assert.deepEqual(tools.snapshot(),{mouse:'select',pen:'erase'});
+const text={x:50,y:30,width:320,scale:2,fontSize:18,viewMode:'window',viewHeight:120};const sized=resizeNote(text,2,{x:10,y:10});
+assert.deepEqual(sized,{...text,x:90,y:50,width:640,viewHeight:240});assert.equal(text.width,320);
+assert.equal(resizeNote({...text,kind:'image'},2,{x:0,y:0}).scale,4);
 const facts={pointerId:1,device:'mouse',button:0,tool:'select',space:false,ui:false,duplicate:false,connection:false,diagram:false};
 let policies=0;
 for(const tool of ['pen','erase','shape'])for(const control of ['connection','width','height','selection','text-scale']){

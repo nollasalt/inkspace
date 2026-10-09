@@ -38,14 +38,18 @@
     const visible =
       !selectionRect &&
       entries.length > 0 &&
-      ["select", "text", "diagram", "pan"].includes(tool) &&
+      ["select", "text", "diagram", "pan"].includes(
+        pointerTool({ pointerType: "mouse" }),
+      ) &&
       !viewport.classList.contains("pen-input") &&
       !editing;
     strip.hidden = !visible;
     handles.hidden = !visible;
     $("#selection").classList.toggle("media-selection", visible);
     const scale = $("#selection .selection-scale");
-    if (scale) scale.style.display = visible ? "block" : "none";
+    if (scale)
+      scale.style.display =
+        visible && (!note || note.kind === "image") ? "block" : "none";
     strip.classList.toggle("media-editor-strip", editing);
     if (editing) {
       showEditorStrip();

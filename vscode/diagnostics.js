@@ -2,7 +2,7 @@
 async function runCodiumDiagnostic(action){
   if(action==='workbench'){
     await window.inkspaceCairoIdle();finishInteraction();window.inkspaceInlineText.finish();
-    const note={id:'workbench-validation',x:40,y:40,width:330,markdown:'Original **source**.'};checkpoint();doc.notes.push(note);activateTool('select',false);selected.notes=[doc.notes.length-1];render();
+    const note={id:'workbench-validation',x:40,y:40,width:330,markdown:'Original **source**.'};checkpoint();doc.notes.push(note);activateTool('select',false,true,'mouse');selected.notes=[doc.notes.length-1];render();
     const original=note.markdown,before=history.length;edit(note);const input=document.querySelector('.inline-note-editor');input.value='Saved **workbench** text.';input.dispatchEvent(new Event('input',{bubbles:true}));
     if(note.markdown!==original||history.length!==before)throw Error('A text draft mutated the document or history');
     window.inkspaceInlineText.finish();if(history.length!==before+1)throw Error('Text commit is not atomic');

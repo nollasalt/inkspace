@@ -27,11 +27,13 @@ function app(raw=false,dpr=1){
   };
   w.Path2D=Path2D;
   for(const file of ['vendor/interaction.js','block-model.js','vendor/content.js','desktop/ink-renderer.js','renderer.js','app.js','canvas-interaction.js'])vm.runInContext(fs.readFileSync(file,'utf8'),dom.getInternalVMContext());
+  w.eval("inputTools.use('pen');inputTools.set('pen');tool='pen'");
   const run=s=>w.eval(s),read=s=>JSON.parse(JSON.stringify(run(s)));
   const pointer=(type,x,y,options={})=>{
     const {timeStamp,...properties}=options;
     const event=new w.Event(type,{bubbles:true});Object.assign(event,{pointerId:1,pointerType:'pen',button:0,clientX:x,clientY:y,pressure:.5,...properties});
     if(timeStamp!==undefined)Object.defineProperty(event,'timeStamp',{value:timeStamp});
+    if(type==='pointerdown')run('inputTools.use('+JSON.stringify(event.pointerType)+');inputTools.set(tool)');
     w.document.querySelector('#viewport').dispatchEvent(event);
   };
   return{w,dom,run,read,pointer,canvases,contextRequests,reads:()=>rectReads,visibleClears:()=>visibleClears};
@@ -130,7 +132,7 @@ pointer('pointerdown',20,20,{pointerType:'mouse'});
 for(let i=1;i<=200;i++){pointer('pointermove',20+i*.3,20+i*.15,{pointerType:'mouse'});if(i%4===0)run('presentInteraction()')}
 const panDuring=read('renderStats');
 assert.equal(w.document.querySelector('#paper').parentElement,w.document.querySelector('#viewport'));
-assert.equal(w.document.querySelector('#paper').style.backgroundPosition,paperPosition);
+assert.equal(w.document.querySelector('#paper').style.backgroundPosition,`${panView.x+60+run('surface.padding')}px ${panView.y+30+run('surface.padding')}px`);
 assert.equal(panDuring.scenePaints,panBefore.scenePaints);assert.equal(panDuring.outlineBuilds,panBefore.outlineBuilds);assert.equal(panDuring.noteBuilds,panBefore.noteBuilds);
 assert.ok(a.reads()-panReads<=2,'Pan rereads viewport geometry during samples');assert.ok(w.document.querySelector('#scene').style.transform.includes('60px'));
 pointer('pointerup',80,50,{pointerType:'mouse'});
@@ -179,7 +181,7 @@ run('undo()');assert.equal(run('doc.strokes[1000].width'),scaleWidth);
 console.log('Passed 1000 pen selection and 1000 scaling samples with zero scene paints/geometry rebuilds during drag.');
 
 // Tool keys toggle the requested tool against the previous tool, once per press.
-run("tool='pen';previousTool='pen'");
+run("inputTools.use('pen');inputTools.set('pen');tool='pen'");
 const toolKey=(key,options={})=>w.document.body.dispatchEvent(new w.KeyboardEvent('keydown',{bubbles:true,key,...options}));
 toolKey('e');assert.equal(run('tool'),'erase');toolKey('e',{repeat:true});assert.equal(run('tool'),'erase');
 toolKey('e');assert.equal(run('tool'),'pen');toolKey('e');assert.equal(run('tool'),'erase');
@@ -190,7 +192,7 @@ run("tool='select'");
 
 // Background styles follow world coordinates and survive save, validation and undo.
 const setBackground=(id,value)=>{const el=w.document.querySelector(id);el.value=value;el.dispatchEvent(new w.Event('change'))};
-setBackground('#background-kind','grid');assert.equal(run('doc.background.type'),'grid');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
+setBackground('#page-layout','a4-portrait');setBackground('#background-kind','grid');assert.equal(run('doc.background.type'),'grid');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
 setBackground('#background-spacing','48');assert.equal(run('doc.background.spacing'),48);run('undo()');assert.equal(run('backgroundSettings().spacing'),'auto');
 setBackground('#background-kind','ruled');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
 setBackground('#background-color','#202020');assert.equal(run('doc.background.color'),'#202020');assert.ok(w.document.querySelector('#a4-pages pattern path[stroke]'));
@@ -371,8 +373,8 @@ pr("doc.background.layout='a4-landscape';render()");
 assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),297*96/25.4);
 assert(pr('valid(JSON.parse(JSON.stringify(doc)))'));pr('flushPersist()');
 assert.equal(JSON.parse(pw.localStorage.getItem('inkspace.document')).background.layout,'a4-landscape');
-pr("doc.background.layout='infinite';render()");assert.equal(Number(pw.document.querySelector('#a4-pages').dataset.pageWidth),210*96/25.4,'legacy infinite documents use A4 portrait');
-assert.equal(pw.document.querySelector('#page-layout option[value=infinite]'),null);
+pr("doc.background.layout='infinite';render()");assert.equal(pw.document.querySelector('#a4-pages'),null,'continuous canvas must not generate page occupancy');
+assert.ok(pw.document.querySelector('#page-layout option[value=infinite]'));
 pt.dom.window.close();
 console.log('Passed gapless dashed A4 borders, occupancy, live expansion, deletion, negative coordinates and persistence.');
 

@@ -37,9 +37,9 @@ function cachedStroke(s){
   let c=strokeCache.get(s);if(!c){const d=InkContent.strokePath(s);c={d,path:new Path2D(d),bounds:itemBounds('strokes',s)};strokeCache.set(s,c);renderStats.outlineBuilds++}return c;
 }
 function visible(b){const pad=surface.padding,r={x:(-view.x-pad)/view.scale,y:(-view.y-pad)/view.scale,w:(surface.width+pad*2)/view.scale,h:(surface.height+pad*2)/view.scale};return b.x+b.w>=r.x&&b.y+b.h>=r.y&&b.x<=r.x+r.w&&b.y<=r.y+r.h}
-function backgroundSettings(){const bg=doc.background||{type:'ruled',color:'#ffffff',spacing:'auto',fontSize:16};return {...bg,layout:bg.layout==='a4-landscape'?'a4-landscape':'a4-portrait'}}
+function backgroundSettings(){const bg=doc.background||{type:'ruled',color:'#ffffff',spacing:'auto',fontSize:16};return {...bg,layout:['a4-portrait','a4-landscape'].includes(bg.layout)?bg.layout:'infinite'}}
 function a4Dimensions(){return backgroundSettings().layout==='a4-landscape'?[297*96/25.4,210*96/25.4]:[210*96/25.4,297*96/25.4]}
-function textSize(){return backgroundSettings().fontSize||16}
+function textSize(note){return note?.fontSize||backgroundSettings().fontSize||16}
 function backgroundSpacing(){const bg=backgroundSettings();return bg.spacing==='auto'?textSize()*1.75:bg.spacing}
 // Paper occupancy is derived from content; completed stroke coverage is cached,
 // and live strokes only add their new segments. No ink raster is rebuilt here.
@@ -94,7 +94,7 @@ function renderA4Pages(){
 }
 // Update paper independently of cached ink, reusing occupancy during navigation.
 function presentBackground(){
-  const layer=$('#a4-pages');if(!layer)return;
+  const layer=$('#a4-pages');if(!layer){const paper=$('#paper');let size=backgroundSpacing()*view.scale;while(size>0&&size<6)size*=10;paper.style.backgroundSize=`${size}px ${size}px`;paper.style.backgroundPosition=`${view.x+surface.padding}px ${view.y+surface.padding}px`;return;}
   const [w,h]=a4Dimensions(),paths=[];
   for(const key of a4PaperCells){const [x,y]=key.split(',').map(Number),b={x:x*w,y:y*h,w,h};if(visible(b))paths.push(`<rect data-cell="${key}" x="${b.x}" y="${b.y}" width="${w}" height="${h}"/>`)}
   const bg={...backgroundSettings(),color:'#ffffff'},dark=bg.color.match(/[a-f0-9]{2}/gi).reduce((sum,c)=>sum+parseInt(c,16),0)<384;
@@ -141,7 +141,7 @@ function placeNote(n,el,dx=0,dy=0){
   el.style.transform='';el.style.left=(Math.round((view.x+n.x*view.scale+dx)*dpr)/dpr)+'px';el.style.top=(Math.round((view.y+n.y*view.scale+dy)*dpr)/dpr)+'px';
   // Layout lives in world units. Zoom must never change line breaking, font
   // metrics, fixed CSS padding, or browser minimum-font-size decisions.
-  el.style.width=(n.width||320)+'px';el.style.fontSize=textSize()+'px';el.style.setProperty('--note-scale','1');el.style.setProperty('--control-unit',(1/s)+'px');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
+  el.style.width=(n.width||320)+'px';el.style.fontSize=textSize(n)+'px';el.style.setProperty('--note-scale','1');el.style.setProperty('--control-unit',(1/s)+'px');el.style.transform=`scale(${s})`;el.style.transformOrigin='0 0';
 }
 function renderNotes(target=null){syncSelectionProjection();
   window.inkspaceInlineText?.sync();
@@ -286,8 +286,10 @@ function presentInteraction(){
     const {bounds:b,factor}=active,origin={x:view.x+b.x*view.scale,y:view.y+b.y*view.scale};
     inkLayers[1].canvas.style.transformOrigin=`${origin.x+surface.padding}px ${origin.y+surface.padding}px`;
     inkLayers[1].canvas.style.transform=`scale(${factor})`;
-    for(const i of selected.notes){const n=doc.notes[i],el=noteCache.get(n.id).el;placeNote(n,el,(n.x-b.x)*view.scale*(factor-1),(n.y-b.y)*view.scale*(factor-1));el.style.setProperty('--control-unit',(1/(view.scale*(n.scale||1)*factor))+'px');el.style.transform=`scale(${view.scale*(n.scale||1)*factor})`}
-    window.inkspaceBlocks?.preview(0,0,factor,origin);const selection=$('#selection');selection.style.transformOrigin='0 0';selection.style.transform=`scale(${factor})`;
+    for(const i of selected.notes){const n=InkInteraction.resizeNote(doc.notes[i],factor,b),cache=noteCache.get(n.id);placeNote(n,cache.el);window.inkspaceInlineText?.layoutNote(n,cache)}
+    window.inkspaceBlocks?.preview(0,0,factor,origin);
+    const graphBounds=window.inkspaceDiagram?.bounds(true),display=union(Object.keys(selected).flatMap(kind=>selected[kind].map(index=>window.inkspaceGeometry.displayBounds(kind,blockValue(kind,index)))).filter(Boolean).concat(graphBounds?[{x:b.x+(graphBounds.x-b.x)*factor,y:b.y+(graphBounds.y-b.y)*factor,w:graphBounds.w*factor,h:graphBounds.h*factor}]:[]));
+    if(display){const selection=$('#selection');selection.style.transform='';Object.assign(selection.style,{left:view.x+display.x*view.scale+'px',top:view.y+display.y*view.scale+'px',width:display.w*view.scale+'px',height:display.h*view.scale+'px'})}
   }else if(active?.type==='move-selection'){
     const dx=active.offset.x*view.scale,dy=active.offset.y*view.scale;
     inkLayers[1].canvas.style.transform=`translate3d(${dx}px,${dy}px,0)`;

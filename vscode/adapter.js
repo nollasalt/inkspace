@@ -1,5 +1,7 @@
 // Writing is allowed only through the high-precision native host bridge.
 const codium=(window.inkspaceCalibrationApi||acquireVsCodeApi()),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
+inputTools.restore(codium.getState()?.inputTools);tool=inputTools.get();
+window.addEventListener('inkspace-input-tools-change',()=>codium.setState({...codium.getState(),inputTools:inputTools.snapshot()}));
 if(typeof codium.getState()?.diagramSidebarCollapsed==='boolean')setDiagramSidebarCollapsed(codium.getState().diagramSidebarCollapsed,false);
 window.addEventListener('inkspace-sidebar-change',event=>codium.setState({...codium.getState(),diagramSidebarCollapsed:event.detail.collapsed}));
 let textDraftTimer=null;window.addEventListener('inkspace-text-draft',event=>{clearTimeout(textDraftTimer);const draft=event.detail?{...event.detail,version:hostVersion}:null;if(!draft){codium.setState({...codium.getState(),contentDraft:null});return}textDraftTimer=setTimeout(()=>codium.setState({...codium.getState(),contentDraft:draft}),400)});

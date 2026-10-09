@@ -1,4 +1,16 @@
 /* DESIGN tokens and shell. All workbench chrome is screen-space, not document geometry. */
+.media-workbench header .tools::before {
+  content: attr(data-input-device);
+  flex-shrink: 0;
+  padding: 0 5px 0 2px;
+  color: var(--iw-muted);
+  font-size: 11px;
+}
+.media-workbench #viewport.pen-input > .media-action-strip,
+.media-workbench #viewport.pen-input > .media-frame-handles {
+  visibility: hidden;
+  pointer-events: none;
+}
 body.media-workbench {
   --iw-ui: #f7f7f7;
   --iw-panel: #fafafa;
