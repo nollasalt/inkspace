@@ -118,7 +118,7 @@
     return{height,width,offset:Math.max(0,(visibleTop-top)/scale)};
   }
   edit=function(note,position,options={}){
-    if(note.kind==='image')return;
+    if(note.kind==='image'||window.inkspaceArrangement?.locked({kind:'notes',id:note.id}))return;
     if(session?.note===note){session.input.focus({preventScroll:true});return}
     const previousFrame=window.inkspaceGeometry?.bounds(note);const previousCache=noteCache.get(note.id),caret=options.caret??(position&&InkBlockModel.textFormat(note)!=='html'?sourceCaret(note,previousCache,position):0),previewBounds=previousCache?bounds(note):null,temporaryView=doc.notes.includes(note)?editingViewport(note,previousCache,position):null,previewScroll=previousCache?.scrollViewport?.scrollTop;
     const normalizedSource=note.markdown.replace(/\r\n|\r/g,'\n'),range=position&&!options.full&&InkBlockModel.textFormat(note)!=='html'?InkContent.sourceRange(normalizedSource,caret):{start:0,end:normalizedSource.length,type:'document'};

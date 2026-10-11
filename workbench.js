@@ -181,6 +181,8 @@
     graphProperties.id = "graph-properties";
     heading("外观", graphProperties);
     graphProperties.append(diagramOptions);
+    for (const id of ["#diagram-front", "#diagram-back", "#diagram-delete"])
+      diagramOptions.querySelector(id).hidden = true;
     properties.append(graphProperties);
     const description = note(properties, "");
     description.id = "interaction-help";
@@ -698,6 +700,11 @@
       parent.append(field);
     }
     function selectionProperties(entries) {
+      if (window.inkspaceArrangement?.selectionLocked()) {
+        note(blockProperties, "已锁定：可书写标注，解锁后可调整内容。");
+        window.inkspaceArrangement.inspect(blockProperties);
+        return;
+      }
       const item = entries.length === 1 ? entries[0] : null,
         noteItem = item?.kind === "notes" ? item.value : null,
         r = selectionBounds();
@@ -854,12 +861,14 @@
       }
       if (r && entries.length > 1)
         note(blockProperties, Math.round(r.w) + " × " + Math.round(r.h));
+      window.inkspaceArrangement?.inspect(blockProperties);
     }
     let footer = null;
     function attachFooter(statusBar) {
       footer = statusBar;
       footer.classList.add("workbench-footer");
       preserveNativeKeys(footer);
+      window.inkspacePlaces?.installFooter(footer);
       const pages = $("#show-pages"),
         views = $(".zoom");
       footer.prepend(pages);
@@ -945,7 +954,10 @@
       toolOptions.hidden =
         hasSelection || !["pen", "erase", "shape"].includes(tool);
       $("#shape-options").hidden = true;
-      graphProperties.hidden = !hasSelection || item?.kind !== "diagram";
+      graphProperties.hidden =
+        !hasSelection ||
+        item?.kind !== "diagram" ||
+        window.inkspaceArrangement?.selectionLocked();
       const key = JSON.stringify([
         mode,
         tool,
@@ -960,6 +972,8 @@
           e.value.format,
         ]),
         doc.groups,
+        doc.blockState,
+        doc.blockOrder,
       ]);
       if (key !== propertyKey) {
         propertyKey = key;

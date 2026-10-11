@@ -147,8 +147,8 @@ function renderNotes(target=null){syncSelectionProjection();
   window.inkspaceInlineText?.sync();
   const ids=new Set(doc.notes.map(n=>n.id));
   for(const [id,c] of noteCache)if(!target&&!ids.has(id)){c.el.remove();noteCache.delete(id)}
-  for(const [index,n] of doc.notes.entries()){
-    if(target&&n!==target)continue;let c=noteCache.get(n.id);
+  for(const [index,original] of doc.notes.entries()){
+    if(target&&original!==target)continue;const n=active?.type==='resize-note'&&active.n===original?{...original,width:active.previewWidth}:original;let c=noteCache.get(n.id);
     if(!c){const el=document.createElement('article');el.className='note';el.dataset.id=n.id;el.innerHTML='<div class="note-bar">⋮⋮ 移动文本框</div><div class="note-body"></div><div class="note-hit" aria-hidden="true"></div><div class="note-resize" title="拖动调整宽度"></div><div class="note-scale" title="拖动等比例缩放文本" aria-label="缩放文本"></div>';c={el,body:el.querySelector('.note-body'),markdown:null};noteCache.set(n.id,c);notes.append(el)}
     if(window.inkspaceInlineText?.renderNote(n)){placeNote(n,c.el);window.inkspaceInlineText.layoutNote(n,c);continue}
     if(c.markdown!==n.markdown||c.src!==n.src||c.kind!==n.kind||c.format!==n.format){c.body.replaceChildren();if(n.kind==='image'){const image=document.createElement('img');image.src=n.src;image.alt='粘贴的图片';image.draggable=false;image.style.aspectRatio=String(n.aspect);image.addEventListener('load',()=>{c.guideSignature=null;renderNotes()},{once:true});c.body.append(image)}else if(!window.inkspaceBlocks?.renderBody(n,c))c.body.innerHTML=markdown(n.markdown);c.markdown=n.markdown;c.src=n.src;c.kind=n.kind;c.format=n.format;c.el.classList.toggle('image-note',n.kind==='image');const bar=c.el.querySelector('.note-bar');if(bar)bar.textContent=n.kind==='image'?'⋮⋮ 移动图片':InkBlockModel.textFormat(n)==='html'?'⋮⋮ 移动 HTML 块':'⋮⋮ 移动文本框';const scaleControl=c.el.querySelector('.note-scale');if(scaleControl){const label=n.kind==='image'?'缩放图片':InkBlockModel.textFormat(n)==='html'?'缩放 HTML 块':'缩放文本';scaleControl.title='拖动等比例'+label;scaleControl.setAttribute('aria-label',label)}renderStats.noteBuilds++}
@@ -320,15 +320,16 @@ function beginGroupMove(){
   for(const s of active.movingShapes)drawShape(s,inkLayers[1].ctx);
 }
 function finishTextScale(){
-  const {n,base,bounds:b,factor}=active;n.x=b.x+(base.x-b.x)*factor;n.y=b.y+(base.y-b.y)*factor;n.scale=base.scale*factor;noteCache.get(n.id)?.el.classList.remove('scaling-text');active=null;renderNotes();renderBackground();overlaySelection();
+  const {n,base,bounds:b,factor}=active;if(Math.abs(factor-1)>1e-9){checkpoint();n.x=b.x+(base.x-b.x)*factor;n.y=b.y+(base.y-b.y)*factor;n.scale=base.scale*factor}noteCache.get(n.id)?.el.classList.remove('scaling-text');active=null;renderNotes();renderBackground();overlaySelection();
 }
 function finishGroupScale(){
-  window.inkspaceBlocks?.clearPreview();const {factor,bounds,items}=active;scaleSelection(factor,bounds,items);active=null;
+  window.inkspaceBlocks?.clearPreview();const {factor,bounds,items}=active;if(Math.abs(factor-1)>1e-9){checkpoint();scaleSelection(factor,bounds,items)}active=null;
   inkLayers[1].canvas.style.transform='';inkLayers[1].canvas.style.transformOrigin='';
   $('#selection').style.transform='';$('#selection').style.transformOrigin='';clearLayer(inkLayers[1]);render();
 }
-function finishGroupMove(){if(active.pendingMove){active=null;overlaySelection();return}const offset=active.offset;window.inkspaceBlocks?.clearPreview();detachSelection();moveSelection(offset.x,offset.y);active=null;inkLayers[1].canvas.style.transform='';$('#selection').style.transform='';clearLayer(inkLayers[1]);render()}
-function finishInteraction(){window.inkspaceWorkbench?.clearShapePreview?.();window.inkspaceInteraction?.finishExternal();if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='erase'){finishErasing();active=null}else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='resize-text')finishTextScale();else if(active?.type==='resize-window')window.inkspaceInlineText?.finishHeight();else if(active?.type==='pan')settlePan();else active=null;pointers.clear();gesture=null;selectionRect=null}
+function finishGroupMove(){if(active.pendingMove){active=null;overlaySelection();return}const offset=active.offset;window.inkspaceBlocks?.clearPreview();if(Math.abs(offset.x)+Math.abs(offset.y)>1e-9){checkpoint();detachSelection();moveSelection(offset.x,offset.y)}active=null;inkLayers[1].canvas.style.transform='';$('#selection').style.transform='';clearLayer(inkLayers[1]);render()}
+function finishNoteWidth(){const current=active;active=null;if(Math.abs(current.previewWidth-current.width)>1e-9){checkpoint();current.n.width=current.previewWidth}renderNotes(current.n);renderBackground();overlaySelection();persist()}
+function finishInteraction(){window.inkspaceArrangement?.clearFeedback();window.inkspaceWorkbench?.clearShapePreview?.();window.inkspaceInteraction?.finishExternal();if(active?.type==='shape')clearLayer(inkLayers[1]);settleZoom();cancelInteractionFrame();if(active?.type==='pen')finishInk();else if(active?.type==='erase'){finishErasing();active=null}else if(active?.type==='move-selection')finishGroupMove();else if(active?.type==='resize-selection')finishGroupScale();else if(active?.type==='resize-text')finishTextScale();else if(active?.type==='resize-window')window.inkspaceInlineText?.finishHeight();else if(active?.type==='resize-note')finishNoteWidth();else if(active?.type==='pan')settlePan();else active=null;pointers.clear();gesture=null;selectionRect=null}
 function snapshot(){return {...doc,strokes:doc.strokes.slice(),notes:doc.notes.filter(n=>n.id!==window.inkspaceInlineText?.transientNoteId()).map(n=>({...n})),shapes:doc.shapes.map(s=>({...s}))}}
 function detachSelection(){for(const i of selected.strokes){const s=doc.strokes[i];doc.strokes[i]={...s,points:s.points.map(p=>({...p}))}}}
 function persist(){clearTimeout(saveTimer);saveTimer=setTimeout(flushPersist,700)}
@@ -384,7 +385,7 @@ function eraseInk(p){
     // Strict crossing; collinear/disjoint segments use endpoint distances above.
     return cross(u,v,a)*cross(u,v,p)<0&&cross(a,p,u)*cross(a,p,v)<0;
   };
-  for(const stroke of candidates){if(contact.eraseRemoved.has(stroke))continue;renderStats.eraseCandidates=(renderStats.eraseCandidates||0)+1;
+  for(const stroke of candidates){if(contact.eraseRemoved.has(stroke)||window.inkspaceArrangement?.locked({kind:'strokes',id:stroke.id}))continue;renderStats.eraseCandidates=(renderStats.eraseCandidates||0)+1;
     const b=cachedStroke(stroke).bounds;if(b.x>right||b.y>bottom||b.x+b.w<left||b.y+b.h<top)continue;
     const radius=r+stroke.width/2,points=stroke.points;
     if(points.length===1?hits(points[0],points[0],radius):points.some((point,i)=>i&&hits(points[i-1],point,radius))){contact.eraseRemoved.add(stroke);contact.eraseDirty.add(stroke)}

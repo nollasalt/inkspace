@@ -51,7 +51,7 @@ function selectionClipboardText(){
   for(const {kind,value}of selectionScaleSnapshot())if(kind!=='diagram'&&kind!=='pdfPages')fragment[kind].push(value);
   fragment.pdfs.push(...InkBlockModel.fragment(doc,selected.pdfPages||[]));fragment.pdfPageBlocks=!!selected.pdfPages?.length&&!selected.pdfs?.length;
   const refs=new Set((window.inkspaceBlocks?.references()||[]).map(r=>r.kind+':'+r.id));fragment.groups=(doc.groups||[]).filter(g=>InkBlockModel.groupMembers(doc,g).every(r=>refs.has(r.kind+':'+r.id))).map(g=>({...g,members:InkBlockModel.groupMembers(doc,g).map(r=>r.kind==='diagram'?{...r,id:diagram.ids[r.id]}:{...r})}));
-  if(diagram)fragment.diagram=diagram.xml;
+  fragment.blockState=(doc.blockState||[]).filter(r=>refs.has(r.kind+':'+r.id)).map(r=>({...r,id:r.kind==='diagram'?diagram.ids[r.id]:r.id}));fragment.blockOrder=(doc.blockOrder||[]).filter(r=>refs.has(r.kind+':'+r.id)).map(r=>({...r,id:r.kind==='diagram'?diagram.ids[r.id]:r.id}));if(diagram)fragment.diagram=diagram.xml;
   return selectionClipboardHeader+JSON.stringify({origin:{x:origin.x,y:origin.y},document:fragment});
 }
 function pasteSelectionText(text){
@@ -77,7 +77,7 @@ function pasteSelectionText(text){
   selected.pdfPages=fragment.pdfs.flatMap(a=>a.pages.map(p=>p.id));selected.pdfs=[];
   const pastedSelection=selected;
   if(fragment.diagram)idMaps.diagram=window.inkspaceDiagram?.paste(fragment.diagram,dx,dy,idMaps.notes,idMaps)||{};doc.groups=(doc.groups||[]).concat((fragment.groups||[]).map(g=>({id:crypto.randomUUID(),members:g.members.flatMap(r=>idMaps[r.kind]?.[r.id]?[{kind:r.kind,id:idMaps[r.kind][r.id]}]:[])})).filter(g=>g.members.length>1));
-  selected=pastedSelection;window.inkspaceBlocks?.expandSelection();render();persist();return true;
+  doc.blockState=(doc.blockState||[]).concat((fragment.blockState||[]).flatMap(r=>idMaps[r.kind]?.[r.id]?[{...r,id:idMaps[r.kind][r.id]}]:[]));doc.blockOrder=(doc.blockOrder||[]).concat((fragment.blockOrder||[]).flatMap(r=>idMaps[r.kind]?.[r.id]?[{...r,id:idMaps[r.kind][r.id]}]:[]));selected=pastedSelection;window.inkspaceBlocks?.expandSelection();render();persist();return true;
 }
 document.addEventListener('copy',event=>{
   if(event.target.closest?.('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||pointerTool({pointerType:'mouse'})==='pdftext'||window.getSelection?.().toString())return;

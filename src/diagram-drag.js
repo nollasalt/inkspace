@@ -1,11 +1,16 @@
 // Keep mxGraph's gesture/undo machinery, but move existing DOM during a drag.
 export function installDiagramDrag(graph,{dimensions,view,stats}){
   const handler=graph.graphHandler,basePreview=handler.updateLivePreview,baseReset=handler.resetLivePreview,baseSnap=graph.snapDelta;
-  let preview=null,pending=null,compositor=false;
+  let preview=null,pending=null,compositor=false,snapContext=null;
   graph.setDropEnabled(false);handler.highlightEnabled=false;
   handler.roundLength=length=>length;handler.livePreview=true;handler.maxLivePreview=1000;
   graph.snapDelta=function(delta,bounds,ignoreGrid,ignoreHorizontal,ignoreVertical){
     const raw={x:delta.x,y:delta.y},result=baseSnap.call(this,delta,bounds,ignoreGrid,ignoreHorizontal,ignoreVertical);
+    if(window.inkspaceArrangement){
+      const v=view();snapContext??=window.inkspaceArrangement.beginMove();
+      const snapped=window.inkspaceArrangement.snap(snapContext,raw.x/v.scale,raw.y/v.scale,ignoreGrid);
+      result.x=snapped.x*v.scale;result.y=snapped.y*v.scale;return result;
+    }
     if(ignoreGrid)return result;
     const v=view(),[w,h]=dimensions();
     for(const [axis,size,extent,ignored]of [['x',w,bounds.width,ignoreHorizontal],['y',h,bounds.height,ignoreVertical]]){
@@ -58,6 +63,7 @@ export function installDiagramDrag(graph,{dimensions,view,stats}){
     if(!preview)begin();pending={dx,dy};paint();
   };
   handler.resetLivePreview=function(){
+    snapContext=null;window.inkspaceArrangement?.clearFeedback();
     if(!preview){if(!compositor)return baseReset.call(this);return}
     pending=null;
     for(const item of preview.nodes){item.node.style.translate=item.translate;item.node.style.willChange=item.willChange}

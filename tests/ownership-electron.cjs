@@ -42,10 +42,10 @@ app.whenReady().then(async()=>{
   assert.equal(await run('window.inkspaceInteraction.machine.gesture.owner'),'selection');assert.equal(await run('window.inkspaceInteraction.machine.gesture.phase'),'dragging');
   send('keyDown',{keyCode:'Escape'});send('keyUp',{keyCode:'Escape'});await pause(30);send('mouseUp',{x:p.x+70,y:p.y+30},{button:'left',clickCount:1});
   assert.equal(await run('doc.notes[0].x'),40);assert.equal(await run('history.length'),0);assert.equal(await run('window.inkspaceInteraction.machine.gesture'),null);
-  // Cancellation restores a width change even when the 80-entry history is full.
+  // Width stays preview-only, including cancellation with a full history.
   await run('history=Array.from({length:80},()=>snapshot());future=[];clearSelection();selected.notes=[0];overlaySelection();');
   p=await elementPoint('.media-width');send('mouseMove',p);send('mouseDown',p,{button:'left',clickCount:1});send('mouseMove',{x:p.x+50,y:p.y});await pause(40);
-  assert.equal(await run('doc.notes[0].width'),380);send('keyDown',{keyCode:'Escape'});send('keyUp',{keyCode:'Escape'});send('mouseUp',{x:p.x+50,y:p.y},{button:'left',clickCount:1});await pause(30);
+  assert.equal(await run('doc.notes[0].width'),330);assert.equal(await run('active.previewWidth'),380);send('keyDown',{keyCode:'Escape'});send('keyUp',{keyCode:'Escape'});send('mouseUp',{x:p.x+50,y:p.y},{button:'left',clickCount:1});await pause(30);
   assert.equal(await run('doc.notes[0].width'),330);assert.equal(await run('history.length'),80);
   // Explicit connection remains usable; external document transitions clear ownership.
   await reset();p=await elementPoint('[data-id=source] .note-hit');send('mouseMove',p);await pause(25);

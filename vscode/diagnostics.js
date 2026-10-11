@@ -555,6 +555,13 @@ async function runCodiumDiagnostic(action){
     const fixture=await PdfApi.PDFDocument.create();fixture.addPage().drawText('VSCodium PDF fixture');const asset={id:crypto.randomUUID(),name:'fixture.pdf',data:pdfBase64(await fixture.save()),pages:[]};const entry=await openPdf(asset),pdf=await Promise.race([entry.promise,new Promise((_,reject)=>setTimeout(()=>reject(Error('PDF worker did not initialize: '+PdfApi.GlobalWorkerOptions.workerSrc)),7000))]),text=(await(await pdf.getPage(1)).getTextContent()).items.map(item=>item.str).join(' ');await pdf.loadingTask.destroy();pdfSessions.delete(asset.id);
     return{image:doc.notes.some(note=>note.kind==='image'),pdf:text,fonts:document.fonts.check('16px KaTeX_Main')};
   }
+  if(action==='arrangement'){
+    finishInteraction();clearSelection();const note=doc.notes.find(n=>n.id==='workbench-validation');if(!note)throw Error('Workbench fixture missing');
+    selected.notes=[doc.notes.indexOf(note)];overlaySelection();const page=notebook.activePage;
+    window.inkspaceTransactions.run('Arrange validation',()=>{doc.bookmarks=[{id:'workbench-region',name:'Validation region',rect:{x:note.x-20,y:note.y-20,w:640,h:480}}];window.inkspaceArrangement.setState([{kind:'notes',id:note.id}],{locked:true,link:{page,bookmark:'workbench-region'}})});
+    const blocked=window.inkspaceArrangement.selectionLocked(),before=JSON.stringify(view);window.inkspacePlaces.navigate({page,bookmark:'workbench-region'});const returned=window.inkspaceNavigation.travel('back');
+    await flushed();return{locked:blocked,bookmarks:doc.bookmarks,blockState:doc.blockState,navigationReturned:returned&&before===JSON.stringify(view)};
+  }
   throw Error('Unknown diagnostic action');
 }
 function testNotePointerOver(el,pointerType){const note=doc.notes.find(n=>n.id===el.closest('.note')?.dataset.id),b=itemBounds('notes',note),r=viewport.getBoundingClientRect();el.dispatchEvent(new PointerEvent('pointerover',{bubbles:true,pointerType,clientX:r.left+view.x+(b.x+b.w/2)*view.scale,clientY:r.top+view.y+(b.y+b.h/2)*view.scale}))}

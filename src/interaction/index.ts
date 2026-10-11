@@ -4,3 +4,4 @@ export {contains, enclosed, noteFrame} from './geometry';
 export {InputRouter} from './router';
 export {InputTools} from './tools';
 export {resizeNote} from './media-sizing';
+export {snapMove} from './snapping';

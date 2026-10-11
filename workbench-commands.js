@@ -60,7 +60,9 @@
     );
   register("edit", {
     label: "编辑",
-    enabled: () => !!text() || single()?.kind === "diagram",
+    enabled: () =>
+      (!!text() || single()?.kind === "diagram") &&
+      !window.inkspaceArrangement?.selectionLocked(),
     run: (position) => {
       const item = single();
       if (item?.kind === "diagram") window.inkspaceDiagram.editAt(item.index);
@@ -108,7 +110,7 @@
   });
   register("text-window", {
     label: () => (text()?.viewMode === "window" ? "展开全文" : "小窗显示"),
-    enabled: () => !!text(),
+    enabled: () => !!text() && !window.inkspaceArrangement?.selectionLocked(),
     run: () => {
       const note = text();
       window.inkspaceInlineText.setView(
@@ -128,7 +130,7 @@
         "类型：" +
         (format === "md" ? "Markdown" : "HTML") +
         (text() && InkBlockModel.textFormat(text()) === format ? " ✓" : ""),
-      enabled: () => !!text(),
+      enabled: () => !!text() && !window.inkspaceArrangement?.selectionLocked(),
       run: () => window.inkspaceBlocks.setTextFormat(text(), format),
     });
   for (const name of ["copy", "paste"])
@@ -139,18 +141,62 @@
     });
   register("group", {
     label: "组合",
-    enabled: () => selection().length > 1,
+    enabled: () =>
+      selection().length > 1 && !window.inkspaceArrangement?.selectionLocked(),
     run: () => window.inkspaceBlocks.groupSelection(),
   });
   register("ungroup", {
     label: "取消组合",
-    enabled: grouped,
+    enabled: () => grouped() && !window.inkspaceArrangement?.selectionLocked(),
     run: () => window.inkspaceBlocks.ungroupSelection(),
   });
   register("delete", {
     label: "删除",
-    enabled: () => !!selection().length,
+    enabled: () =>
+      !!selection().length && !window.inkspaceArrangement?.selectionLocked(),
     run: () => window.inkspaceBlocks.deleteSelection(),
+  });
+  register("lock", {
+    label: () =>
+      window.inkspaceArrangement?.selectionLocked() ? "解锁" : "锁定",
+    enabled: () => !!selection().length,
+    run: () => window.inkspaceArrangement.toggleLock(),
+  });
+  register("layers", {
+    label: "层级与被遮挡内容…",
+    run: () => window.inkspaceArrangement.openLayers(),
+  });
+  for (const [id, label] of [
+    ["front", "置于顶层"],
+    ["back", "置于底层"],
+  ])
+    register(id, {
+      label,
+      enabled: () =>
+        selection().some((e) => !["strokes", "shapes"].includes(e.kind)) &&
+        !window.inkspaceArrangement?.selectionLocked(),
+      run: () => window.inkspaceArrangement.order(id),
+    });
+  register("bookmark", {
+    label: "保存区域为书签…",
+    run: () => window.inkspacePlaces.editBookmark(),
+  });
+  register("bookmarks", {
+    label: "画布书签…",
+    run: () => window.inkspacePlaces.open(),
+  });
+  register("link-to", {
+    label: "链接到…",
+    enabled: () =>
+      !!selection().length && !window.inkspaceArrangement?.selectionLocked(),
+    run: () => window.inkspacePlaces.linkTo(),
+  });
+  register("open-link", {
+    label: "跳转链接",
+    enabled: () =>
+      selection().length === 1 &&
+      !!window.inkspaceArrangement?.state(refs()[0])?.link,
+    run: () => window.inkspacePlaces.openLink(),
   });
   register("insert-text", {
     label: "文本",
@@ -236,9 +282,24 @@
             "copy",
             "group",
             "ungroup",
+            "lock",
+            "front",
+            "back",
+            "layers",
+            "link-to",
+            "open-link",
+            "bookmark",
             "delete",
           ]
-        : ["insert-text", "insert-image", "insert-pdf", "import-html"]),
+        : [
+            "insert-text",
+            "insert-image",
+            "insert-pdf",
+            "import-html",
+            "layers",
+            "bookmarks",
+            "bookmark",
+          ]),
       "paste",
     ].filter((id) => describe(id)?.enabled);
   window.inkspaceCommands = {

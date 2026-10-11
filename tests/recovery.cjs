@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{fork}=require('node:child_process');
 const binary=require('../vscode/binary-store.cjs'),delta=require('../vscode/notebook-delta.js');
 const initial=()=>({format:'inkspace',version:2,title:'Recovery fixture',activePage:'p',pages:[{id:'p',title:'Page',view:{x:0,y:0,scale:1},document:{format:'inkspace',version:1,strokes:[],notes:[],shapes:[],pdfs:[]}}]});
-function change(store,title){const next=delta.capture(store.model);next.title=title;next.pages[0].document.notes=[{id:'text',x:1,y:2,width:200,markdown:title}];store.stage(next);return next}
+function change(store,title){const next=delta.capture(store.model);next.title=title;next.pages[0].document.notes=[{id:'text',x:1,y:2,width:200,markdown:title}];const d=next.pages[0].document;d.blockState=[{kind:'notes',id:'text',locked:true,link:{page:'p',bookmark:'region'}}];d.blockOrder=[{kind:'notes',id:'text'}];d.bookmarks=[{id:'region',name:title,rect:{x:0,y:0,w:600,h:400}}];store.stage(next);return next}
 async function failOnce(file,kind,operation){
  const open=fs.open;let injected=false;
  fs.open=async(...args)=>{const h=await open(...args);if(args[0]!==file||args[1]!=='r+')return h;const write=h.write.bind(h),sync=h.sync.bind(h);let partial=false;

@@ -1,6 +1,6 @@
 {
   "name": "inkspace",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "scripts": {
     "build:theia": "npm run build && node theia/build-media.cjs && node theia/prepare-native.cjs && npm run build --prefix theia",
@@ -36,6 +36,7 @@
     "test:blocks": "node tests/block-geometry.cjs && electron tests/blocks-electron.cjs && electron tests/block-interaction-electron.cjs && electron tests/block-model-electron.cjs",
     "test:ownership": "electron tests/ownership-electron.cjs",
     "typecheck": "tsc -p tsconfig.interaction.json",
+    "test:arrangement": "node tests/arrangement.cjs && electron tests/arrangement-electron.cjs",
     "test:workbench": "electron tests/workbench-electron.cjs",
     "test:engine:workbench": "node -e \"process.env.INKSPACE_ENGINE_WORKBENCH_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
     "test:engine:legacy": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && node scripts/test-ink-engine.cjs"

@@ -60,8 +60,10 @@
   function ensureConnectionTarget(target) {
     if (!target?.connectionKind || target.diagramCell) return target;
     if(target.connectionKind==='pdfPages')return target;
-    target.connectionItem.id ??= crypto.randomUUID();
-    target.id = target.connectionKind + ':' + target.connectionItem.id;
+    const id=blockIdentity(target.connectionItem);
+    if(target.connectionKind==='strokes')target.connectionItem=doc.strokes.find(s=>s.id===id);
+    target.id = target.connectionKind + ':' + id;
+    target.connectionBounds=()=>window.inkspaceGeometry.displayBounds(target.connectionKind,target.connectionItem);
     frame.dataset.id = target.id;
     return target;
   }
@@ -84,7 +86,7 @@
     if (event.target.closest('.note-connect-arrow') && hovered) return;
     if (event.target.closest('.note')) {hideHover(); return;}
     const p = local(event), pos = world(p.x, p.y);
-    const hit = cellTarget(graph()?.graph?.getCellAt(p.x, p.y)) || targetAt(hitCanvasItem(pos));
+    const picked = pick(event); const hit = picked?.kind === 'diagram' ? cellTarget(graph()?.graph?.getModel().getCell(picked.id)) : targetAt(picked);
     // Keep the controls reachable while crossing the gap to an outside port.
     if (!hit && hovered && !frame.hidden) {
       const b = hovered.connectionBounds(), pad = 28 / view.scale;
@@ -106,6 +108,7 @@
   window.addEventListener('blur', hideHover);
 
   function pick(event) {
+    if(window.inkspaceArrangement)return window.inkspaceArrangement.pick(event);
     const p=local(event),pos=world(p.x,p.y);
     const hit=hitCanvasItem(pos);
     if(hit?.kind==='notes')return{...hit,id:blockValue(hit.kind,hit.index).id};

@@ -64,18 +64,24 @@
         ":" +
         note?.format +
         ":" +
-        commands().describe("ungroup").enabled;
+        commands().describe("ungroup").enabled +
+        ":" +
+        JSON.stringify(doc.blockState);
     if (key !== signature) {
       signature = key;
       strip.replaceChildren();
       const badge = document.createElement("span");
       badge.className = "media-type-label media-grip";
-      badge.title = "拖动移动选中内容";
+      badge.title = window.inkspaceArrangement?.selectionLocked()
+        ? "内容已锁定"
+        : "拖动移动选中内容";
       badge.textContent =
         entries.length > 1
           ? entries.length + " 项"
           : window.inkspaceBlocks.descriptor(single)?.label || "内容";
       strip.append(badge);
+      if (window.inkspaceArrangement?.selectionLocked()) addButton("lock");
+      if (commands().describe("open-link").enabled) addButton("open-link");
       if (commands().describe("edit").enabled) addButton("edit");
       if (commands().describe("view").enabled) addButton("view");
       if (note && note.kind !== "image") addButton("text-window");
@@ -106,9 +112,11 @@
       1 / (r.width / Math.max(1e-9, parseFloat($("#selection").style.width))) +
         "px",
     );
-    width.hidden = !note || note.kind === "image";
+    const locked = window.inkspaceArrangement?.selectionLocked();
+    if (scale && locked) scale.style.display = "none";
+    width.hidden = locked || !note || note.kind === "image";
     height.hidden =
-      !note || note.kind === "image" || note.viewMode !== "window";
+      locked || !note || note.kind === "image" || note.viewMode !== "window";
     for (const control of [width, height])
       control.dataset.blockId = note?.id || "";
     if (!width.hidden)

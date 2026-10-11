@@ -12,11 +12,13 @@ exports.run=async()=>{
     const zoom=await api.diagnostic(uri,'zoom');assert(zoom.continuous&&zoom.finalPixelsExact);
     const inputStability=await api.diagnostic(uri,'input-stability');assert.equal(inputStability.rapidTaps,100);assert(inputStability.pixelsPresent&&inputStability.focusReturnWithoutMouseClick);
     const workbench=await api.diagnostic(uri,'workbench');assert(workbench.atomicTextCommit&&workbench.sharedControls&&workbench.centeredShape&&workbench.libraryStayedOpen&&workbench.sidebarRestored);
+    const arrangement=await api.diagnostic(uri,'arrangement');assert(arrangement.locked&&arrangement.navigationReturned);
     await vscode.commands.executeCommand('inkspace.save');const saved=binary.decode(fs.readFileSync(uri.fsPath));
+    assert.deepEqual(saved.model.pages[0].document.bookmarks,arrangement.bookmarks);assert.deepEqual(saved.model.pages[0].document.blockState,arrangement.blockState);
     assert.equal(saved.model.pages[0].document.notes.find(n=>n.id==='workbench-validation').markdown,workbench.text);assert.equal(saved.model.pages[0].document.diagram,workbench.diagram);
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');await vscode.commands.executeCommand('vscode.open',uri);for(let i=0;i<120&&!api.ready(uri);i++)await new Promise(r=>setTimeout(r,100));
     const reopened=await api.diagnostic(uri,'inspect');assert.deepEqual(reopened.model,saved.model);
-    fs.writeFileSync(report,JSON.stringify({passed:true,ordinaryVSCode:true,independentEngine:true,rawInput:true,dense,dots,zoom,inputStability,workbench,saveAndReopenExact:true},null,2));
+    fs.writeFileSync(report,JSON.stringify({passed:true,ordinaryVSCode:true,independentEngine:true,rawInput:true,dense,dots,zoom,inputStability,workbench,arrangement,saveAndReopenExact:true},null,2));
   }catch(error){fs.writeFileSync(report,JSON.stringify({passed:false,error:error.stack},null,2));throw error}
   finally{if(process.env.INKSPACE_ENGINE_HOME===path.join(root,'engine')){try{const config=JSON.parse(fs.readFileSync(path.join(root,'engine','connection.json')));await fetch(config.endpoint+'/shutdown',{method:'POST',headers:{'X-Inkspace-Key':config.key},body:'{}'})}catch{}}}
 };

@@ -40,7 +40,7 @@ function init(){
   graph.getEditingValue=label;graph.getCursorForCell=cell=>cell?.vertex?'move':'pointer';
   graph.isToggleEvent=event=>!!(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey));
   graph.graphHandler.guidesEnabled=true;
-  graph.graphHandler.useGuidesForEvent=event=>!event.getEvent().altKey&&!graph.isConstrainedEvent(event.getEvent());
+  graph.graphHandler.useGuidesForEvent=event=>!window.inkspaceArrangement&&!event.getEvent().altKey&&!graph.isConstrainedEvent(event.getEvent());
   graph.getTooltipForCell=()=> '鼠标拖动移动 · 边角缩放 · 双击输入文字和 $公式$ · 点击边缘箭头，再点击目标';
   const vertex=graph.getStylesheet().getDefaultVertexStyle();Object.assign(vertex,{fillColor:'#f4f8fc',strokeColor:'#788d9d',strokeWidth:1,fontColor:'#262626',fontSize:16,whiteSpace:'wrap',html:1,overflow:'hidden',spacing:8});
   Object.assign(graph.getStylesheet().getDefaultEdgeStyle(),{strokeColor:'#73869a',strokeWidth:1.5,endArrow:'open',edgeStyle:'orthogonalEdgeStyle',rounded:1,html:1,fontSize:16,labelBackgroundColor:'#ffffff'});
@@ -102,7 +102,9 @@ function isResizeHandle(event){return !!graph?.getSelectionCells().some(cell=>gr
 function ownsPointer(event){
   if(!graph||event.pointerType&&event.pointerType!=='mouse')return false;
   if(!objectControls(event)||pointerTool(event)==='pan'||event.button===1||event.button===2||event.buttons&6)return false;
-  if(diagramContact)return true;if(!event.target.closest?.('#diagram-layer'))return false;const p=local(event);return !!graph.getCellAt(p.x,p.y)||isResizeHandle(event)||!!graph.connectionHandler.constraintHandler.currentConstraint;
+  if(diagramContact)return true;const p=local(event),hit=window.inkspaceBlocks?.pick(event),cell=hit?.kind==='diagram'?graph.getModel().getCell(hit.id):null;
+  if(cell&&window.inkspaceArrangement?.locked({kind:'diagram',id:cell.id}))return false;
+  return !!cell || isResizeHandle(event)||!!graph.connectionHandler.constraintHandler.currentConstraint;
 }
 function refreshProperties(){
   const cell=graph?.getSelectionCell(),style=cell?graph.getCellStyle(cell):null;for(const id of ['#diagram-stroke','#diagram-fill','#diagram-width','#diagram-delete','#diagram-front','#diagram-back'])$(id).disabled=!cell;
@@ -141,7 +143,7 @@ function paste(source,dx,dy,noteIds={},blockIds={}){
   loading=true;try{for(const cell of cells)if(cell.style)cell.style=cell.style.replace(/(inkNote(?:Source|Target)=)([^;]+)/g,(all,key,id)=>(()=>{const decoded=decodeURIComponent(id),[kind,old]=decoded.split(':');const replacement=noteIds[decoded]||(blockIds[kind]?.[old]?kind+':'+blockIds[kind][old]:null);return replacement?key+encodeURIComponent(replacement):all})());const inserted=graph.importCells(cells,dx,dy,graph.getDefaultParent());graph.setSelectionCells(inserted);blockSelection.setKind('diagram',inserted.map(c=>c.id));doc.diagram=xml();loaded=doc.diagram;return Object.fromEntries(cells.map((cell,i)=>[cell.id,inserted[i].id]));}finally{loading=false}
 }
 function remove(){if(!graph?.getSelectionCount()||graph.isEditing())return false;graph.removeCells();return true}
-function svg(){if(!graph||!doc.diagram)return '';const canvas=graph.view.getCanvas(),copy=canvas.cloneNode(true),original=canvas.querySelectorAll('foreignObject *'),cloned=copy.querySelectorAll('foreignObject *');original.forEach((element,index)=>{const style=getComputedStyle(element);cloned[index].setAttribute('style',Array.from(style,key=>key+':'+style.getPropertyValue(key)).join(';'))});return `<g transform="translate(${-view.x/view.scale} ${-view.y/view.scale}) scale(${1/view.scale})">${copy.outerHTML}</g>`}
+function svg(){if(!graph||!doc.diagram)return '';const canvas=graph.view.getCanvas(),copy=canvas.cloneNode(true);for(const portal of document.querySelectorAll('.diagram-cell-layer>svg'))for(const child of portal.children)copy.append(child.cloneNode(true));const originals=[...canvas.querySelectorAll('foreignObject *'),...document.querySelectorAll('.diagram-cell-layer>svg foreignObject *')],cloned=copy.querySelectorAll('foreignObject *');originals.forEach((element,index)=>{const style=getComputedStyle(element);cloned[index]?.setAttribute('style',Array.from(style,key=>key+':'+style.getPropertyValue(key)).join(';'))});return `<g transform="translate(${-view.x/view.scale} ${-view.y/view.scale}) scale(${1/view.scale})">${copy.outerHTML}</g>`}
 
 function selectionSnapshot(){return(graph?.getSelectionCells()||[]).map(cell=>({kind:'diagram',index:cell.id,value:JSON.parse(JSON.stringify(cell.geometry))}))}
 function mutate(change){if(!graph)return;const prior=loading;loading=true;graph.getModel().beginUpdate();try{change()}finally{graph.getModel().endUpdate();doc.diagram=xml();loaded=doc.diagram;loading=prior}}

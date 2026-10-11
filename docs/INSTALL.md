@@ -1,12 +1,12 @@
-# 在其他电脑安装 Inkspace 0.10.0
+# 在其他电脑安装 Inkspace 0.11.0
 
 适用于 Windows x64 桌面版 Microsoft VS Code。建议使用当前稳定版；本机测试版本为 1.140.0。暂不提供 macOS、Linux、Windows ARM64 或浏览器版运行时。
 
 ## 推荐：安装 VSIX
 
-1. 将 `Inkspace-VSCode-0.10.0-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
+1. 将 `Inkspace-VSCode-0.11.0-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
 2. 安装或打开 Microsoft VS Code。
-3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.10.0-win32-x64.vsix`。
+3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.11.0-win32-x64.vsix`。
 4. 若提示，重新加载 VS Code 窗口。
 5. 打开存放笔记的文件夹，在文件栏右键选择“墨境：新建笔记”；已有新格式笔记直接打开 `.ink`；旧 `.inkspace.json` 仍兼容。
 6. 首次点击“校准触控笔”，依次点击三个圆圈。以后同一设备与显示配置自动恢复。换电脑需要在新电脑校准一次。
@@ -14,7 +14,7 @@
 也可以在已提供 `code` 命令的终端中安装：
 
 ```powershell
-code --install-extension .\Inkspace-VSCode-0.10.0-win32-x64.vsix --force
+code --install-extension .\Inkspace-VSCode-0.11.0-win32-x64.vsix --force
 ```
 
 安装包内含 Raw Input 程序、Cairo 原生模块和引擎依赖。使用时不需要安装 Node.js、编译工具或本项目源码目录；引擎由 VS Code 自带的运行时启动。
@@ -30,8 +30,8 @@ code --install-extension .\Inkspace-VSCode-0.10.0-win32-x64.vsix --force
 
 ## 分发包内容
 
-- `Inkspace-VSCode-0.10.0-win32-x64.vsix`：直接安装的插件。
-- `Inkspace-VSCode-0.10.0-Source.zip`：对应源码、原生依赖源码和构建脚本。
+- `Inkspace-VSCode-0.11.0-win32-x64.vsix`：直接安装的插件。
+- `Inkspace-VSCode-0.11.0-Source.zip`：对应源码、原生依赖源码和构建脚本。
 - `INSTALL.md`：本说明。
 - `SHA256SUMS.txt`：文件校验和。
 
@@ -61,3 +61,11 @@ A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张�
 鼠标点选后使用悬浮操作条编辑/查看、小窗切换与更多；拖动类型标签或正文可移动块，右下角统一缩放。文本右侧柄改变排版宽度，小窗底部柄改变高度。控件固定屏幕大小，属性栏左缘可调宽度。
 
 双击 Markdown 从命中源码片段和字符位置编辑，周围段落保持原位；复杂内容回退到完整源码，操作条可切换完整源码。HTML 使用完整源码。Tab 缩进，Enter 延续列表，Ctrl+Z 只撤销本地文本，Ctrl+Enter/完成提交，Esc/取消放弃草稿。输入期间不改变文档历史，完成后一次提交并沿用自动保存。鼠标中键平移保留编辑会话。
+
+## 编排、锁定和书签
+
+- 拖动块自动显示边缘/中心或等距参考线，按住 Alt 临时跳过吸附。多选后在属性栏的“编排”中对齐或分布；组合按整体对齐。
+- 悬浮条“更多”可锁定、置顶/置底，或打开“层级与被遮挡内容”选择下层块。锁定后仍可在上方书写，不能拖动、调整尺寸或误删。墨迹固定在最上方标注层，PDF/图片/文本/图形之间共用层级。
+- 底栏“书签”保存和访问命名区域；有选区时保存选区区域，无选区时保存当前视野。
+- 选中块后在“编排”或“更多”中“链接到…”选择画布/书签，悬浮条“跳转链接”访问目标，Alt+← 返回。
+- 移动或调整尺寸时 Esc 取消，失焦取消编排预览；切换画布、切换工具或显式保存会先完成当前操作。一次完成对应一次撤回。

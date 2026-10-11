@@ -26,9 +26,10 @@ const inputTools=new InkInteraction.InputTools();
 window.inkspaceInputTools=inputTools;
 const blockSelection=new InkInteraction.Selection();
 let selectionId=0;
+function blockIdentity(item){if(item.id)return item.id;const id=crypto.randomUUID()+'-'+(++selectionId),index=doc.strokes.indexOf(item);if(index>=0){const replacement={...item,id};doc.strokes[index]=replacement;const cached=strokeCache.get(item);if(cached)strokeCache.set(replacement,cached)}else item.id=id;return id}
 const selectionProjection=InkInteraction.selectionProjection(blockSelection,{
   kinds:['strokes','notes','shapes','pdfs','pdfPages'],items:kind=>blockItems(kind),
-  id:item=>item.id||(item.id=crypto.randomUUID()+'-'+(++selectionId))
+  id:blockIdentity
 });
 let selected=selectionProjection,selectionRect=null;
 function syncSelectionProjection(){if(selected!==selectionProjection){const prior=selected;blockSelection.clear();selected=selectionProjection;Object.assign(selected,prior)}}
@@ -63,7 +64,7 @@ window.inkspaceGeometry.displayBounds=function(kind,item){
 function union(items){if(!items.length)return null;let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;for(const r of items){x=Math.min(x,r.x);y=Math.min(y,r.y);x2=Math.max(x2,r.x+r.w);y2=Math.max(y2,r.y+r.h)}return{x,y,w:x2-x,h:y2-y}}
 function selectionBounds(){syncSelectionProjection();return union(Object.keys(selected).flatMap(k=>selected[k].map(i=>itemBounds(k,blockValue(k,i))).filter(Boolean)).concat(window.inkspaceDiagram?.bounds(true)||[]))}
 function clearSelection(){for(const c of noteCache.values())c.el.classList.remove('selected');syncSelectionProjection();blockSelection.clear();window.inkspaceDiagram?.setSelected([]);selectionRect=null}
-function selectBox(r){window.inkspaceDiagram?.selectBox(r);for(const k of Object.keys(selected)){selected[k]=[];(k==='pdfs'?[]:blockItems(k)).forEach((item,i)=>{const b=itemBounds(k,item);if(b&&InkInteraction.enclosed(r,b))selected[k].push(blockIndex(k,item,i))})}window.inkspaceBlocks?.expandSelection()}
+function selectBox(r){window.inkspaceDiagram?.selectBox(r);for(const k of Object.keys(selected)){selected[k]=[];(k==='pdfs'?[]:blockItems(k)).forEach((item,i)=>{const b=itemBounds(k,item);if(b&&InkInteraction.enclosed(r,b))selected[k].push(blockIndex(k,item,i))})}window.inkspaceBlocks?.expandSelection();if(window.inkspaceArrangement){const refs=window.inkspaceBlocks.references().filter(r=>!window.inkspaceArrangement.locked(r));window.inkspaceBlocks.selectReferences(refs)}}
 function moveSelection(dx,dy){for(const k of Object.keys(selected))for(const i of selected[k]){const o=blockValue(k,i);if(k==='pdfPages'){InkBlockModel.updatePage(doc,i,p=>({...p,x:p.x+dx,y:p.y+dy}))}else if(k==='pdfs'){doc.pdfs=doc.pdfs.map((asset,index)=>index===i?{...asset,pages:asset.pages.map(p=>({...p,x:p.x+dx,y:p.y+dy}))}:asset)}else if(k==='strokes'){strokeCache.delete(o);o.points.forEach(p=>{p.x+=dx;p.y+=dy})}else{o.x+=dx;o.y+=dy;if(k==='shapes'){o.x2+=dx;o.y2+=dy}}}window.inkspaceDiagram?.transformSelected(dx,dy)}
 function arrowPoints(s){const a=Math.atan2(s.y2-s.y,s.x2-s.x),len=Math.max(14,s.width*4);return[{x:s.x2-len*Math.cos(a-.45),y:s.y2-len*Math.sin(a-.45)},{x:s.x2-len*Math.cos(a+.45),y:s.y2-len*Math.sin(a+.45)}]}
 function drawShape(s,context=ctx){context.strokeStyle=s.color;context.lineWidth=s.width;context.beginPath();const b=normalized({x:s.x,y:s.y},{x:s.x2,y:s.y2});if(s.kind==='highlight'){context.save();context.globalAlpha=.35;context.fillStyle=s.color;context.fillRect(b.x,b.y,b.w,b.h);context.restore();return}else if(s.kind==='rect')context.rect(b.x,b.y,b.w,b.h);else if(s.kind==='ellipse')context.ellipse(b.x+b.w/2,b.y+b.h/2,b.w/2,b.h/2,0,0,Math.PI*2);else{context.moveTo(s.x,s.y);context.lineTo(s.x2,s.y2);if(s.kind==='arrow'){const[a,z]=arrowPoints(s);context.moveTo(a.x,a.y);context.lineTo(s.x2,s.y2);context.lineTo(z.x,z.y)}}context.stroke()}
