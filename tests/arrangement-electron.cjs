@@ -138,9 +138,10 @@ app.whenReady().then(async () => {
     );
     assert.equal(
       await run(
-        'itemBounds("notes",doc.notes[0]).y===itemBounds("notes",doc.notes[1]).y',
+        'Math.abs(itemBounds("notes",doc.notes[0]).y-itemBounds("notes",doc.notes[1]).y)<1e-6',
       ),
       true,
+      JSON.stringify(await run('doc.notes.map(n=>({id:n.id,y:n.y,b:itemBounds("notes",n)}))')),
     );
     assert.equal(await run("history.length"), 1);
     await run("undo();void 0;");

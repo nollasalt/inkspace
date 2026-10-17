@@ -13,6 +13,9 @@ for(const file of ['index.html','style.css','workbench.css','workbench.js','work
   fs.writeFileSync(destination,data);
 }
 fs.cpSync(path.join(root,'vendor','mxgraph'),path.join(media,'vendor','mxgraph'),{recursive:true});
+fs.copyFileSync(path.join(root,'vendor','ai.js'),path.join(media,'vendor','ai.js'));
+fs.copyFileSync(path.join(root,'vendor','code.css'),path.join(media,'vendor','code.css'));
+fs.copyFileSync(path.join(root,'vscode','ai.css'),path.join(media,'ai.css'));
 // Copy the PDF worker, formula fonts and dependency licenses along with bundles.
 for(const name of fs.readdirSync(path.join(root,'vendor'))){if(name==='fonts'||/worker|license|licenses|^pdf-/i.test(name))fs.cpSync(path.join(root,'vendor',name),path.join(media,'vendor',name),{recursive:true})}
 for(const file of ['adapter.js','diagnostics.js','codium.css','native-client.js','native-render-async.js','engine-client.js','notebook-delta.js','inline-text.js','performance.js','navigation-data.js','navigation.js'])fs.copyFileSync(path.join(root,'vscode',file),path.join(media,file));

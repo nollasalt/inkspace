@@ -1,5 +1,27 @@
 // Test-only renderer diagnostics. Loaded only by a validation host.
 async function runCodiumDiagnostic(action){
+  if(action==='ai'){
+    await window.inkspaceCairoIdle();window.inkspaceAI.open();finishInteraction();
+    const adapter=window.inkspaceAI.adapter,base=adapter.capture('view');
+    // Invalid model must make a full host round trip without any cloud call.
+    let rpc=false;try{await window.inkspaceAIHost.request({id:crypto.randomUUID(),prompt:'Synthetic test',scene:base,profile:'__invalid__'})}catch(error){rpc=error.message.includes('模型选项无效')}
+    if(!rpc)throw Error('AI host channel did not return validation error');
+    const image=await window.inkspaceAI.snapshot(base);if(!image.startsWith('data:image/png;base64,')||!base.imageArea)throw Error('AI snapshot failed');
+    // Exercise the actual bundled TextMate engine under the webview CSP.
+    const codePreview=document.createElement('div');codePreview.className='ai-markdown';codePreview.innerHTML=InkContent.markdown('```python\nclass Example:\n    def run(self):\n        return True\n```\n\n```\nx = 1\nprint("hello")\n```');document.querySelector('#ai-review').append(codePreview);
+    const blocks=[...codePreview.querySelectorAll('code')];if(blocks.length!==2||blocks.some(code=>new Set([...code.querySelectorAll('[style]')].map(span=>getComputedStyle(span).color)).size<3))throw Error('TextMate or unspecified-language highlighting failed in VS Code');codePreview.remove();
+    const p=base.insertion,change=(extra)=>({action:'add',kind:'text',id:'new-note',content:null,format:null,geometry:null,style:null,connection:null,...extra});
+    const result={model:'fixture',reasoningEffort:'low',elapsedMs:0,result:{summary:'Native AI fixture',review:'A test answer.',questions:[],changes:[
+      change({content:'AI **editable** $x^2$',geometry:{x:p.x,y:p.y,width:280,height:140}}),
+      change({kind:'shape',id:'new-card',content:'AI card',geometry:{x:p.x+350,y:p.y,width:180,height:100}}),
+      change({kind:'connection',id:'new-edge',connection:{source:'new-note',target:'new-card',sourceSide:'right',targetSide:'left',arrow:'forward',dashed:false}})
+    ]}};
+    const before=history.length;window.inkspaceAI.showProposal(result,base);document.querySelector('#ai-apply').click();
+    if(history.length!==before+1||!doc.notes.some(n=>n.markdown==='AI **editable** $x^2$'))throw Error('AI apply is not atomic');
+    undo();if(doc.notes.some(n=>n.markdown==='AI **editable** $x^2$'))throw Error('AI undo failed');redo();
+    await window.inkspaceCairoIdle();persist();await flushed();
+    return{rpc:true,snapshot:true,atomic:true,undoRedo:true,textMate:true,unspecifiedHighlight:true,text:'AI **editable** $x^2$',diagram:doc.diagram};
+  }
   if(action==='workbench'){
     await window.inkspaceCairoIdle();finishInteraction();window.inkspaceInlineText.finish();
     const note={id:'workbench-validation',x:40,y:40,width:330,markdown:'Original **source**.'};checkpoint();doc.notes.push(note);activateTool('select',false,true,'mouse');selected.notes=[doc.notes.length-1];render();

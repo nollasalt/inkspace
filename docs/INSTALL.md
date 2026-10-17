@@ -1,12 +1,12 @@
-# 在其他电脑安装 Inkspace 0.11.0
+# 在其他电脑安装 Inkspace 0.13.1
 
 适用于 Windows x64 桌面版 Microsoft VS Code。建议使用当前稳定版；本机测试版本为 1.140.0。暂不提供 macOS、Linux、Windows ARM64 或浏览器版运行时。
 
 ## 推荐：安装 VSIX
 
-1. 将 `Inkspace-VSCode-0.11.0-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
+1. 将 `Inkspace-VSCode-0.13.1-Windows-x64-Bundle.zip` 复制到目标电脑并解压。
 2. 安装或打开 Microsoft VS Code。
-3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.11.0-win32-x64.vsix`。
+3. 按 Ctrl+Shift+P，运行 `Extensions: Install from VSIX…`（从 VSIX 安装），选择 `Inkspace-VSCode-0.13.1-win32-x64.vsix`。
 4. 若提示，重新加载 VS Code 窗口。
 5. 打开存放笔记的文件夹，在文件栏右键选择“墨境：新建笔记”；已有新格式笔记直接打开 `.ink`；旧 `.inkspace.json` 仍兼容。
 6. 首次点击“校准触控笔”，依次点击三个圆圈。以后同一设备与显示配置自动恢复。换电脑需要在新电脑校准一次。
@@ -14,30 +14,32 @@
 也可以在已提供 `code` 命令的终端中安装：
 
 ```powershell
-code --install-extension .\Inkspace-VSCode-0.11.0-win32-x64.vsix --force
+code --install-extension .\Inkspace-VSCode-0.13.1-win32-x64.vsix --force
 ```
 
 安装包内含 Raw Input 程序、Cairo 原生模块和引擎依赖。使用时不需要安装 Node.js、编译工具或本项目源码目录；引擎由 VS Code 自带的运行时启动。
+
+**可选 AI 助手**另外需要已安装并登录的 Codex CLI。点击顶栏 ✦ AI，默认使用 Luna，直接生成，不读取笔记；需要时添加笔记附件，再显式附带画面。CLI 安装、账户额度及发送范围见 [AI 使用说明](AI-NOTES.md)。离线笔记功能不依赖 AI。
 
 ## 文件和保存
 
 - 新笔记为 `.ink`，可直接复制到其他电脑，其中保存笔迹、页面和嵌入资源。
 - 校准保存在本机 VS Code 插件存储，不需要随笔记复制。
-- `.ink` 笔记停止编辑约 2 秒后自动保存，持续编辑最多约 10 秒提交一次；可在设置中调整，Ctrl+S 立即保存。纸张采用 A4 竖向/横向拼接。
+- `.ink` 笔记停止编辑约 2 秒后自动保存，持续编辑最多约 10 秒提交一次；可在设置中调整，Ctrl+S 立即保存。新笔记默认连续画布，可选 A4 竖向/横向拼接。
 - 引擎连接信息和日志位于 `%USERPROFILE%\.inkspace-engine`。不要分享其中的 `connection.json`，它包含本机连接令牌。
 
 每台设备能否提供后台坐标和压力取决于触控笔及驱动。引擎已连接但校准圆圈无响应时，可更新设备驱动并提供 `service.log` 及探针计数供排查；注册成功不等于实际收到笔数据。
 
 ## 分发包内容
 
-- `Inkspace-VSCode-0.11.0-win32-x64.vsix`：直接安装的插件。
-- `Inkspace-VSCode-0.11.0-Source.zip`：对应源码、原生依赖源码和构建脚本。
+- `Inkspace-VSCode-0.13.1-win32-x64.vsix`：直接安装的插件。
+- `Inkspace-VSCode-0.13.1-Source.zip`：对应源码、原生依赖源码和构建脚本。
 - `INSTALL.md`：本说明。
 - `SHA256SUMS.txt`：文件校验和。
 
 源码包供查阅和重建，不需要解压到 VS Code 插件目录。
 
-A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张，笔迹、图形、文本和图片越界时自动拓展，删除后收回空纸张。
+A4 纸张无间隔，以淡虚线标记边界；空笔记保留首张纸，其余仅显示内容占用的纸张，笔迹、图形、文本和图片越界时自动拓展，删除后收回空纸张。
 
 ## 操作与搜索
 
@@ -58,7 +60,7 @@ A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张�
 
 ## 公共介质控件
 
-鼠标点选后使用悬浮操作条编辑/查看、小窗切换与更多；拖动类型标签或正文可移动块，右下角统一缩放。文本右侧柄改变排版宽度，小窗底部柄改变高度。控件固定屏幕大小，属性栏左缘可调宽度。
+鼠标点选后使用悬浮操作条编辑/查看、小窗切换与更多；拖动类型标签或正文可移动块；图片、PDF 与图形使用角柄等比缩放。文本右侧柄改变排版宽度，小窗底部柄改变高度。控件固定屏幕大小，属性栏左缘可调宽度。
 
 双击 Markdown 从命中源码片段和字符位置编辑，周围段落保持原位；复杂内容回退到完整源码，操作条可切换完整源码。HTML 使用完整源码。Tab 缩进，Enter 延续列表，Ctrl+Z 只撤销本地文本，Ctrl+Enter/完成提交，Esc/取消放弃草稿。输入期间不改变文档历史，完成后一次提交并沿用自动保存。鼠标中键平移保留编辑会话。
 

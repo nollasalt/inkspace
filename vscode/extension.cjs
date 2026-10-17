@@ -26,6 +26,8 @@ function activate(context){
     if(!document.inkStore)assertNotebook(document.getText());const media=vscode.Uri.joinPath(context.extensionUri,'media');
     const state={document,panel,ready:false,applying:false,queue:Promise.resolve(),pages:[],activePage:null};states.set(document.uri.toString(),state);
     const disposables=[];
+    // Deliberately outside state.queue: model latency must not block edits/saves.
+    disposables.push(require('./ai-controller.cjs').attach(panel.webview,{instructionsFile:path.join(context.extensionPath,'ai','instructions.txt'),writeClipboard:text=>vscode.env.clipboard.writeText(text)}));
     if(document.inkStore){const watcher=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(path.dirname(document.uri.fsPath),path.basename(document.uri.fsPath)));disposables.push(watcher,watcher.onDidChange(()=>{state.queue.catch(()=>{}).then(async()=>{try{await document.inkStore.queue;const stat=await fs.stat(document.uri.fsPath);if(stat.size!==document.inkStore.validBytes||stat.mtimeMs!==document.inkStore.lastMtime)panel.webview.postMessage({type:'binary-external-change'})}catch{}})}))}
     disposables.push(vscode.window.onDidChangeWindowState(inputFocus));panel.webview.options={enableScripts:true,localResourceRoots:[media]};
     function inputFocus(){if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',!!state.clipboardFocused);panel.webview.postMessage({type:'engine-focus',windowFocused:vscode.window.state.focused,editorActive:panel.active})}
@@ -33,6 +35,7 @@ function activate(context){
     disposables.push(vscode.workspace.onDidChangeTextDocument(event=>{if(event.document===document&&event.contentChanges.length&&state.ready){const history=event.reason===vscode.TextDocumentChangeReason.Undo||event.reason===vscode.TextDocumentChangeReason.Redo;if(history){state.historyVersion=document.version;update(true)}else if(!state.applying&&normalizedText(document.getText())!==state.lastOwn)update()}}));
     disposables.push(panel.onDidChangeViewState(()=>{inputFocus();if(panel.active){active=state;refresh()}else{if(active===state){active=null;refresh()}if(state.ready&&document.autoSave)document.autoSave.flush().catch(error=>vscode.window.showErrorMessage(error.message))}}));
     disposables.push(panel.webview.onDidReceiveMessage(message=>{
+      if(['ai-request','ai-cancel','ai-copy'].includes(message.type))return;
       if(message.type==='clipboard-focus'){state.clipboardFocused=!!message.focused;state.textEditing=!!message.textEditing;if(panel.active)vscode.commands.executeCommand('setContext','inkspace.inlineTextFocused',state.textEditing&&state.clipboardFocused);if(panel.active)vscode.commands.executeCommand('setContext','inkspace.canvasKeyboardFocused',state.clipboardFocused);return}
       if(message.type==='history-shortcut'&&['undo','redo'].includes(message.command)){request(state,message.command).catch(error=>vscode.window.showErrorMessage(error.message));return}
       if(message.type==='response'){const entry=pending.get(message.id);if(entry?.state===state){clearTimeout(entry.timer);pending.delete(message.id);message.error?entry.reject(Error(message.error)):entry.resolve(message.result)}return}
@@ -85,6 +88,7 @@ function activate(context){
     vscode.commands.registerCommand('inkspace.new',newNote),vscode.commands.registerCommand('inkspace.open',openNote),
     vscode.commands.registerCommand('inkspace.showDiagnostics',showDiagnostics),vscode.commands.registerCommand('inkspace.saveRecoveryCopy',saveRecoveryCopy),
     vscode.commands.registerCommand('inkspace.find',()=>{const state=active;if(state){state.panel.reveal(undefined,false);return request(state,'find')}}),
+    vscode.commands.registerCommand('inkspace.ai',()=>{const state=active;if(state){state.panel.reveal(undefined,false);return request(state,'ai')}}),
     vscode.commands.registerCommand('inkspace.navigateBack',()=>active&&request(active,'navigate',{direction:'back'})),vscode.commands.registerCommand('inkspace.navigateForward',()=>active&&request(active,'navigate',{direction:'forward'})),
     ...[-1,1].map(direction=>vscode.commands.registerCommand(direction===-1?'inkspace.movePageUp':'inkspace.movePageDown',item=>{const state=active;return state&&request(state,'movePage',{page:item?.id||state.activePage,direction})})),
     ...toolNames.map(tool=>vscode.commands.registerCommand('inkspace.tool.'+tool,()=>active&&request(active,'tool',{tool}))),

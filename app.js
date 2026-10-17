@@ -83,7 +83,7 @@ function erase(p){eraseInk(p)}
 function arrangeMouse(){activateTool('select',false,true,'mouse')}
 
 const canvasUiSelector='.zoom,#notebook-find,.media-action-strip,input,textarea,select,[contenteditable="true"],.mxCellEditor';
-function canvasUi(e){if(e.target.closest?.('.media-grip'))return false;if(e.pointerType==='pen'&&e.target.closest?.('.media-action-strip,.media-frame-handles'))return false;if((e.button===1||e.button===2||space)&&(!e.pointerType||e.pointerType==='mouse')&&e.target.closest?.('.inline-note-editor,.mxCellEditor'))return false;if(pointerTool(e)==='pdftext'&&e.type!=='wheel'&&e.target.closest?.('.textLayer'))return true;if(e.pointerType==='pen'&&e.target.closest?.('.inline-note-editor'))return false;return !!e.target.closest?.(canvasUiSelector)}
+function canvasUi(e){if(e.target.closest?.('.media-grip'))return false;if(e.composedPath?.().some(node=>node.matches?.('.ink-code-copy')))return e.pointerType!=='pen'&&e.button!==1&&!space&&['select','pan','text','diagram'].includes(pointerTool(e));if(e.pointerType==='pen'&&e.target.closest?.('.media-action-strip,.media-frame-handles'))return false;if((e.button===1||e.button===2||space)&&(!e.pointerType||e.pointerType==='mouse')&&e.target.closest?.('.inline-note-editor,.mxCellEditor'))return false;if(pointerTool(e)==='pdftext'&&e.type!=='wheel'&&e.target.closest?.('.textLayer'))return true;if(e.pointerType==='pen'&&e.target.closest?.('.inline-note-editor'))return false;return !!e.target.closest?.(canvasUiSelector)}
 function pointerTool(e){return inputTools.get(e.pointerType||'mouse')}
 function useInputDevice(device){
   if(active||!['mouse','pen'].includes(device))return;
@@ -91,6 +91,7 @@ function useInputDevice(device){
   if(previous!==device){syncInputMode();refreshToolOptions();window.inkspaceMediaFrame?.refresh();window.dispatchEvent(new CustomEvent('inkspace-input-tools-change'))}
 }
 function objectControls(e){return !space&&!canvasUi(e)&&(!e.pointerType||e.pointerType==='mouse')&&['select','pan','text','diagram'].includes(pointerTool(e))}
+document.addEventListener?.('DOMContentLoaded',()=>{if(!window.inkspaceAIHost)InkContent.installCodeControls({writeText:text=>navigator.clipboard.writeText(text),canCopy:()=>objectControls({pointerType:'mouse',target:viewport})})},{once:true});
 function penOverContent(e){return !space&&['pen','erase','shape'].includes(pointerTool(e))&&(e.pointerType==='pen'||e.pointerType==='mouse')&&!canvasUi(e)}
 function syncInputMode(){const objects=objectControls({pointerType:'mouse',target:viewport});viewport.classList.toggle('object-controls',objects);if(!objects)for(const cache of noteCache.values())cache.el.classList.remove('mouse-hover');viewport.classList.toggle('pan-input',pointerTool({pointerType:'mouse'})==='pan');viewport.classList.toggle('mouse-drawing',['pen','erase','shape'].includes(pointerTool({pointerType:'mouse'})));viewport.classList.toggle('object-input',['select','text','diagram'].includes(pointerTool({pointerType:'mouse'})));viewport.classList.toggle('shape-input',pointerTool({pointerType:'mouse'})==='shape');}
 function hitCanvasItem(pos,note){

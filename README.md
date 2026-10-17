@@ -1,15 +1,18 @@
 # Inkspace · 墨境
 
+在 VS Code 中手写、阅读和编排笔记。把笔迹、Markdown、公式、代码、图片、PDF 页面和图形放进同一张无限画布。
 
-0.11.0 收紧产品范围：鼠标与笔分别记忆工具；文本调宽和独立字号；图片、PDF、图形等比缩放；连续画布为默认，A4 为可选。范围见 [产品范围](docs/PRODUCT-SCOPE.md)。保留紧凑工作台与公共悬浮操作条：图形库留在右侧栏，模板居中插入与拖动绘制共用 mxGraph；文本、图片、PDF、图形及多选复用屏幕控件。Markdown 双击就地编辑源码片段，完整源码可切换，文本草稿完成时一次提交。工作台设计与实施记录见 [工作台](docs/WORKBENCH-DESIGN.md) 和 [介质框](docs/MEDIA-FRAME-DESIGN.md)。
+**首个公开预览版：0.13.1 · Windows x64 · Microsoft VS Code 桌面版。** 独立 Ink Engine 随笔记自动启动，无需修改 VS Code。其他触控笔与驱动的兼容性仍需要更多用户验证。
 
-Windows 触控笔无限笔记画布，支持基于 mxGraph 的鼠标图形编辑、附着箭头和公式标签，集成到普通 Microsoft VS Code。当前主线为 **VS Code 插件 0.11.0 + 独立 Ink Engine**，无需修改 VS Code 或手动启动引擎。
+从 [GitHub Releases](https://github.com/nollasalt/inkspace/releases) 下载 Windows x64 分发包；首发功能和限制见 [发布说明](docs/RELEASE-0.13.1.md)。
 
-鼠标默认编排，笔默认书写，属性栏可选择配置设备；鼠标明确选择画笔、橡皮或图形绘制后直接绘制，无额外开关。顶栏资源入口、侧栏内容与输入优先级见 [交互规则](docs/INTERACTION.md)。
+![Inkspace 示例画布](docs/images/canvas-preview.png)
+
+*实际界面的离线示例；展示 Markdown、公式、代码与图形，蓝色线条为合成笔迹样例。*
 
 ## 安装和使用
 
-在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.11.0-win32-x64.vsix`。
+在 Windows x64 上安装桌面版 VS Code，运行命令面板的 **Extensions: Install from VSIX…**，选择 `Inkspace-VSCode-0.13.1-win32-x64.vsix`。
 
 打开文件夹，文件栏右键选择“墨境：新建笔记”。首次点击“校准触控笔”，依次点击三个圆圈；同一设备与显示配置下自动恢复校准。新笔记格式为 `.ink`，采用二进制增量保存；旧 `.inkspace.json` 仍可打开。
 
@@ -41,10 +44,18 @@ Windows 触控笔无限笔记画布，支持基于 mxGraph 的鼠标图形编辑
 
 ## 许可与边界
 
-GPL-2.0-or-later。Xournal++ 轮廓算法、Cairo 与第三方依赖的来源和许可见 [native/UPSTREAM.md](native/UPSTREAM.md) 及安装包中的许可证；跨电脑分发包附对应源码。
+GPL-3.0-or-later，见 [LICENSE](LICENSE)。Xournal++ 轮廓算法、Cairo 与第三方依赖的来源和许可见 [native/UPSTREAM.md](native/UPSTREAM.md) 及安装包中的许可证；跨电脑分发包附对应源码。
 
 当前只提供 Windows x64 原生运行时。后台 Raw Input 已在本机设备验证；其他笔设备仍需测试，笔尾橡皮擦尚未映射。首次安装或显示配置改变需要校准。VS Code 插件版本与根目录独立桌面版本分别管理。
 
-A4 纸张无间隔，以淡虚线标记边界；仅显示内容占用的纸张，笔迹、图形、文本和图片越界时自动拓展，删除后收回空纸张。
+A4 纸张无间隔，以淡虚线标记边界；空笔记保留首张纸，其余仅显示内容占用的纸张，笔迹、图形、文本和图片越界时自动拓展，删除后收回空纸张。
 
 鼠标图形编辑与 draw.io 文件导入：[使用说明](docs/DIAGRAMS.md)。
+
+## 反馈
+
+请通过 [GitHub Issues](https://github.com/nollasalt/inkspace/issues/new/choose) 提供版本、设备型号与复现步骤。性能或保存问题可运行 **墨境：查看性能与保存诊断**，附上报告；不要上传引擎的 `connection.json` 或私人笔记。
+
+## 可选 AI 助手
+
+默认直接生成，需要时添加笔记数据或画面；修改先预览、再应用，并可一次撤销。需要另行安装并登录 Codex CLI，模型权限取决于账户；日常笔记不依赖 AI。详见 [AI 使用说明](docs/AI-NOTES.md)。

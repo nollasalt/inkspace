@@ -1,0 +1,15 @@
+name: 使用建议
+description: 描述你想完成的笔记任务
+title: "[Feature] "
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 希望完成什么任务？
+      description: 请说明使用场景、当前遇到的阻碍，以及已有的替代方式。
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 期望的行为（可选）

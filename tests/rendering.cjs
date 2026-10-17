@@ -60,7 +60,7 @@ run('doc.notes[0].markdown='+JSON.stringify(sample)+';render()');
 assert.equal(w.document.querySelectorAll('.katex-display').length,2);
 assert.equal(w.document.querySelectorAll('.katex').length,4);
 assert.equal(w.document.querySelectorAll('.katex-error').length,0);
-assert.ok(w.document.querySelector('code.language-python .hljs-keyword'));
+assert.ok(w.document.querySelector('code.language-python [style*="--shiki-light"]'));
 assert.ok(w.document.querySelector('math'));
 
 // Display math may follow ordinary text without an intervening blank line.
@@ -82,7 +82,7 @@ $\href{javascript:alert(1)}{bad}$
 `.replace(/~~~/g,'```');
 run('doc.notes.push({id:"security",x:900,y:20,markdown:'+JSON.stringify(malicious)+'});render()');
 assert.equal(w.document.querySelectorAll('.note script,.note img,.note [onerror],.note a[href^="javascript:"]').length,0);
-const markup=run('markdown('+JSON.stringify('```imaginary\n$x$ <tag>\n```')+')');assert.ok(markup.includes('&lt;tag&gt;'));assert.ok(!markup.includes('katex'));
+const markup=run('markdown('+JSON.stringify('```imaginary\n$x$ <tag>\n```')+')'),unknownCode=new JSDOM(markup).window.document;assert.equal(unknownCode.querySelector('code').textContent,'$x$ <tag>\n');assert.equal(unknownCode.querySelector('tag'),null);assert.ok(!markup.includes('katex'));
 assert.equal(run('inline("`$x$`")'),'<code>$x$</code>');
 assert.ok(!run('inline("\\\\$5")').includes('katex'));
 const link=run('inline('+JSON.stringify('[公式 $x^2$](https://example.com/$y$)')+')');

@@ -13,6 +13,7 @@ vendor/
 vscode/media/
 vscode/LICENSE
 *.inkspace.json
+*.ink
 .env
 .env.*
 theia/lib/
@@ -22,3 +23,5 @@ theia/gen-esbuild.*.mjs
 theia/demo-workspace/.theia/
 
 vscode/engine-runtime/
+vscode/ai-runtime.cjs
+vscode/ai/

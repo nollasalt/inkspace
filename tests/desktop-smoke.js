@@ -37,7 +37,7 @@
     assert(valid(JSON.parse(JSON.stringify(doc))),'native stroke persists');
   }
   doc={format:'inkspace',version:1,strokes:[],notes:[{id:'smoke-note',x:30,y:80,width:560,markdown:'# Markdown\n\n$E=mc^2$\n\n```python\ndef f(x):\n    return x * x\n```'}],shapes:[],background:{type:'ruled',color:'#f6f7f5',spacing:'auto',fontSize:16}};view={x:40,y:40,scale:1};render();await document.fonts.ready;
-  assert(document.querySelector('.katex'),'formula renders');assert(document.querySelector('.hljs-keyword'),'code highlights');
+  assert(document.querySelector('.katex'),'formula renders');assert(document.querySelector('.ink-code-content [style*="--shiki-light"]'),'code highlights');
   assert(surface.dpr===devicePixelRatio,'ink drawn at physical display density');
   for(const scale of [.001,.1,.17,.75,1.25,2,8,32]){zoom(scale,400,300);const el=document.querySelector('.note');assert(Math.abs(view.scale-scale)<1e-12,'no fixed zoom bounds');assert(Math.abs(el.getBoundingClientRect().width-560*scale)<1,'note visual width at '+scale);assert(Math.abs(itemBounds('notes',doc.notes[0]).w-560)<1,'note world width')}
   zoom(1,400,300);const before=renderStats.fullScenePaints;const start=performance.now();for(let i=0;i<150;i++)interactiveZoom(.6+i/300,400,300);assert(renderStats.fullScenePaints===before,'zoom events coalesced');await pause(200);assert(renderStats.fullScenePaints===before+1,'one final zoom render');const zoomTime=performance.now()-start;

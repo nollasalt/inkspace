@@ -33,7 +33,9 @@ Static dependencies:
   resolved from the host executable, using the stable Node-API ABI.
 
 Licenses are in `desktop/native/licenses`. Xournal-derived code is covered by
-the root GPL-2.0-or-later license. Cairo is used under LGPL-2.1; Pixman is under
+the upstream GPL-2.0-or-later terms; the application is distributed under
+GPL-3.0-or-later as declared in the root LICENSE and package metadata.
+Cairo is used under LGPL-2.1; Pixman is under
 its permissive license. The source distribution includes application/native
 source and the original Cairo/Pixman source archives, so the native module can
 be modified and relinked. It does not include unrelated user notes or research

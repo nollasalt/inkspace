@@ -8,6 +8,7 @@
     shapes:
       '<path d="m3 3 6 10H1Z"/><rect x="12" y="3" width="9" height="9" rx="1"/><circle cx="6" cy="19" r="4"/><path d="m17 14 5 5-5 4-5-4Z"/>',
     plus: '<path d="M12 5v14 M5 12h14"/>',
+    copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
     minus: '<path d="M5 12h14"/>',
     down: '<path d="m6 9 6 6 6-6"/>',
     back: '<path d="m12 5-7 7 7 7 M5 12h14"/>',

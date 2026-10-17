@@ -3,31 +3,17 @@ import taskLists from 'markdown-it-task-lists';
 import texmath from 'markdown-it-texmath';
 import DOMPurify from 'dompurify';
 import katex from 'katex';
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import typescript from 'highlight.js/lib/languages/typescript';
-import python from 'highlight.js/lib/languages/python';
-import cpp from 'highlight.js/lib/languages/cpp';
-import csharp from 'highlight.js/lib/languages/csharp';
-import java from 'highlight.js/lib/languages/java';
-import json from 'highlight.js/lib/languages/json';
-import bash from 'highlight.js/lib/languages/bash';
-import css from 'highlight.js/lib/languages/css';
-import xml from 'highlight.js/lib/languages/xml';
-import sql from 'highlight.js/lib/languages/sql';
-import rust from 'highlight.js/lib/languages/rust';
-
-for(const [name,grammar] of Object.entries({javascript,typescript,python,cpp,csharp,java,json,bash,css,xml,sql,rust}))hljs.registerLanguage(name,grammar);
+import { codeMarkup } from './code-highlight.js';
+import codeStyles from './code.css';
+export { codeStyles };
+export { highlightCode, installCodeControls } from './code-highlight.js';
 export const escape=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 export function formula(source,display=false){
   try{return katex.renderToString(source,{displayMode:display,throwOnError:false,trust:false,maxExpand:500,maxSize:20,strict:'ignore',output:'htmlAndMathml'})}
   catch{return `<code class="math-error">${escape(source)}</code>`}
 }
 export function codeBlock(source,language=''){
-  language=language.toLowerCase();
-  const known=/^[\w+-]+$/.test(language)&&hljs.getLanguage(language);
-  const value=known?hljs.highlight(source,{language,ignoreIllegals:true}).value:escape(source);
-  return `<pre><code class="hljs${known?' language-'+language:''}">${value}</code></pre>`;
+  return `<pre class="ink-code-block">${codeMarkup(source,language)}</pre>`;
 }
 const parser=new MarkdownIt({html:false,linkify:true,breaks:true,highlight:(source,language)=>codeBlock(source,language)}).use(taskLists).use(texmath,{engine:katex,delimiters:['dollars','brackets'],katexOptions:{trust:false,maxExpand:500,maxSize:20,strict:'ignore',output:'htmlAndMathml'}});
 // Reuse texmath's recognizers to let display math interrupt a paragraph.
@@ -75,4 +61,13 @@ for(const name of ['math_inline','math_inline_double','math_block','math_block_e
 }
 export {createStrokeState,appendStrokePoint,strokeTailPath,strokeTailPoints,strokePath,strokeOutline} from './ink-detail.js';
 
-export function html(source){return DOMPurify.sanitize(source,{WHOLE_DOCUMENT:true,ADD_TAGS:['style'],FORBID_TAGS:['script','iframe','object','embed','form','input','button','textarea','select','base','meta','link'],FORBID_ATTR:['contenteditable']})}
+export function html(source){
+  const clean=DOMPurify.sanitize(source,{WHOLE_DOCUMENT:true,ADD_TAGS:['style'],FORBID_TAGS:['script','iframe','object','embed','form','input','button','textarea','select','base','meta','link'],FORBID_ATTR:['contenteditable']});
+  const template=document.createElement('template');template.innerHTML=clean;
+  for(const pre of template.content.querySelectorAll('pre')){
+    const code=pre.querySelector('code');if(!code)continue;
+    const language=[...code.classList,...pre.classList].find(name=>/^(language-|lang-)/.test(name))?.replace(/^(language-|lang-)/,'')||'';
+    const original=code.textContent;pre.classList.add('ink-code-block');pre.innerHTML=codeMarkup(original,language);
+  }
+  return template.innerHTML;
+}

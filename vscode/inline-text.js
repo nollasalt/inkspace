@@ -79,7 +79,7 @@
     let node=range?.startContainer,offset=range?.startOffset||0;
     if(!node||!root.contains(node)||node.nodeType!==Node.TEXT_NODE){
       const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let current,distance=Infinity;
-      while(current=walker.nextNode()){if(!current.textContent.trim()||current.parentElement.closest('.katex-mathml'))continue;const r=document.createRange();r.selectNodeContents(current);for(const box of r.getClientRects()){const d=Math.hypot(Math.max(box.left-position.x,0,position.x-box.right),Math.max(box.top-position.y,0,position.y-box.bottom));if(d<distance){distance=d;node=current;offset=position.x<box.left?0:current.textContent.length}}}
+      while(current=walker.nextNode()){if(!current.textContent.trim()||current.parentElement.closest('.katex-mathml,[data-ink-code-ui]'))continue;const r=document.createRange();r.selectNodeContents(current);for(const box of r.getClientRects()){const d=Math.hypot(Math.max(box.left-position.x,0,position.x-box.right),Math.max(box.top-position.y,0,position.y-box.bottom));if(d<distance){distance=d;node=current;offset=position.x<box.left?0:current.textContent.length}}}
     }
     if(!node||!root.contains(node))return 0;
     const normalized=note.markdown.replace(/\r\n|\r/g,'\n'),block=node.parentElement.closest('[data-ink-source-start]')||root,start=Number(block.dataset.inkSourceStart)||0,end=Number(block.dataset.inkSourceEnd)||normalized.length,raw=normalized.slice(start,end),map=[];let decoded='';
@@ -88,7 +88,7 @@
     let cursor=0,result=start;const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);let current;
     while(current=walker.nextNode()){
       if(current.nodeType===Node.ELEMENT_NODE){if(!current.hasAttribute('data-ink-math'))continue;const text=current.getAttribute('data-ink-math'),index=decoded.indexOf(text,cursor);if(index>=0){if(current.contains(node)){result=start+map[index];break}cursor=index+text.length}continue}
-      if(current.parentElement.closest('[data-ink-math],.katex-mathml'))continue;
+      if(current.parentElement.closest('[data-ink-math],.katex-mathml,[data-ink-code-ui]'))continue;
       const text=current.textContent;if(!text)continue;let index=decoded.indexOf(text,cursor);
       if(index<0){const first=text.search(/\S/);index=decoded.indexOf(text.trim(),cursor);if(index>=0)index-=Math.max(0,first)}
       if(index<0){if(current===node){result=start+(map[cursor]??raw.length);break}continue}
@@ -157,7 +157,7 @@
     const rects=[],walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);let node;
     while(node=walker.nextNode()){
       if(node.nodeType===Node.ELEMENT_NODE){if(node.matches('img,.katex')){const rect=node.getBoundingClientRect();if(rect.width&&rect.height)rects.push(rect)}continue}
-      if(!node.textContent.trim()||node.parentElement.closest('.katex'))continue;const range=document.createRange();range.setStart(node,node.textContent.search(/\S/));range.setEnd(node,node.textContent.trimEnd().length);for(const rect of range.getClientRects())if(rect.width&&rect.height)rects.push(rect);
+      if(!node.textContent.trim()||node.parentElement.closest('.katex,[data-ink-code-ui]'))continue;const range=document.createRange();range.setStart(node,node.textContent.search(/\S/));range.setEnd(node,node.textContent.trimEnd().length);for(const rect of range.getClientRects())if(rect.width&&rect.height)rects.push(rect);
     }
     return rects;
   }

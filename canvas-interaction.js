@@ -181,6 +181,8 @@
       if (connector()?.pending && event.pointerType==='mouse') connector().hover(event);
     },
     key(event) {
+      // Auxiliary surfaces own their keyboard before canvas shortcuts run.
+      if(event.target.closest?.('[data-inkspace-ui]')||event.composedPath?.().some(node=>node.matches?.('[data-ink-code-ui]')))return false;
       if(document.querySelectorAll('dialog[open]').length)return false;
       if(event.target.closest?.('.note-height-resize')&&['ArrowUp','ArrowDown'].includes(event.key))return false;
       if (event.key === 'Escape' && connector()?.pending) { connector().cancel(); return true; }
@@ -198,7 +200,7 @@
       if (!router.machine.gesture || router.machine.gesture.owner==='pan') canvasWheel(event);
     },
     doubleClick(event) {
-      if (!objectControls(event)||event.button!==0||event.detail>0&&lastCanvasPointer!=='mouse'||event.sourceCapabilities?.firesTouchEvents||event.detail>0&&lastControlGesture||controlAt(event)||document.querySelector('dialog[open]')) return;
+      if (canvasUi(event)||!objectControls(event)||event.button!==0||event.detail>0&&lastCanvasPointer!=='mouse'||event.sourceCapabilities?.firesTouchEvents||event.detail>0&&lastControlGesture||controlAt(event)||document.querySelector('dialog[open]')) return;
       const hit=window.inkspaceBlocks?.pick(event);
       if (hit && window.inkspaceArrangement?.locked(hit)) {toast('内容已锁定，请先解锁'); return;}
       if (hit?.kind==='notes') {

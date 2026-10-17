@@ -80,7 +80,7 @@ function pasteSelectionText(text){
   doc.blockState=(doc.blockState||[]).concat((fragment.blockState||[]).flatMap(r=>idMaps[r.kind]?.[r.id]?[{...r,id:idMaps[r.kind][r.id]}]:[]));doc.blockOrder=(doc.blockOrder||[]).concat((fragment.blockOrder||[]).flatMap(r=>idMaps[r.kind]?.[r.id]?[{...r,id:idMaps[r.kind][r.id]}]:[]));selected=pastedSelection;window.inkspaceBlocks?.expandSelection();render();persist();return true;
 }
 document.addEventListener('copy',event=>{
-  if(event.target.closest?.('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]')||pointerTool({pointerType:'mouse'})==='pdftext'||window.getSelection?.().toString())return;
+  if(event.target.closest?.('input,textarea,[contenteditable="true"],[data-inkspace-ui]')||document.querySelector('dialog[open]')||pointerTool({pointerType:'mouse'})==='pdftext'||window.getSelection?.().toString())return;
   const text=selectionClipboardText();if(!text||!event.clipboardData)return;
   event.preventDefault();event.clipboardData.setData('text/plain',text);
 });
@@ -90,7 +90,7 @@ async function pasteItems(items,text){
   if(!inserted.length&&text)inserted.push({id:crypto.randomUUID(),x:point.x,y:point.y,width:560,markdown:text});
   if(pageId!==notebook.activePage){toast('粘贴期间切换了页面，请重新粘贴');return}if(!inserted.length)return;checkpoint();doc.notes.push(...inserted);clearSelection();selected.notes=inserted.map(n=>doc.notes.indexOf(n));render();persist();toast('已粘贴，可拖动顶部移动，拖动右下角调整大小');
 }
-document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;const files=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean),text=e.clipboardData?.getData('text/plain');if(!files.length&&!text)return;e.preventDefault();try{if(pasteSelectionText(text))return;pasteItems(files,text).catch(()=>toast('粘贴失败，请重试'))}catch(error){toast('粘贴失败：'+error.message)}});
+document.addEventListener('paste',e=>{if(e.target.closest('input,textarea,[contenteditable="true"],[data-inkspace-ui]')||document.querySelector('dialog[open]'))return;const files=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean),text=e.clipboardData?.getData('text/plain');if(!files.length&&!text)return;e.preventDefault();try{if(pasteSelectionText(text))return;pasteItems(files,text).catch(()=>toast('粘贴失败，请重试'))}catch(error){toast('粘贴失败：'+error.message)}});
 // The cursor lives outside the transformed scene, so its size follows zoom once.
 const penCursor=$('#pen-cursor');let penPosition=null,lastPenCursorTime=-Infinity;
 function clearPenCursor(){penPosition=null;viewport.classList.remove('pen-input');penCursor.hidden=true}

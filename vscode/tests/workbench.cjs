@@ -18,7 +18,10 @@ exports.run=async()=>{
     assert.equal(saved.model.pages[0].document.notes.find(n=>n.id==='workbench-validation').markdown,workbench.text);assert.equal(saved.model.pages[0].document.diagram,workbench.diagram);
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');await vscode.commands.executeCommand('vscode.open',uri);for(let i=0;i<120&&!api.ready(uri);i++)await new Promise(r=>setTimeout(r,100));
     const reopened=await api.diagnostic(uri,'inspect');assert.deepEqual(reopened.model,saved.model);
-    fs.writeFileSync(report,JSON.stringify({passed:true,ordinaryVSCode:true,independentEngine:true,rawInput:true,dense,dots,zoom,inputStability,workbench,arrangement,saveAndReopenExact:true},null,2));
+    await vscode.commands.executeCommand('inkspace.ai');const ai=await api.diagnostic(uri,'ai');assert(ai.rpc&&ai.snapshot&&ai.atomic&&ai.undoRedo&&ai.textMate&&ai.unspecifiedHighlight);
+    await vscode.commands.executeCommand('inkspace.save');const withAI=binary.decode(fs.readFileSync(uri.fsPath));assert(withAI.model.pages[0].document.notes.some(n=>n.markdown===ai.text));assert.equal(withAI.model.pages[0].document.diagram,ai.diagram);
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');await vscode.commands.executeCommand('vscode.open',uri);for(let i=0;i<120&&!api.ready(uri);i++)await new Promise(r=>setTimeout(r,100));assert.deepEqual((await api.diagnostic(uri,'inspect')).model,withAI.model);
+    fs.writeFileSync(report,JSON.stringify({passed:true,ordinaryVSCode:true,independentEngine:true,rawInput:true,dense,dots,zoom,inputStability,workbench,arrangement,ai,saveAndReopenExact:true},null,2));
   }catch(error){fs.writeFileSync(report,JSON.stringify({passed:false,error:error.stack},null,2));throw error}
   finally{if(process.env.INKSPACE_ENGINE_HOME===path.join(root,'engine')){try{const config=JSON.parse(fs.readFileSync(path.join(root,'engine','connection.json')));await fetch(config.endpoint+'/shutdown',{method:'POST',headers:{'X-Inkspace-Key':config.key},body:'{}'})}catch{}}}
 };

@@ -1,0 +1,33 @@
+name: 问题反馈
+description: 书写、编辑、显示、性能或保存问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: 请勿上传 connection.json、账户凭据或私人笔记。可用无敏感内容的示例复现。
+  - type: input
+    id: version
+    attributes:
+      label: Inkspace 版本
+      placeholder: 0.13.1
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 使用环境
+      description: Windows 与 VS Code 版本；涉及触控笔时请提供电脑、笔型号和显示器缩放比例。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤、预期与实际结果
+      description: 请注明鼠标还是触控笔，以及当时使用的工具。
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断或截图（可选）
+      description: 性能和保存问题可运行“墨境：查看性能与保存诊断”，附上输出。请先检查附件中的个人信息。

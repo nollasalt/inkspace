@@ -20,6 +20,7 @@ npm run start:engine:vscode
 
 ```powershell
 npm test
+npm run test:ai
 npm run test:arrangement
 npm run test:workbench
 npm run test:blocks
@@ -31,6 +32,8 @@ npm run test:engine
 `test:workbench` 在实际 Chromium 中验证布局、主题、控件尺寸、独立设备工具状态、基本文本编辑、尺寸策略及 PDF 放置。`test:engine` 验证校准及持久化，接着在真实 Microsoft VS Code 和独立引擎内执行 0.11 工作台验证：300 个小数坐标采样、60 次快速打点、100 次延迟回包打点、连续缩放、焦点返回、公共控件、居中插入及二进制保存重开。结果位于 `artifacts/workbench-vscode-test/result.json`。合成采样不替代实体触控笔手感验证。
 
 旧的 `test:engine:legacy`、`test:engine:binary` 保留 0.8 宿主诊断入口，部分断言引用已经移除的块顶部控件；不用于当前工作台界面验收。旧诊断源码保留在 `vscode/diagnostics.js`，只在验证宿主加载。
+
+`test:ai` 不联网，覆盖纯提案校验、原生应用与一次撤销、过期原稿、真实 DOM 截图、对话、回答写入和辅助 UI 所有权；也验证默认不截图、仅生成不读取文档、输入方式的宿主约束、切换模式清空历史和生成期间继续编辑。`test:engine:workbench` 额外覆盖 AI 通道、Webview CSP 下的截图及二进制保存重开。显式执行 `npm run test:ai:codex` 才运行云端合成请求；结果位于 `artifacts/ai-notes`。协议、模块和扩展边界见 [AI-NOTES](AI-NOTES.md)。
 
 保留原 VSCodium 路线时可运行 `npm run test:vscode`，需要已有原生宿主构建。
 

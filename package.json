@@ -3,6 +3,9 @@
   "version": "0.11.0",
   "private": true,
   "scripts": {
+    "demo:recognition": "node demos/recognition/launch.cjs",
+    "test:recognition": "node demos/recognition/test.cjs",
+    "test:recognition:codex": "node demos/recognition/smoke-codex.cjs",
     "build:theia": "npm run build && node theia/build-media.cjs && node theia/prepare-native.cjs && npm run build --prefix theia",
     "start:theia": "node theia/host.cjs",
     "test:theia": "node theia/host.cjs --smoke-test",
@@ -39,7 +42,9 @@
     "test:arrangement": "node tests/arrangement.cjs && electron tests/arrangement-electron.cjs",
     "test:workbench": "electron tests/workbench-electron.cjs",
     "test:engine:workbench": "node -e \"process.env.INKSPACE_ENGINE_WORKBENCH_TEST='1';require('./scripts/test-ink-engine.cjs')\"",
-    "test:engine:legacy": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && node scripts/test-ink-engine.cjs"
+    "test:engine:legacy": "node tests/engine-calibration.cjs && node tests/engine-calibration-persistence.cjs && node tests/engine-lifecycle.cjs && node scripts/test-ink-engine.cjs",
+    "test:ai": "node scripts/test-ai.cjs",
+    "test:ai:codex": "node tests/ai-codex.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -56,6 +61,7 @@
     "mxgraph": "4.2.2",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",
+    "shiki": "4.4.3",
     "ws": "8.22.0"
   },
   "devDependencies": {

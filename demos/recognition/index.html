@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>InkSpace · 手写识别验证</title>
+  <link rel="stylesheet" href="katex.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><div><strong>InkSpace</strong><span class="badge">识别实验</span></div><span id="connection">正在检查本机识别器…</span></header>
+  <main>
+    <section class="input-pane">
+      <div class="pane-title"><h1>手写样本</h1><div class="buttons"><button id="open">导入图片</button><button id="paste">粘贴图片</button></div></div>
+      <div class="toolbar">
+        <div class="segmented"><button id="write" aria-pressed="true">书写</button><button id="select" aria-pressed="false">框选</button></div>
+        <button id="undo">撤销一笔</button><button id="clear-selection">取消框选</button><button id="clear">清空</button>
+        <span id="sample-count">0 笔 · 0 采样点</span>
+      </div>
+      <div class="paper" id="paper"><canvas id="ink" width="1200" height="800"></canvas><canvas id="overlay" width="1200" height="800"></canvas><div id="empty">在这里写中文、公式或一小片思维导图<br><small>也可粘贴现有笔记的截图，再框选需要识别的部分</small></div></div>
+      <div class="model-controls"><span>识别模型</span><div class="segmented" role="group" aria-label="Codex 识别模型"><button data-profile="fast" aria-pressed="true">快速 · Luna</button><button data-profile="precise" aria-pressed="false">精细 · Sol</button></div><small id="model-hint">gpt-6-luna · low</small></div>
+      <div class="recognition-actions">
+        <button id="codex" class="primary" disabled>Codex 识别选区</button><button id="cancel" hidden>取消识别</button>
+        <button id="copy">复制选区图片</button>
+      </div>
+      <p class="help">默认使用 Luna 低推理强度；复杂内容可手动换 Sol 重试，不会自动升级模型。未框选时识别全部内容。点击才联网发送选区，使用 Codex 账户额度。</p>
+      <details class="baseline"><summary>Windows 本地文字识别对照</summary><div class="baseline-controls"><select id="recognizer" aria-label="Windows 识别器"></select><button id="windows" disabled>识别同一选区</button></div><p class="help">此基线只测试新写的文字笔画，不支持导入图片、公式结构或 Mindmap 关系。没有安装相应语言时会禁用。</p></details>
+      <details class="evaluation"><summary>测试对照</summary><label for="reference">预期转写（可选）</label><textarea id="reference" placeholder="填写正确的文字或 LaTeX，用同一份样本比较两种识别结果。"></textarea><p id="score" class="help">填写后显示原始识别结果的字符编辑距离；不代表公式等价性或关系识别准确率。</p><div id="run-history"></div></details>
+    </section>
+    <section class="result-pane">
+      <div class="pane-title"><h1>识别与确认</h1><button id="save" disabled>保存确认结果</button></div>
+      <div id="status" role="status">写好后点击识别。确认结果以文字、公式和节点关系保存，不包含原始笔迹。</div>
+      <div id="metrics" class="metrics"></div>
+      <div id="alternatives" class="alternatives"></div>
+      <div class="result-tabs segmented"><button data-tab="preview" aria-pressed="true">排版预览</button><button data-tab="source" aria-pressed="false">编辑转写</button><button data-tab="structure" aria-pressed="false">节点与连线</button><button data-tab="image" aria-pressed="false">选区原图</button></div>
+      <div id="preview" class="result-content markdown"><div class="result-empty">识别结果会显示在这里。<br>文字、公式、箭头和分支会分别提取。</div></div>
+      <div id="source" class="result-content" hidden><label for="transcript">Markdown / LaTeX 转写</label><textarea id="transcript" spellcheck="false"></textarea><p class="help">转写与节点内容分别展示，修改转写不会自动改写节点。节点可在“节点与连线”中核对。</p></div>
+      <div id="structure" class="result-content" hidden><p class="help">节点位置对应输入原图，连线方向来自识别。请核对有歧义的连接。</p><div id="node-list"></div><div id="edge-list"></div><details><summary>检查或修改结构 JSON</summary><textarea id="structure-json" spellcheck="false"></textarea><button id="apply-structure">应用结构修改</button></details></div>
+      <div id="image" class="result-content" hidden><div class="snapshot"><img id="snapshot" alt="本次识别的选区原图"><svg id="regions" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="识别节点的位置"></svg></div></div>
+      <div id="uncertainties" hidden><strong>需要核对</strong><ul></ul></div>
+    </section>
+  </main>
+  <footer>独立验证 · 不修改正式笔记 · 本地笔迹用于输入 · 识别结果需核对<span>建议测试：中文一句 / 公式一组 / 文字＋箭头＋公式</span></footer>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,14 +1,20 @@
-# 发布到 VS Code Marketplace
+# GitHub 与 VS Code Marketplace 发布
 
 当前插件使用标准 VS Code Custom Editor/API，可作为普通扩展发布。包含 Windows Raw Input 和原生 Cairo，所以发布包指定 `win32-x64`，而不是通用平台。
 
 官方说明：[Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)。当前只生成安装包，没有自动发布。
 
-## 发布前准备
+## GitHub 预览版
+
+首发说明见 [RELEASE-0.13.1](RELEASE-0.13.1.md)。先完成回归验证，再依次运行 `npm run build:vscode`、`npm run dist:vscode` 和 `npm run dist:vscode:bundle`。打包命令本身不执行完整回归测试。
+
+发布物为对应版本 VSIX、源码包和 Windows x64 分发包；分发包包含安装说明、AI 说明、发布说明与文件校验和。发布标签必须指向包含这些源码的提交，不能使用落后于工作目录的旧提交。GitHub Release 与 Marketplace 为独立发布渠道。
+
+## Marketplace 发布前准备
 
 1. 在 [Marketplace 发布者管理页面](https://marketplace.visualstudio.com/manage) 创建或取得 Publisher 权限。`vscode/package.json` 当前 Publisher 为 `nollasalt`；GitHub 同名账号不会自动获得该 Marketplace 身份。
-2. 使用 `npm run dist:vscode:bundle` 构建并测试，检查版本、描述及 Windows x64 平台标记。
-3. 为公开用户提供对应源码和第三方许可。GitHub 仓库当前是私有的，私有仓库链接不能作为公众可访问的源码下载入口；可另行提供公开源码包，不必直接变更整个仓库可见性。
+2. 完成构建、回归测试与打包，检查版本、描述及 Windows x64 平台标记。
+3. 为公开用户提供对应源码和第三方许可。公开 Release 应同时提供对应源码；私有仓库链接不能作为公众可访问的源码下载入口。
 4. 上传 `Inkspace-VSCode-<版本>-win32-x64.vsix` 到发布者管理页面，或使用已授权的 vsce 发布流程。
 
 未确认 Publisher 权限前，不把 GitHub 登录当作 Marketplace 发布授权。

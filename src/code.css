@@ -1,0 +1,42 @@
+.ink-code-block {
+  --ink-code-bg:#f5f7fa; --ink-code-fg:#28313d; --ink-code-border:#e1e5eb;
+  --ink-code-muted:#6c7480;
+}
+.ink-code-block,.media-workbench .note-body pre.ink-code-block {
+  position:relative; box-sizing:border-box; max-width:100%; min-width:0; padding:0; margin:10px 0;
+  overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--ink-code-border);
+  border-radius:5px; background:var(--ink-code-bg); color:var(--ink-code-fg); font-family:Consolas,"Cascadia Code",monospace;
+}
+.ink-code-block .ink-code-toolbar {
+  display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 10px;
+  border-bottom:1px solid var(--ink-code-border); font:11px/1.5 "Segoe UI","Microsoft YaHei UI",sans-serif;
+  white-space:normal; color:var(--ink-code-muted); user-select:none; -webkit-user-select:none;
+}
+.ink-code-toolbar>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ink-code-block .ink-code-copy {
+  flex-shrink:0; display:inline-block; position:relative; z-index:4; pointer-events:auto;
+  padding:1px 3px; min-height:18px; border:0; border-radius:3px; background:transparent; color:inherit; font:inherit; cursor:pointer;
+}
+.ink-code-block .ink-code-copy:hover { background:var(--ink-code-border); }
+.ink-code-block .ink-code-copy:focus-visible { outline:1px solid var(--vscode-focusBorder,#2868c7); }
+.ink-code-block>code.ink-code-content,.note-body pre.ink-code-block>code.ink-code-content {
+  display:block; padding:10px 12px; margin:0; border:0; max-width:100%; overflow:visible; background:transparent;
+  color:var(--ink-code-fg); font:inherit; line-height:1.75; white-space:inherit; overflow-wrap:inherit; tab-size:4;
+}
+.ink-code-content span {
+  color:var(--shiki-light,var(--ink-code-fg)); font-style:var(--shiki-light-font-style,normal);
+  font-weight:var(--shiki-light-font-weight,normal); text-decoration:var(--shiki-light-text-decoration,none);
+}
+.ai-markdown .ink-code-block {
+  --ink-code-bg:var(--vscode-textCodeBlock-background,#f5f7fa); --ink-code-fg:var(--vscode-editor-foreground,#28313d);
+  --ink-code-border:var(--vscode-widget-border,#e1e5eb); --ink-code-muted:var(--vscode-descriptionForeground,#6c7480);
+}
+:is(.vscode-dark,.vscode-high-contrast) .ai-markdown .ink-code-block {
+  --ink-code-bg:var(--vscode-textCodeBlock-background,#292d35); --ink-code-fg:var(--vscode-editor-foreground,#e1e4e9);
+  --ink-code-border:var(--vscode-widget-border,#3c3f46); --ink-code-muted:var(--vscode-descriptionForeground,#a4abb6);
+}
+:is(.vscode-dark,.vscode-high-contrast) .ai-markdown .ink-code-content span {
+  color:var(--shiki-dark,var(--ink-code-fg)); font-style:var(--shiki-dark-font-style,normal);
+  font-weight:var(--shiki-dark-font-weight,normal); text-decoration:var(--shiki-dark-text-decoration,none);
+}
+.pen-input .ink-code-copy:hover { background:transparent; }

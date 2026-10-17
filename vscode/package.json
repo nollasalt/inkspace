@@ -2,7 +2,7 @@
   "name": "inkspace",
   "displayName": "墨境 Inkspace",
   "description": "Infinite pen notebooks with independent Raw Input and Cairo engine for VS Code",
-  "version": "0.11.0",
+  "version": "0.13.1",
   "publisher": "nollasalt",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -198,6 +198,11 @@
         "command": "inkspace.ungroup",
         "title": "取消块组合",
         "category": "墨境"
+      },
+      {
+        "command": "inkspace.ai",
+        "title": "AI 笔记助手",
+        "category": "墨境"
       }
     ],
     "viewsContainers": {
@@ -289,6 +294,10 @@
         {
           "command": "inkspace.movePageDown",
           "when": "false"
+        },
+        {
+          "command": "inkspace.ai",
+          "when": "inkspace.hasNotebook"
         }
       ]
     },

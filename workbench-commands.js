@@ -301,6 +301,7 @@
             "bookmark",
           ]),
       "paste",
+      "ai",
     ].filter((id) => describe(id)?.enabled);
   window.inkspaceCommands = {
     register,

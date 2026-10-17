@@ -1,5 +1,32 @@
 // Writing is allowed only through the high-precision native host bridge.
 const codium=(window.inkspaceCalibrationApi||acquireVsCodeApi()),boot=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('#inkspace-boot').content),c=>c.charCodeAt(0))));
+// Inference has a separate channel; it never waits on canvas saves or input.
+(() => {
+  const requests = new Map();
+  window.inkspaceAIHost = {
+    request(value) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { window.inkspaceAIHost.cancel(value.id); }, 190000);
+        requests.set(value.id, { resolve, reject, timer });
+        codium.postMessage({ type: 'ai-request', ...value });
+      });
+    },
+    cancel(id) {
+      codium.postMessage({ type: 'ai-cancel', id });
+      const entry = requests.get(id);
+      if (entry) { clearTimeout(entry.timer); requests.delete(id); entry.reject(Error('AI 请求已取消')); }
+    },
+  };
+  window.addEventListener('message', event => {
+    const message = event.data;
+    if (message.type !== 'ai-result') return;
+    const entry = requests.get(message.id);
+    if (!entry) return;
+    clearTimeout(entry.timer); requests.delete(message.id);
+    message.error ? entry.reject(Error(message.error)) : entry.resolve(message.result);
+  });
+  window.addEventListener('beforeunload', () => { for (const id of requests.keys()) window.inkspaceAIHost.cancel(id); });
+})();
 inputTools.restore(codium.getState()?.inputTools);tool=inputTools.get();
 window.addEventListener('inkspace-input-tools-change',()=>codium.setState({...codium.getState(),inputTools:inputTools.snapshot()}));
 if(typeof codium.getState()?.diagramSidebarCollapsed==='boolean')setDiagramSidebarCollapsed(codium.getState().diagramSidebarCollapsed,false);
@@ -74,11 +101,12 @@ window.addEventListener('message',async event=>{const message=event.data;
   }
   if(message.type==='document'){receiveDocument(message);return}
   if(message.type==='ack'&&editFlight?.id===message.id){const sent=editFlight;editFlight=null;hostVersion=message.version;if(message.error){conflict=true;rememberDraft();for(const waiter of flushWaiters.splice(0))waiter.reject(Error(message.error));toast(message.error);return}if(boot.binary)binaryBaseline=sent.captured;lastHostText=sent.text;lastContent=sent.signature;sendEdit();if(!editFlight&&!active&&draftTimer===null){forceSaveView=false;codium.setState({...codium.getState(),text:boot.binary?undefined:documentJSON(true),patch:undefined,version:hostVersion,dirty:false});for(const waiter of flushWaiters.splice(0))waiter.resolve()}return}
-  if(message.type==='request'){try{let result=true;if(message.command==='tool'){if(!['pen','erase','pan','text','select','shape','diagram'].includes(message.tool))throw Error('未知工具');if(!window.inkspaceDiagram?.editing()&&!$('#editor').open){if(['diagram','shape'].includes(message.tool))showSidebarMode('diagram');else activateTool(message.tool,true,false);await flushed()}}else if(message.command==='group')result=window.inkspaceBlocks.groupSelection();else if(message.command==='ungroup')result=window.inkspaceBlocks.ungroupSelection();else if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){if(!window.inkspaceInlineText?.history(message.command)){message.command==='undo'?undo():redo();await flushed()}}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='find')window.inkspaceNavigation.open();else if(message.command==='navigate')result=window.inkspaceNavigation.travel(message.direction);else if(message.command==='movePage'){result=window.inkspaceNavigation.movePage(message.page,message.direction);await flushed()}else if(message.command==='performance-report')result=window.inkspacePerformance.report();else if(message.command==='recovery-snapshot'){finishInteraction();rememberPage();result=InkNotebookDelta.capture(documentData())}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
+  if(message.type==='request'){try{let result=true;if(message.command==='tool'){if(!['pen','erase','pan','text','select','shape','diagram'].includes(message.tool))throw Error('未知工具');if(!window.inkspaceDiagram?.editing()&&!$('#editor').open){if(['diagram','shape'].includes(message.tool))showSidebarMode('diagram');else activateTool(message.tool,true,false);await flushed()}}else if(message.command==='group')result=window.inkspaceBlocks.groupSelection();else if(message.command==='ungroup')result=window.inkspaceBlocks.ungroupSelection();else if(message.command==='copy')result=selectionClipboardText();else if(message.command==='paste'){if(!pasteSelectionText(message.text))await pasteItems([],message.text);await flushed()}else if(message.command==='undo'||message.command==='redo'){if(!window.inkspaceInlineText?.history(message.command)){message.command==='undo'?undo():redo();await flushed()}}else if(message.command==='flush')await flushed();else if(message.command==='page'){switchPage(message.page);pageMessage()}else if(message.command==='addPage'){$('#page-add').click();await flushed()}else if(message.command==='renamePage'){const page=notebook.pages.find(p=>p.id===message.page);if(page){page.title=message.title;renderPageList();persist();await flushed()}}else if(message.command==='deletePage'){if(notebook.pages.length===1)throw Error('至少保留一个页面');finishInteraction();rememberPage();const index=notebook.pages.findIndex(p=>p.id===message.page);if(index>=0){notebook.pages.splice(index,1);pageSessions.delete(message.page);if(notebook.activePage===message.page)switchPage(notebook.pages[Math.min(index,notebook.pages.length-1)].id);else{renderPageList();persist()}await flushed()}}else if(message.command==='ai')window.inkspaceAI.open();else if(message.command==='find')window.inkspaceNavigation.open();else if(message.command==='navigate')result=window.inkspaceNavigation.travel(message.direction);else if(message.command==='movePage'){result=window.inkspaceNavigation.movePage(message.page,message.direction);await flushed()}else if(message.command==='performance-report')result=window.inkspacePerformance.report();else if(message.command==='recovery-snapshot'){finishInteraction();rememberPage();result=InkNotebookDelta.capture(documentData())}else if(message.command==='diagnostic'&&boot.test)result=await runCodiumDiagnostic(message.action);else throw Error('不支持的画布操作');codium.postMessage({type:'response',id:message.id,result})}catch(error){codium.postMessage({type:'response',id:message.id,error:error.message})}}
 });
 window.addEventListener('beforeunload',()=>{if(hostLoaded)rememberDraft()});
 codium.postMessage({type:'ready'});resize();
 
 window.inkspaceBlockClipboard=command=>codium.postMessage({type:'command',command:command==='copy'?'copy-blocks':'paste-blocks'});
+InkContent.installCodeControls({writeText:text=>window.inkspaceAIHost.request({id:crypto.randomUUID(),type:'ai-copy',text}),canCopy:()=>objectControls({pointerType:'mouse',target:viewport})});
 
 void 0;
